@@ -1,6 +1,6 @@
 # PLAN_v0.5_relayconsole.md — 감시 이벤트: ThresholdGate·hysteresis·severity
 
-> 생성일: 2026-09-24 | 상태: **완료 (DoD 전수 · 육안 ✓ · PR 중)**
+> 생성일: 2026-09-24 | 상태: **완료 (DoD 전수 · 육안 ✓ · PR #2 머지 `64d84e4`)**
 > 모체: `docs/research/RESEARCH_watch_events.md` (Downloads 보완판 v1.1)
 > 앱: **Relay Console** | bundleId: **`com.borasarang.relayconsole`** | 목표 버전: **0.5.0** | 최소 OS: **macOS 26.0**
 
