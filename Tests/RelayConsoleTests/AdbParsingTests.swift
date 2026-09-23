@@ -473,6 +473,70 @@ struct AdbParsingTests {
         #expect(top[0].rssMB > 600)
     }
 
+    @Test func parseCpuInfoProcsRows() {
+        let sample = """
+        CPU usage from 5023ms to 32ms ago:
+          12.5% 1234/com.example.app: 8% user + 4% kernel
+          3.1% 567/system_server: 2% user + 1% kernel
+         0.2% 890/kworker/u8:2: 0% user + 0.2% kernel
+        """
+        let rows = AdbClient.parseCpuInfoProcs(sample, limit: 10)
+        #expect(rows.count == 3)
+        #expect(rows[0].name == "com.example.app")
+        #expect(rows[0].cpuPercent == 12.5)
+        #expect(rows[0].pid == 1234)
+        #expect(rows[1].name == "system_server")
+        #expect(rows[1].cpuPercent == 3.1)
+    }
+
+    @Test func parsePsProcRowsWithPath() {
+        let sample = """
+        PID   RSS NAME              ARGS
+        1234  714368 com.example.app /data/app/~~abc==/com.example-xyz==/base.apk
+        567   532480 system_server  system_server
+        """
+        let rows = AdbClient.parsePsProcRows(sample, limit: 10)
+        #expect(rows.count == 2)
+        #expect(rows[0].pid == 1234)
+        #expect(rows[0].name == "com.example.app")
+        #expect(rows[0].path?.contains("base.apk") == true)
+        #expect((rows[0].rssMB ?? 0) > 600)
+        #expect(rows[1].name == "system_server")
+    }
+
+    @Test func mergeProcessRowsByName() {
+        let rss = [
+            ProcessRSS(name: "com.a", rssMB: 200),
+            ProcessRSS(name: "com.b", rssMB: 100),
+        ]
+        let cpu = [
+            ProcessRow(name: "com.a", cpuPercent: 50, rssMB: nil),
+            ProcessRow(name: "com.c", cpuPercent: 10, rssMB: nil),
+        ]
+        let merged = AdbClient.mergeProcessRows(rss: rss, cpu: cpu)
+        #expect(merged.count == 3)
+        let a = merged.first { $0.name == "com.a" }
+        #expect(a?.cpuPercent == 50)
+        #expect(a?.rssMB == 200)
+        let b = merged.first { $0.name == "com.b" }
+        #expect(b?.cpuPercent == nil)
+        #expect(b?.rssMB == 100)
+    }
+
+    @Test func mergeProcessRowsKeepsPathAndPid() {
+        let ps = [
+            ProcessRow(name: "com.a", cpuPercent: nil, rssMB: 100, pid: 11, path: "/data/app/base.apk"),
+        ]
+        let cpu = [
+            ProcessRow(name: "com.a", cpuPercent: 42, rssMB: nil, pid: 11, path: nil),
+        ]
+        let merged = AdbClient.mergeProcessRows(rss: ps, cpu: cpu)
+        #expect(merged.count == 1)
+        #expect(merged[0].cpuPercent == 42)
+        #expect(merged[0].path == "/data/app/base.apk")
+        #expect(merged[0].pid == 11)
+    }
+
     @Test func parseThermalZonesMulti() {
         let sample = """
         Temperature{mValue=53.0, mType=0, mName=AP, mStatus=0}

@@ -3,13 +3,56 @@ import AppKit
 /// LSUIElement(메뉴바) 앱 — 창을 뒤로 숨기지 않고 앞으로 가져오는 유틸
 @MainActor
 enum WindowFocus {
-    /// 메뉴바 팝오버 패널(상태바 레벨) 닫기
+    /// 알림 배너 패널 ID — 메뉴 팝오버 닫기 대상에서 제외
+    static let alertBannerWindowID = "RelayAlertBanner"
+
+    private static var savedFrontOrder: [ObjectIdentifier] = []
+    private static var popoverWasOpen = false
+
+    /// 메뉴바 팝오버 패널(상태바 레벨) 닫기 — 알림 배너는 제외
     static func dismissMenuBarPanels() {
         for window in NSApp.windows {
             guard let panel = window as? NSPanel else { continue }
+            if panel.identifier?.rawValue == alertBannerWindowID { continue }
             if panel.level == .statusBar || panel.level == .popUpMenu {
                 panel.perform(#selector(NSWindow.orderOut(_:)), with: nil)
             }
+        }
+    }
+
+    /// 메뉴바 팝오버 열림 — LSUIElement는 activate가 자주 누락되어
+    /// 일반 창이 다른 앱 뒤로 내려감. 앱을 활성화하고 앱 내 창 순서 복원.
+    static func menuBarPopoverDidOpen() {
+        let regular: [NSWindow] = NSApp.windows.filter { w in
+            w.isVisible && !(w is NSPanel) && w.canBecomeKey
+        }
+        savedFrontOrder = regular
+            .sorted(by: { (a: NSWindow, b: NSWindow) in a.windowNumber < b.windowNumber })
+            .map { (w: NSWindow) -> ObjectIdentifier in ObjectIdentifier(w) }
+
+        NSApp.activate(ignoringOtherApps: true)
+        popoverWasOpen = true
+
+        for id in savedFrontOrder {
+            guard let w = NSApp.windows.first(where: { ObjectIdentifier($0) == id }) else { continue }
+            w.orderFrontRegardless()
+        }
+    }
+
+    /// 팝오버가 닫힌 뒤 — 앱이 아직 active면 창을 다시 앞으로
+    /// (다른 앱으로 포커스 이동 시에는 개입하지 않음)
+    static func menuBarPopoverDidClose() {
+        guard popoverWasOpen else { return }
+        popoverWasOpen = false
+        // 패널 사라진 뒤 한 틱 대기 — SwiftUI panel orderOut 타이밍
+        DispatchQueue.main.async {
+            guard NSApp.isActive else { return }
+            for id in savedFrontOrder {
+                guard let w = NSApp.windows.first(where: { ObjectIdentifier($0) == id }),
+                      w.isVisible, !(w is NSPanel) else { continue }
+                w.orderFrontRegardless()
+            }
+            savedFrontOrder = []
         }
     }
 

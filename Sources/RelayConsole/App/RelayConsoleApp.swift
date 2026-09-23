@@ -16,16 +16,26 @@ struct RelayConsoleApp: App {
                 openDebug()
             }, openSettings: {
                 openSettingsWindow()
+            }, openProcesses: {
+                openProcesses()
             })
             .frame(width: 360, height: 560)
             .preferredColorScheme(.dark)
             .background(Color(hex: 0x0F111A)) // SOLID — V0-2: no material/glass
-        } label: {
-            // 아이콘만 — 텍스트 없음. 0대: 흰 안테나 · 1대+: 흰 Android + 초록점 (다크 메뉴바)
-            Image(nsImage: statusIcon)
-                .resizable()
-                .scaledToFit()
-                .frame(height: 18)
+        }         label: {
+            // 아이콘만 — 텍스트 없음. 0대: 흰 안테나 · 1대+: 흰 Android + 초록점 · critical 미해결: 주황 배지
+            ZStack(alignment: .topTrailing) {
+                Image(nsImage: statusIcon)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(height: 18)
+                if store.hasActiveCritical {
+                    Circle()
+                        .fill(OPColor.thermal)
+                        .frame(width: 7, height: 7)
+                        .offset(x: 3, y: -1)
+                }
+            }
         }
         .menuBarExtraStyle(.window)
         .windowResizability(.contentSize)
@@ -41,6 +51,18 @@ struct RelayConsoleApp: App {
         }
         .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 900, height: 700)
+
+        Window(L10n.string("droid.process.titleShort"), id: "processes") {
+            ZStack {
+                Color(hex: 0x0F111A).ignoresSafeArea()
+                ProcessListWindowView(store: store)
+            }
+            .frame(minWidth: 560, minHeight: 480)
+            .preferredColorScheme(.dark)
+            .background(Color(hex: 0x0F111A))
+        }
+        .windowStyle(.hiddenTitleBar)
+        .defaultSize(width: 640, height: 520)
 
         Settings {
             ZStack {
@@ -97,6 +119,12 @@ struct RelayConsoleApp: App {
         WindowFocus.dismissMenuBarPanels()
         openSettings()
         WindowFocus.presentSettings()
+    }
+
+    private func openProcesses() {
+        WindowFocus.dismissMenuBarPanels()
+        openWindow(id: "processes")
+        WindowFocus.present(sceneID: "processes")
     }
 
     /// 기기 0대 → Off(흰 안테나) · 1대+ → Online(흰 Android + 초록점)

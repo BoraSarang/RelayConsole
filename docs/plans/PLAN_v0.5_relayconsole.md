@@ -1,6 +1,6 @@
 # PLAN_v0.5_relayconsole.md — 감시 이벤트: ThresholdGate·hysteresis·severity
 
-> 생성일: 2026-09-24 | 상태: **계획 확정 전 (리서치 흡수 완료)**
+> 생성일: 2026-09-24 | 상태: **완료 (DoD 전수 · 육안 ✓ · PR 중)**
 > 모체: `docs/research/RESEARCH_watch_events.md` (Downloads 보완판 v1.1)
 > 앱: **Relay Console** | bundleId: **`com.borasarang.relayconsole`** | 목표 버전: **0.5.0** | 최소 OS: **macOS 26.0**
 
@@ -155,14 +155,19 @@ WatchEvent
 
 ## 7. 검증 (DoD)
 
-- [ ] `swift test` 통과 (신규 Gate 테스트 포함)
-- [ ] `./build_and_run.sh debug macos` 빌드 0 error
-- [ ] 금지 grep 0건 (Outpost, iStat, Scrcpy, gfxinfo, material…)
-- [ ] i18n 3곳 키 수 일치 (ko strings / en strings / xcstrings)
-- [ ] 실기기 S22: Thermalservice Status≥3 유도(또는 에뮬 status 오버라이드) → 알림 1회 → clear 후 "해제" 1회 → 60s 내 재진입 무시
-- [ ] 충전 켜기/끄기 → 이벤트 각 1회
-- [ ] 팝오버 Latest에 심각 이벤트 상단 노출
-- [ ] 메뉴바 주황 배지 (critical 미해결 시) 육안
+- [x] `swift test` 통과 (신규 Gate 테스트 포함) — **84/84** (ThresholdGate + WatchEvent + 프로세스 파서 + 기존)
+- [x] `./build_and_run.sh debug macos` 빌드 0 error · 번들 **0.5.0**
+- [x] 금지 grep 0건 (Outpost, iStat, Scrcpy, gfxinfo, material…)
+- [x] i18n 3곳 키 수 일치 — **129/129/129** (알림 배너 + 후속 조치 + 저전력/배터리 임계 + 프로세스 목록 포함)
+- [x] DEBUG 합성 주입 훅 — `ConsoleStore.debugInjectSynthetic` + 디버그 패널 (스로틀링/충전/보호 on·off/저전력/배터리20%/배지) — release 미포함
+- [x] 알림형 상단 배너 — `AlertBannerPresenter` (NSPanel, 메뉴 팝오버 아님) · `relay.watch.banner` 기본 ON · `alert.banner.{notify,cleared}` 메시지
+- [x] **권장 후속 조치 가이드** — 미해결 warning+ → 팝오버 `권장 후속 조치` 체크리스트 (스로틀링 대응 5항 등), 탭 → 콘솔
+- [x] **저전력 모드·배터리 임계** — `lowPowerChanged` + `batteryThreshold` 20/10/5% · 설정 2토글 · 테스트 80/80
+- [x] 실기기 육안 — 주입(스로틀/충전/보호)·알림 배너·팝오버 Latest·메뉴바 배지 ✓
+- [x] 충전 전이 육안 — 켜기/끄기 이벤트 ✓
+- [x] 팝오버 Latest에 심각 이벤트 상단 노출 (육안 ✓)
+- [x] 메뉴바 주황 배지 (critical 미해결 시) 육안 ✓
+- [ ] Phase2 A5: PSI 파서 + load/mem 임계 — **보류(후속)**
 
 ---
 
@@ -170,13 +175,14 @@ WatchEvent
 
 | 단계 | 작업 | 산출 | 검증 |
 |------|------|------|------|
-| **A0** | 본 PLAN + research 커밋 | 문서 | — |
-| **A1** | ThresholdGate + 테스트 | Utils + Tests | flap/cooldown 케이스 |
-| **A2** | WatchEvent + WatchEngine + thermal/charge/protection feed | 3종 이벤트 | 단위 emit 테스트 |
-| **A3** | ConsoleStore 쿨다운 + UNNotification + 권한 | 파이프 | 중복 0, 시연 알림 |
-| **A4** | 팝오버 Latest + 메뉴바 주황 배지 + i18n | UI | 육안 |
-| **A5** | PSI 파서 + load/mem 임계 (Phase2) | 3종 추가 | S22 실측 |
-| **A6** | 설정 토글 (`relay.watch.*`) + 문서화 + 버전 0.5.0 | Settings + CHANGELOG | DoD 전수 |
+| **A0** | 본 PLAN + research 커밋 | 문서 | — ✓ |
+| **A1** | ThresholdGate + 테스트 | Utils + Tests | flap/cooldown 케이스 ✓ |
+| **A2** | WatchEvent + WatchEngine + thermal/charge/protection feed | 3종 이벤트 | 단위 emit 테스트 ✓ |
+| **A3** | ConsoleStore 쿨다운 + UNNotification + 권한 | 파이프 | 중복 0 ✓ / 시연 알림 대기 |
+| **A4** | 팝오버 Latest + 메뉴바 주황 배지 + i18n | UI | 코드 ✓ · 육안 ✓ |
+| **A5** | PSI 파서 + load/mem 임계 (Phase2) | 3종 추가 | **보류** |
+| **A6** | 설정 토글 (`relay.watch.*`) + 문서화 + 버전 0.5.0 | Settings + CHANGELOG | DoD 자동 항목 ✓ |
+| **+** | 프로세스 목록(이름/PID/CPU/RAM/커맨드) · 독립 윈도우 | ProcessList* | 84/84 · 육안 ✓ |
 
 **소요**: A1–A3 반나절 · A4–A6 하루.  
 **병렬 가능**: i18n 키 목록은 A2와 동시 작성.

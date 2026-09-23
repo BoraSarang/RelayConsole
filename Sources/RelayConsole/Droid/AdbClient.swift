@@ -459,6 +459,93 @@ enum AdbClient {
         return out
     }
 
+    /// `dumpsys cpuinfo` — `  12.3% 4567/com.app: 8% user + 4% kernel` → name/cpu/pid
+    static func parseCpuInfoProcs(_ text: String, limit: Int = 30) -> [ProcessRow] {
+        var out: [ProcessRow] = []
+        for line in text.split(separator: "\n") {
+            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard trimmed.contains("%"), trimmed.contains("/") else { continue }
+            // "12.3% 4567/com.app: ..."
+            let parts = trimmed.split(whereSeparator: \.isWhitespace).map(String.init)
+            guard parts.count >= 2 else { continue }
+            var pctStr = parts[0]
+            if pctStr.hasSuffix("%") { pctStr.removeLast() }
+            guard let cpu = Double(pctStr) else { continue }
+            // "4567/com.app:" → pid + name
+            let pidName = parts[1]
+            guard let slash = pidName.firstIndex(of: "/") else { continue }
+            let pidStr = String(pidName[..<slash])
+            var name = String(pidName[pidName.index(after: slash)...])
+            if name.hasSuffix(":") { name.removeLast() }
+            guard !name.isEmpty else { continue }
+            out.append(ProcessRow(
+                name: name,
+                cpuPercent: cpu,
+                rssMB: nil,
+                pid: Int(pidStr),
+                path: nil
+            ))
+            if out.count >= limit { break }
+        }
+        return out
+    }
+
+    /// `ps -A -o PID,RSS,NAME,ARGS --sort=-rss` — ARGS는 실행 경로(공백 포함 나머지 줄)
+    static func parsePsProcRows(_ text: String, limit: Int = 30) -> [ProcessRow] {
+        var out: [ProcessRow] = []
+        for line in text.split(separator: "\n") {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            guard !trimmed.isEmpty else { continue }
+            let parts = trimmed.split(whereSeparator: \.isWhitespace).map(String.init)
+            guard parts.count >= 4 else { continue }
+            if parts[0].uppercased() == "PID" { continue }
+            guard let pid = Int(parts[0]), let kb = Double(parts[1]) else { continue }
+            let name = parts[2]
+            guard !name.isEmpty, name != "NAME" else { continue }
+            let path = parts[3...].joined(separator: " ")
+            out.append(ProcessRow(
+                name: name,
+                cpuPercent: nil,
+                rssMB: kb / 1024.0,
+                pid: pid,
+                path: path.isEmpty ? nil : path
+            ))
+            if out.count >= limit { break }
+        }
+        return out
+    }
+
+    /// RSS/ARGS 목록 + CPU 목록 이름 기준 병합
+    static func mergeProcessRows(rss: [ProcessRow], cpu: [ProcessRow]) -> [ProcessRow] {
+        var map: [String: ProcessRow] = [:]
+        var order: [String] = []
+        for r in rss {
+            let key = r.name
+            if map[key] == nil { order.append(key) }
+            map[key] = r
+        }
+        for c in cpu {
+            let key = c.name
+            if var existing = map[key] {
+                existing.cpuPercent = c.cpuPercent
+                if existing.pid == nil { existing.pid = c.pid }
+                map[key] = existing
+            } else {
+                map[key] = c
+                order.append(key)
+            }
+        }
+        return order.compactMap { map[$0] }
+    }
+
+    /// 구버전 호환 — [ProcessRSS] → [ProcessRow]
+    static func mergeProcessRows(rss: [ProcessRSS], cpu: [ProcessRow]) -> [ProcessRow] {
+        let asRows = rss.map {
+            ProcessRow(name: $0.name, cpuPercent: nil, rssMB: $0.rssMB, pid: nil, path: nil)
+        }
+        return mergeProcessRows(rss: asRows, cpu: cpu)
+    }
+
     // MARK: - Thermal zones (all Temperature{...})
 
     struct ThermalZoneSample: Equatable, Sendable {

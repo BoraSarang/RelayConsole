@@ -12,6 +12,20 @@ struct ProcessRSS: Sendable, Equatable, Hashable {
     var rssMB: Double
 }
 
+/// 프로세스 목록 행 — 이름 + PID + CPU% + RSS + 실행 경로
+struct ProcessRow: Sendable, Equatable, Hashable, Identifiable {
+    var name: String
+    var cpuPercent: Double?
+    var rssMB: Double?
+    var pid: Int?
+    /// ARGS/cmdline — 실행 경로 (앱 APK 경로 또는 바이너리)
+    var path: String?
+    var id: String {
+        if let pid { return "\(pid):\(name)" }
+        return name
+    }
+}
+
 /// thermalservice 온도 존 행
 struct ThermalZone: Sendable, Equatable, Hashable {
     var name: String
@@ -47,6 +61,8 @@ struct DeviceSnapshot: Sendable, Equatable {
     var batteryHealthPct: Int?
     var isProtectionMode: Bool?
     var protectionThresholdPct: Int?
+    /// settings global low_power (0/1)
+    var isLowPowerMode: Bool?
     var cycleEstimate: Int?
     var load1: Double?
     var load5: Double?
@@ -63,6 +79,8 @@ struct DeviceSnapshot: Sendable, Equatable {
     /// none / low / moderate / full
     var memPressureLabel: String?
     var topProcesses: [ProcessRSS]?
+    /// 전체 프로세스 목록 (CPU% + RSS, 시트용)
+    var processList: [ProcessRow]?
     var swapUsedGB: Double?
     var thermalZones: [ThermalZone]?
     var rsrp: Int?
@@ -148,6 +166,7 @@ struct DeviceInventory: Equatable {
                 merged.batteryHealthPct = merged.batteryHealthPct ?? prev.batteryHealthPct
                 merged.isProtectionMode = merged.isProtectionMode ?? prev.isProtectionMode
                 merged.protectionThresholdPct = merged.protectionThresholdPct ?? prev.protectionThresholdPct
+                merged.isLowPowerMode = merged.isLowPowerMode ?? prev.isLowPowerMode
                 merged.cycleEstimate = merged.cycleEstimate ?? prev.cycleEstimate
                 merged.load1 = merged.load1 ?? prev.load1
                 merged.load5 = merged.load5 ?? prev.load5
@@ -167,6 +186,7 @@ struct DeviceInventory: Equatable {
                 merged.memPressurePct = merged.memPressurePct ?? prev.memPressurePct
                 merged.memPressureLabel = merged.memPressureLabel ?? prev.memPressureLabel
                 merged.topProcesses = merged.topProcesses ?? prev.topProcesses
+                merged.processList = merged.processList ?? prev.processList
                 merged.swapUsedGB = merged.swapUsedGB ?? prev.swapUsedGB
                 merged.thermalZones = merged.thermalZones ?? prev.thermalZones
                 merged.rsrp = merged.rsrp ?? prev.rsrp

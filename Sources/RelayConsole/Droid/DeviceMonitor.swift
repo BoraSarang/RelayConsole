@@ -123,10 +123,44 @@ actor DeviceMonitor {
             snap.isProtectionMode = batt.isProtectionMode
             snap.protectionThresholdPct = batt.protectionThresholdPct
             snap.cycleEstimate = batt.cycleEstimate
+
+            // ── 감시 이벤트 (PLAN_v0.5 Phase1): 충전·보호모드·배터리 임계 전이
+            if let charging = batt.isCharging {
+                await emitWatch(
+                    WatchEngine.shared.feedCharging(serial: serial, charging: charging)
+                )
+            }
+            if let prot = batt.isProtectionMode {
+                await emitWatch(
+                    WatchEngine.shared.feedProtection(serial: serial, enabled: prot)
+                )
+            }
+            if let level = batt.batteryLevel {
+                let charging = batt.isCharging ?? false
+                await emitWatch(
+                    WatchEngine.shared.feedBatteryLevel(
+                        serial: serial,
+                        level: level,
+                        charging: charging
+                    )
+                )
+            }
         } else {
             let msg = ErrorCode.adbParseFailed.koMessage
             snap.lastError = msg
             await logLast(msg)
+        }
+
+        // 저전력 모드 (settings global low_power 0/1) — 15s 틱
+        if tickCount % 3 == 1 {
+            if let lpText = try? shell(serial, "settings", "get", "global", "low_power"),
+               let lp = AdbClient.parseSettingValue(lpText) {
+                let enabled = (Int(lp) ?? 0) != 0
+                snap.isLowPowerMode = enabled
+                await emitWatch(
+                    WatchEngine.shared.feedLowPower(serial: serial, enabled: enabled)
+                )
+            }
         }
 
         if let thText = try? shell(serial, "dumpsys", "thermalservice") {
@@ -137,6 +171,12 @@ actor DeviceMonitor {
             // zones는 15s tick에서
             if tickCount % 3 == 1 {
                 snap.thermalZones = AdbClient.parseThermalZones(thText).zones
+            }
+            // ── 감시 이벤트: 스로틀링 전이 (hysteresis gate)
+            if let status = th.status {
+                await emitWatch(
+                    WatchEngine.shared.feedThermal(serial: serial, status: status)
+                )
             }
         }
 
@@ -209,10 +249,32 @@ actor DeviceMonitor {
                 snap.memPressureLabel = "moderate"
             }
 
-            // Top RSS
-            if let psText = try? shell(serial, "ps", "-A", "-o", "RSS,NAME", "--sort=-rss") {
-                let top = AdbClient.parseTopRss(psText, limit: 3)
-                if !top.isEmpty { snap.topProcesses = top }
+            // Top RSS+ARGS + CPU → 프로세스 목록
+            var psRows: [ProcessRow] = []
+            if let psText = try? shell(serial, "ps", "-A", "-o", "PID,RSS,NAME,ARGS", "--sort=-rss") {
+                psRows = AdbClient.parsePsProcRows(psText, limit: 30)
+            }
+            var cpuRows: [ProcessRow] = []
+            if let cpuText = try? shell(serial, "dumpsys", "cpuinfo") {
+                cpuRows = AdbClient.parseCpuInfoProcs(cpuText, limit: 30)
+            }
+            if !psRows.isEmpty || !cpuRows.isEmpty {
+                let merged = AdbClient.mergeProcessRows(rss: psRows, cpu: cpuRows)
+                // 카드용 상위 5 (RSS 기준)
+                let top5 = merged
+                    .filter { $0.rssMB != nil }
+                    .sorted { ($0.rssMB ?? 0) > ($1.rssMB ?? 0) }
+                    .prefix(5)
+                    .map { ProcessRSS(name: $0.name, rssMB: $0.rssMB ?? 0) }
+                if !top5.isEmpty { snap.topProcesses = top5 }
+                // 시트/윈도우용 전체
+                let full = merged.sorted {
+                    let c0 = $0.cpuPercent ?? -1
+                    let c1 = $1.cpuPercent ?? -1
+                    if c0 != c1 { return c0 > c1 }
+                    return ($0.rssMB ?? 0) > ($1.rssMB ?? 0)
+                }
+                if !full.isEmpty { snap.processList = full }
             }
 
             if let netText = try? shell(serial, "cat", "/proc/net/dev") {
@@ -460,6 +522,18 @@ actor DeviceMonitor {
         }
     }
 
+    /// WatchEngine emit → ConsoleStore (구조화 이벤트 + 문자열 요약 병행)
+    private func emitWatch(_ event: WatchEvent?) async {
+        guard let event else { return }
+        await MainActor.run {
+            DebugLogger.shared.info(
+                "Watch",
+                "[WATCH] \(event.kind.rawValue) sev=\(event.severity.rawValue) \(event.summary)"
+            )
+            ConsoleStore.shared.ingestWatch(event)
+        }
+    }
+
     // MARK: - Device list
 
     private func resolveDevices() async {
@@ -503,6 +577,7 @@ actor DeviceMonitor {
             states.removeValue(forKey: s)
             await MainActor.run {
                 ConsoleStore.shared.markDeviceOffline(s)
+                WatchEngine.shared.forget(serial: s)
             }
             let short = AdbClient.parseConnection(s).kind == .network ? s : AdbClient.shortId(s)
             await notifyEvent(L10n.format("event.deviceDisconnected", short))

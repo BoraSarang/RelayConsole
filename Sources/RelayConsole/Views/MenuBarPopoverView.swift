@@ -5,11 +5,16 @@ struct MenuBarPopoverView: View {
     var openConsole: () -> Void
     var openDebug: () -> Void = {}
     var openSettings: () -> Void = {}
+    var openProcesses: () -> Void = {}
 
     @State private var showDeviceDetail = false
     @State private var showEvents = false
-    /// 메뉴바는 아이콘만 — 기기 수는 팝오버에서만 (설정 토글)
+    /// 상단 감시 배너 TTL — 해제/충전 등 일회성 이벤트는 5분 후 자동 제거
+    @State private var now = Date()
     @AppStorage("relay.menubarMetrics") private var menubarMetrics = true
+
+    /// 상단 배너 유지 시간 (초)
+    private let topBannerTTL: TimeInterval = 300
 
     private var devices: [DeviceSnapshot] { store.inventory.devices }
     private var device: DeviceSnapshot? { store.selectedDevice }
@@ -17,6 +22,10 @@ struct MenuBarPopoverView: View {
         device.map { store.metrics(for: $0.serial) }
     }
     private var multiDevice: Bool { devices.count > 1 }
+    /// 최신 5분 내 이벤트만 상단 배너 — 오래된 건 이력(최신 이벤트)에만 남김
+    private var freshWatchEvent: WatchEvent? {
+        store.recentWatchEvents.first { now.timeIntervalSince($0.at) < topBannerTTL }
+    }
 
     var body: some View {
         ZStack {
@@ -37,8 +46,16 @@ struct MenuBarPopoverView: View {
                             .padding(.top, 72)
                     } else {
                         VStack(alignment: .leading, spacing: 12) {
+                            // 감시 이벤트 상단 배너 — 5분 TTL (해제·충전 등 일회성 자동 제거)
+                            if let ev = freshWatchEvent {
+                                watchEventBanner(ev)
+                            }
                             if let d = device, d.isThermalAlert {
                                 thermalBanner(device: d)
+                            }
+                            // 미해결 warning+ → 후속 조치 가이드
+                            if !store.activeRemediationEvents.isEmpty {
+                                remediationGuide(store.activeRemediationEvents)
                             }
                             // 기기 상세 ⌄ → 상세 + 대시보드 카드
                             if showDeviceDetail {
@@ -46,11 +63,11 @@ struct MenuBarPopoverView: View {
                                 cards
                                 eventsSection
                             } else {
-                                Text(L10n.string("menubar.device.detailHint"))
-                                    .font(OPFont.body(12))
-                                    .foregroundStyle(OPColor.inkDim)
-                                    .frame(maxWidth: .infinity, alignment: .center)
-                                    .padding(.top, 48)
+                                // 접힘: 이벤트는 배너 바로 아래, 힌트는 남은 빈 영역 중앙
+                                eventsSection
+                                Spacer(minLength: 24)
+                                detailHint
+                                Spacer(minLength: 24)
                             }
                         }
                         .padding(OPSpace.lg)
@@ -69,6 +86,16 @@ struct MenuBarPopoverView: View {
         .frame(width: 360, height: 560)
         .background(Color(hex: 0x0F111A))
         .preferredColorScheme(.dark)
+        .onAppear {
+            // LSUIElement — 팝오버 열림 시 앱 활성화 누락 → 다른 창이 뒤로 내려감
+            WindowFocus.menuBarPopoverDidOpen()
+        }
+        .onDisappear {
+            WindowFocus.menuBarPopoverDidClose()
+        }
+        .onReceive(Timer.publish(every: 15, on: .main, in: .common).autoconnect()) { t in
+            now = t
+        }
     }
 
     // MARK: - Header (fixed)
@@ -93,7 +120,7 @@ struct MenuBarPopoverView: View {
                         .font(OPFont.number(11))
                         .foregroundStyle(OPColor.inkDim)
                 }
-                Text("0.4.0")
+                Text("0.5.0")
                     .font(OPFont.number(10))
                     .foregroundStyle(OPColor.inkDim)
             }
@@ -258,6 +285,56 @@ struct MenuBarPopoverView: View {
         d.connectionKind == .network ? (d.connectionLabel ?? d.serial) : AdbClient.shortId(d.serial)
     }
 
+    // MARK: - Watch event banner (상단 — thermalBanner와 동일 스타일)
+
+    private func watchEventBanner(_ e: WatchEvent) -> some View {
+        let accent: Color = e.isClear
+            ? OPColor.ok
+            : (e.severity == .critical ? OPColor.bad : (e.severity == .warning ? OPColor.warn : OPColor.cta))
+        return HStack(spacing: 6) {
+            Circle()
+                .fill(accent)
+                .frame(width: 6, height: 6)
+            Text(e.isClear ? "✓ " + e.title : "● " + e.title)
+                .font(OPFont.body(11))
+                .foregroundStyle(accent)
+                .lineLimit(1)
+                .truncationMode(.tail)
+            if !e.detail.isEmpty {
+                Text(e.detail)
+                    .font(OPFont.number(10))
+                    .foregroundStyle(OPColor.inkDim)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
+            Spacer(minLength: 4)
+            Text(timeLabel(e.at))
+                .font(OPFont.number(9))
+                .foregroundStyle(OPColor.inkDim)
+                .lineLimit(1)
+        }
+        .padding(OPSpace.sm)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(accent.opacity(0.15))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(accent.opacity(0.35), lineWidth: 1)
+        )
+        .contentShape(Rectangle())
+        .onTapGesture {
+            withAnimation(.easeInOut(duration: 0.15)) { showEvents = true }
+        }
+    }
+
+    private func timeLabel(_ date: Date) -> String {
+        let f = DateFormatter()
+        f.dateFormat = "HH:mm:ss"
+        return f.string(from: date)
+    }
+
     // MARK: - Thermal banner
 
     private func thermalBanner(device d: DeviceSnapshot) -> some View {
@@ -299,13 +376,134 @@ struct MenuBarPopoverView: View {
         .onTapGesture { openConsole() }
     }
 
+    // MARK: - Remediation guide (미해결 경고 → 후속 조치 체크리스트)
+
+    private func remediationGuide(_ events: [WatchEvent]) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                Image(systemName: "list.bullet.clipboard")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(OPColor.warn)
+                Text(L10n.string("remediation.title"))
+                    .font(OPFont.body(11))
+                    .foregroundStyle(OPColor.warn)
+            }
+            ForEach(Array(Set(events.map(\.kind)).sorted(by: { $0.rawValue < $1.rawValue })), id: \.rawValue) { kind in
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(remediationHeader(kind))
+                        .font(OPFont.body(10))
+                        .foregroundStyle(OPColor.inkDim)
+                    ForEach(remediationSteps(kind), id: \.self) { step in
+                        HStack(alignment: .top, spacing: 6) {
+                            Text("•")
+                                .font(OPFont.body(11))
+                                .foregroundStyle(OPColor.inkDim)
+                            Text(step)
+                                .font(OPFont.body(11))
+                                .foregroundStyle(OPColor.ink)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                }
+                .padding(.bottom, 2)
+            }
+        }
+        .padding(OPSpace.sm)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(OPColor.warn.opacity(0.08))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(OPColor.warn.opacity(0.25), lineWidth: 1)
+        )
+        .contentShape(Rectangle())
+        .onTapGesture { openConsole() }
+    }
+
+    private func remediationHeader(_ kind: WatchKind) -> String {
+        switch kind {
+        case .throttling: return L10n.string("remediation.throttling")
+        case .protectionChanged: return L10n.string("remediation.protection")
+        case .batteryThreshold: return L10n.string("remediation.battery")
+        case .lowPowerChanged: return L10n.string("remediation.lowPower")
+        default: return L10n.string("remediation.title")
+        }
+    }
+
+    private func remediationSteps(_ kind: WatchKind) -> [String] {
+        switch kind {
+        case .throttling:
+            return [
+                L10n.string("remediation.throttle.1"),
+                L10n.string("remediation.throttle.2"),
+                L10n.string("remediation.throttle.3"),
+                L10n.string("remediation.throttle.4"),
+                L10n.string("remediation.throttle.5")
+            ]
+        case .protectionChanged:
+            return [
+                L10n.string("remediation.protection.1"),
+                L10n.string("remediation.protection.2")
+            ]
+        case .batteryThreshold:
+            return [
+                L10n.string("remediation.battery.1"),
+                L10n.string("remediation.battery.2"),
+                L10n.string("remediation.battery.3")
+            ]
+        case .lowPowerChanged:
+            return [
+                L10n.string("remediation.lowPower.1"),
+                L10n.string("remediation.lowPower.2")
+            ]
+        default:
+            return []
+        }
+    }
+
+    // MARK: - Detail hint (접힘 — 빈 영역 중앙, 탭하면 펼침)
+
+    private var detailHint: some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.15)) {
+                showDeviceDetail = true
+            }
+        } label: {
+            VStack(spacing: 8) {
+                Image(systemName: "rectangle.stack")
+                    .font(.system(size: 22, weight: .light))
+                    .foregroundStyle(OPColor.inkDim.opacity(0.7))
+                Text(L10n.string("menubar.device.detailHint"))
+                    .font(OPFont.body(12))
+                    .foregroundStyle(OPColor.inkDim)
+                    .multilineTextAlignment(.center)
+                HStack(spacing: 4) {
+                    Text(L10n.string("menubar.device.detail"))
+                        .font(OPFont.body(11))
+                        .foregroundStyle(OPColor.cta)
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(OPColor.cta)
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, OPSpace.md)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
     // MARK: - Cards (dashboard 동일 형식 — DroidCards 공유)
 
     private var cards: some View {
         VStack(spacing: 12) {
             DroidCards.cpu(device: device, metrics: metrics)
             DroidCards.gpu(device: device, metrics: metrics)
-            DroidCards.memory(device: device, metrics: metrics)
+            DroidCards.memory(device: device, metrics: metrics) {
+                openProcesses()
+            }
             DroidCards.sensors(device: device, metrics: metrics)
             DroidCards.battery(device: device, metrics: metrics)
             DroidCards.network(device: device, metrics: metrics)
@@ -377,32 +575,103 @@ struct MenuBarPopoverView: View {
             .buttonStyle(.plain)
 
             if showEvents {
-                if store.recentEvents.isEmpty {
+                if store.recentWatchEvents.isEmpty && store.recentEvents.isEmpty {
                     Text(L10n.string("menubar.events.empty"))
                         .font(OPFont.body(12))
                         .foregroundStyle(OPColor.inkDim)
                         .lineLimit(1)
                 } else {
+                    let fallback = store.recentEvents.prefix(5).map {
+                        WatchRow(title: $0, detail: "", severity: .info, isClear: false)
+                    }
+                    let events = store.recentWatchEvents.isEmpty
+                        ? fallback
+                        : store.recentWatchEvents.prefix(5).map {
+                            WatchRow(
+                                title: $0.title,
+                                detail: $0.detail,
+                                severity: $0.severity,
+                                isClear: $0.isClear
+                            )
+                        }
                     VStack(alignment: .leading, spacing: 0) {
-                        ForEach(Array(store.recentEvents.prefix(5).enumerated()), id: \.offset) { _, e in
+                        ForEach(Array(events.enumerated()), id: \.offset) { _, e in
                             HStack(alignment: .top, spacing: 6) {
                                 Circle()
-                                    .fill(OPColor.cta.opacity(0.7))
+                                    .fill(watchDotColor(e.severity).opacity(e.isClear ? 0.35 : 0.9))
                                     .frame(width: 5, height: 5)
                                     .padding(.top, 5)
-                                Text(e)
-                                    .font(OPFont.body(11))
-                                    .foregroundStyle(OPColor.ink)
-                                    .lineLimit(2)
-                                    .truncationMode(.tail)
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text(e.title)
+                                        .font(OPFont.body(11))
+                                        .foregroundStyle(
+                                            e.severity == .critical
+                                                ? OPColor.bad
+                                                : (e.severity == .warning ? OPColor.warn : OPColor.ink)
+                                        )
+                                        .lineLimit(1)
+                                        .truncationMode(.tail)
+                                    if !e.detail.isEmpty {
+                                        Text(e.detail)
+                                            .font(OPFont.body(10))
+                                            .foregroundStyle(OPColor.inkDim)
+                                            .lineLimit(1)
+                                            .truncationMode(.tail)
+                                    }
+                                }
                             }
                             .padding(.vertical, 3)
                         }
                     }
                     .padding(.leading, 2)
                 }
+            } else if let latest = store.recentWatchEvents.first {
+                // 접힘 시 최신 1건만 — 주입 직후 육안 확인용
+                HStack(alignment: .top, spacing: 6) {
+                    Circle()
+                        .fill(watchDotColor(latest.severity).opacity(latest.isClear ? 0.35 : 0.9))
+                        .frame(width: 5, height: 5)
+                        .padding(.top, 5)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(latest.title)
+                            .font(OPFont.body(11))
+                            .foregroundStyle(
+                                latest.severity == .critical
+                                    ? OPColor.bad
+                                    : (latest.severity == .warning ? OPColor.warn : OPColor.ink)
+                            )
+                            .lineLimit(1)
+                        if !latest.detail.isEmpty {
+                            Text(latest.detail)
+                                .font(OPFont.body(10))
+                                .foregroundStyle(OPColor.inkDim)
+                                .lineLimit(1)
+                        }
+                    }
+                }
+                .padding(.leading, 2)
+            } else {
+                Text(L10n.string("menubar.events.empty"))
+                    .font(OPFont.body(12))
+                    .foregroundStyle(OPColor.inkDim)
+                    .lineLimit(1)
             }
         }
+    }
+
+    private func watchDotColor(_ severity: WatchSeverity) -> Color {
+        switch severity {
+        case .critical: return OPColor.bad
+        case .warning: return OPColor.warn
+        case .info: return OPColor.cta
+        }
+    }
+
+    private struct WatchRow: Equatable {
+        let title: String
+        let detail: String
+        let severity: WatchSeverity
+        let isClear: Bool
     }
 
     // MARK: - Footer (fixed)

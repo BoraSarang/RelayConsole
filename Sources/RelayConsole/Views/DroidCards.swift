@@ -114,7 +114,11 @@ enum DroidCards {
 
     // MARK: - Memory
 
-    static func memory(device: DeviceSnapshot?, metrics: DroidMetrics?) -> some View {
+    static func memory(
+        device: DeviceSnapshot?,
+        metrics: DroidMetrics?,
+        onMore: (() -> Void)? = nil
+    ) -> some View {
         shell(L10n.string("droid.card.memory.title")) {
             Text(memoryValue(device))
                 .font(OPFont.number(16))
@@ -142,6 +146,11 @@ enum DroidCards {
                                 .lineLimit(1)
                                 .truncationMode(.middle)
                             Spacer()
+                            if let cpu = cpuPercent(for: p.name, in: device) {
+                                Text(String(format: "%.1f%%", cpu))
+                                    .font(OPFont.number(10))
+                                    .foregroundStyle(OPColor.cta)
+                            }
                             Text(String(format: "%.0f MB", p.rssMB))
                                 .font(OPFont.number(10))
                                 .foregroundStyle(OPColor.inkDim)
@@ -149,7 +158,23 @@ enum DroidCards {
                     }
                 }
             }
+            if let onMore, device?.processList?.isEmpty == false {
+                Button(action: onMore) {
+                    Text(L10n.string("droid.process.more"))
+                        .font(OPFont.body(11))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 5)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(OPColor.cta)
+                .frame(maxWidth: .infinity)
+            }
         }
+    }
+
+    private static func cpuPercent(for name: String, in device: DeviceSnapshot?) -> Double? {
+        device?.processList?.first { $0.name == name }?.cpuPercent
     }
 
     // MARK: - Sensors
