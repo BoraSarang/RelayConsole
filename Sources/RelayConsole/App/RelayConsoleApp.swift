@@ -6,6 +6,7 @@ struct RelayConsoleApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var store = ConsoleStore.shared
     @Environment(\.openWindow) private var openWindow
+    @Environment(\.openSettings) private var openSettings
 
     var body: some Scene {
         MenuBarExtra {
@@ -13,20 +14,18 @@ struct RelayConsoleApp: App {
                 openConsole()
             }, openDebug: {
                 openDebug()
+            }, openSettings: {
+                openSettingsWindow()
             })
             .frame(width: 360, height: 560)
             .preferredColorScheme(.dark)
             .background(Color(hex: 0x0F111A)) // SOLID — V0-2: no material/glass
         } label: {
-            HStack(spacing: 4) {
-                Image(nsImage: Self.menuBarIcon)
-                    .renderingMode(.template)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(height: 16)
-                Text(menuTitle)
-                    .font(OPFont.number(12))
-            }
+            // 아이콘만 — 텍스트 없음. 0대: 흰 안테나 · 1대+: 흰 Android + 초록점 (다크 메뉴바)
+            Image(nsImage: statusIcon)
+                .resizable()
+                .scaledToFit()
+                .frame(height: 18)
         }
         .menuBarExtraStyle(.window)
         .windowResizability(.contentSize)
@@ -71,7 +70,7 @@ struct RelayConsoleApp: App {
         .defaultSize(width: 640, height: 480)
         .commands {
             CommandGroup(after: .sidebar) {
-                Button(L10n.string("menubar.button.debug")) { openWindow(id: "debug") }
+                Button(L10n.string("menubar.button.debug")) { openDebug() }
                     .keyboardShortcut("d", modifiers: [.command, .shift])
             }
         }
@@ -81,53 +80,52 @@ struct RelayConsoleApp: App {
     }
 
     private func openConsole() {
+        WindowFocus.dismissMenuBarPanels()
         openWindow(id: "console")
-        NSApp.activate(ignoringOtherApps: true)
+        WindowFocus.present(sceneID: "console")
     }
 
     private func openDebug() {
 #if DEBUG
+        WindowFocus.dismissMenuBarPanels()
         openWindow(id: "debug")
-        NSApp.activate(ignoringOtherApps: true)
+        WindowFocus.present(sceneID: "debug")
 #endif
     }
 
-    /// `Relay n/m` + optional 5지표 (`relay.menubarMetrics`)
-    private var menuTitle: String {
-        let online = store.inventory.devices.filter(\.isOnline).count
-        if store.inventory.devices.isEmpty { return "Relay" }
-        let base = "Relay \(online)/\(store.inventory.devices.count)"
-        guard UserDefaults.standard.object(forKey: "relay.menubarMetrics") as? Bool ?? true else {
-            return base
-        }
-        guard let d = store.selectedDevice else { return base }
-        var parts: [String] = []
-        if let cpu = d.cpuUsePercent {
-            parts.append(String(format: "CPU %.0f%%", cpu))
-        }
-        if let used = d.memoryUsedGB, let total = d.memoryTotalGB, total > 0 {
-            parts.append(String(format: "MEM %.0f%%", used / total * 100))
-        }
-        if let level = d.batteryLevel {
-            parts.append(String(format: "BAT %d%%", level))
-        }
-        if let t = d.deviceTempC ?? d.batteryTempC {
-            parts.append(String(format: "%.0f°", t))
-        }
-        if d.netUpMBps != nil || d.netDownMBps != nil {
-            parts.append("NET")
-        }
-        if parts.isEmpty { return base }
-        return base + " · " + parts.joined(separator: " · ")
+    private func openSettingsWindow() {
+        WindowFocus.dismissMenuBarPanels()
+        openSettings()
+        WindowFocus.presentSettings()
     }
 
-    /// Black_Template_22 — must be template (not White preview)
-    private static let menuBarIcon: NSImage = {
+    /// 기기 0대 → Off(흰 안테나) · 1대+ → Online(흰 Android + 초록점)
+    /// 다크 메뉴바용 흰색 리소스 — template 금지(색 유지)
+    private var statusIcon: NSImage {
+        let empty = store.inventory.devices.isEmpty
+        let name = empty ? "MenuBar-Off" : "MenuBar-Online"
+        guard let img = Bundle.main.image(forResource: name) else {
+            return Self.fallbackIcon
+        }
+        img.isTemplate = false
+        let displayH: CGFloat = 18
+        if let tiff = img.tiffRepresentation,
+           let rep = NSBitmapImageRep(data: tiff),
+           rep.pixelsHigh > 0 {
+            let displayW = max(1, displayH * CGFloat(rep.pixelsWide) / CGFloat(rep.pixelsHigh))
+            img.size = NSSize(width: displayW, height: displayH)
+        } else {
+            img.size = NSSize(width: displayH, height: displayH)
+        }
+        return img
+    }
+
+    private static let fallbackIcon: NSImage = {
         guard let img = Bundle.main.image(forResource: "MenuBarTemplate") else {
-            return NSImage(size: NSSize(width: 16, height: 16))
+            return NSImage(size: NSSize(width: 18, height: 18))
         }
         img.isTemplate = true
-        img.size = NSSize(width: 44, height: 16)
+        img.size = NSSize(width: 18, height: 18)
         return img
     }()
 }

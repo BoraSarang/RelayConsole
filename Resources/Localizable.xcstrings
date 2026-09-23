@@ -434,6 +434,38 @@
         }
       }
     },
+    "droid.empty.noDeviceBody": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connect an Android device over USB to see it here."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "USB로 Android 기기를 연결하면 여기에 표시됩니다."
+          }
+        }
+      }
+    },
+    "droid.empty.noDeviceHint": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Network device: adb connect IP:PORT"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "네트워크 기기: adb connect IP:PORT"
+          }
+        }
+      }
+    },
     "droid.footer.logcatHits": {
       "localizations": {
         "en": {
@@ -758,6 +790,22 @@
         }
       }
     },
+    "menubar.device.detailHint": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open device details to view dashboard"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "기기 상세를 눌러 대시보드 보기"
+          }
+        }
+      }
+    },
     "menubar.device.list": {
       "localizations": {
         "en": {
@@ -956,13 +1004,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Show menubar metrics"
+            "value": "Show device count"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "메뉴바 지표 표시"
+            "value": "메뉴바 기기 수 표시"
           }
         }
       }

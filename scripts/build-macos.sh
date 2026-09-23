@@ -69,10 +69,10 @@ else
   exit 1
 fi
 
-# 메뉴바 템플릿 아이콘
-if [ -f "Resources/icons/MenuBarTemplate.png" ]; then
-  cp "Resources/icons/MenuBarTemplate.png" "$APP_BUNDLE/Contents/Resources/"
-fi
+# 메뉴바 아이콘 (Off / Online / Template) — Downloads 원본 복사본
+for f in Resources/icons/MenuBar*.png; do
+  [ -f "$f" ] && cp "$f" "$APP_BUNDLE/Contents/Resources/"
+done
 
 # AppIcon.icns 생성 (BrandKit 1024)
 ICNS_SRC="Resources/icons/AppIcon.icns"

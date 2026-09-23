@@ -20,11 +20,9 @@ struct DroidDashboardView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: OPSpace.lg) {
                     if device == nil {
-                        Text(L10n.string("droid.empty.noDevice"))
-                            .font(OPFont.body(14))
-                            .foregroundStyle(OPColor.inkDim)
-                            .frame(maxWidth: .infinity, alignment: .center)
-                            .padding(.top, OPSpace.xl)
+                        emptyState
+                            .frame(maxWidth: .infinity)
+                            .padding(.top, 80)
                     } else {
                         header
                         if devices.count > 1 {
@@ -33,18 +31,18 @@ struct DroidDashboardView: View {
                         if let d = device, d.isThermalAlert {
                             thermalBanner(device: d)
                         }
+                        LazyVGrid(columns: columns, spacing: 16) {
+                            DroidCards.cpu(device: device, metrics: metrics)
+                            DroidCards.gpu(device: device, metrics: metrics)
+                            DroidCards.memory(device: device, metrics: metrics)
+                            DroidCards.sensors(device: device, metrics: metrics)
+                            DroidCards.battery(device: device, metrics: metrics)
+                            DroidCards.network(device: device, metrics: metrics)
+                            DroidCards.thermal(device: device, metrics: metrics)
+                            DroidCards.storage(device: device, metrics: metrics)
+                        }
+                        footer
                     }
-                    LazyVGrid(columns: columns, spacing: 16) {
-                        DroidCards.cpu(device: device, metrics: metrics)
-                        DroidCards.gpu(device: device, metrics: metrics)
-                        DroidCards.memory(device: device, metrics: metrics)
-                        DroidCards.sensors(device: device, metrics: metrics)
-                        DroidCards.battery(device: device, metrics: metrics)
-                        DroidCards.network(device: device, metrics: metrics)
-                        DroidCards.thermal(device: device, metrics: metrics)
-                        DroidCards.storage(device: device, metrics: metrics)
-                    }
-                    footer
                 }
                 .padding(OPSpace.xl)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -164,6 +162,29 @@ struct DroidDashboardView: View {
             RoundedRectangle(cornerRadius: 8)
                 .stroke(OPColor.thermal.opacity(0.3), lineWidth: 1)
         )
+    }
+
+    // MARK: - Empty
+
+    private var emptyState: some View {
+        VStack(spacing: 10) {
+            Image(systemName: "cable.connector")
+                .font(.system(size: 32, weight: .light))
+                .foregroundStyle(OPColor.inkDim)
+            Text(L10n.string("droid.empty.noDevice"))
+                .font(OPFont.title(16))
+                .foregroundStyle(OPColor.ink)
+            Text(L10n.string("droid.empty.noDeviceBody"))
+                .font(OPFont.body(13))
+                .foregroundStyle(OPColor.inkDim)
+                .multilineTextAlignment(.center)
+            Text(L10n.string("droid.empty.noDeviceHint"))
+                .font(OPFont.number(12))
+                .foregroundStyle(OPColor.inkDim.opacity(0.85))
+                .multilineTextAlignment(.center)
+        }
+        .padding(.horizontal, OPSpace.xl)
+        .frame(maxWidth: .infinity)
     }
 
     // MARK: - Values

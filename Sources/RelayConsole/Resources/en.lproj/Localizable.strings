@@ -18,6 +18,8 @@
 "droid.storage.read" = "Read";
 "droid.storage.write" = "Write";
 "droid.empty.noDevice" = "No Device Connected";
+"droid.empty.noDeviceBody" = "Connect an Android device over USB to see it here.";
+"droid.empty.noDeviceHint" = "Network device: adb connect IP:PORT";
 "droid.footer.logcatHits" = "logcat Hits (%d)";
 "droid.footer.settingsChanged" = "Settings Changed (%d)";
 "droid.header.title" = "Relay Console · External Console";
@@ -30,6 +32,7 @@
 "menubar.device.adb" = "ADB";
 "menubar.device.android" = "Android";
 "menubar.device.detail" = "Device Details";
+"menubar.device.detailHint" = "Open device details to view dashboard";
 "menubar.device.model" = "Model";
 "menubar.events.empty" = "No Events Detected";
 "menubar.events.recent" = "Recent Events (%d)";
@@ -48,7 +51,7 @@
 "settings.version" = "Version";
 "ui.debug.clear" = "Clear";
 "ui.debug.title" = "Debug Log";
-"settings.menubarMetrics" = "Show menubar metrics";
+"settings.menubarMetrics" = "Show device count";
 "menubar.device.list" = "Devices";
 "menubar.device.usb" = "USB";
 "menubar.device.network" = "Wi-Fi";

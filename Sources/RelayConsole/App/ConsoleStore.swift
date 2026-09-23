@@ -41,9 +41,6 @@ final class ConsoleStore: ObservableObject {
             await DeviceMonitor.shared.attachEvent(eventHandler)
             await DeviceMonitor.shared.start()
         }
-        #if DEBUG
-        injectDebugSecondDeviceIfNeeded()
-        #endif
     }
 
     private func ingest(_ snapshot: DeviceSnapshot) {
@@ -128,44 +125,4 @@ final class ConsoleStore: ObservableObject {
     func markDeviceOffline(_ serial: String) {
         inventory.markOffline(serial: serial)
     }
-
-    // MARK: - DEBUG: 2번째 기기 스냅샷 주입 (다중 기기 UI 검증용)
-
-    #if DEBUG
-    /// `relay.debugSecondDevice` = true 이면 가짜 serial 1개 append — 출시 빌드 제외
-    func injectDebugSecondDeviceIfNeeded() {
-        guard UserDefaults.standard.bool(forKey: "relay.debugSecondDevice") else { return }
-        let ghost = DeviceSnapshot(
-            serial: "DEBUG-GHOST-2",
-            model: "SM-A536N",
-            isOnline: true
-        )
-        var s = ghost
-        s.connectionKind = .usb
-        s.connectionLabel = "USB"
-        s.deviceName = "Galaxy A53"
-        s.batteryLevel = 91
-        s.batteryTempC = 36.5
-        s.isCharging = false
-        s.thermalStatus = 0
-        s.cpuUsePercent = 12
-        s.deviceTempC = 38
-        s.memoryUsedGB = 3.1
-        s.memoryTotalGB = 6.0
-        s.storageUsedGB = 48
-        s.storageTotalGB = 128
-        s.networkType = "Wi-Fi"
-        s.netUpMBps = 0.4
-        s.netDownMBps = 1.2
-        s.networkInfo = "↑0.4 ↓1.2 MB/s"
-        s.load1 = 1.2
-        s.androidVersion = "14"
-        s.sdkInt = 34
-        inventory.merge(s)
-        if selectedSerial == nil {
-            selectedSerial = inventory.devices.first?.serial
-        }
-        pushEvent("DEBUG device injected DEBUG-GHOST-2")
-    }
-    #endif
 }

@@ -4,9 +4,12 @@ struct MenuBarPopoverView: View {
     @ObservedObject var store: ConsoleStore
     var openConsole: () -> Void
     var openDebug: () -> Void = {}
+    var openSettings: () -> Void = {}
 
     @State private var showDeviceDetail = false
     @State private var showEvents = false
+    /// 메뉴바는 아이콘만 — 기기 수는 팝오버에서만 (설정 토글)
+    @AppStorage("relay.menubarMetrics") private var menubarMetrics = true
 
     private var devices: [DeviceSnapshot] { store.inventory.devices }
     private var device: DeviceSnapshot? { store.selectedDevice }
@@ -28,18 +31,30 @@ struct MenuBarPopoverView: View {
                 Divider().overlay(OPColor.border)
 
                 ScrollView(.vertical, showsIndicators: true) {
-                    VStack(alignment: .leading, spacing: 12) {
-                        if showDeviceDetail {
-                            deviceExpandSection
+                    if device == nil {
+                        emptyState
+                            .frame(maxWidth: .infinity)
+                            .padding(.top, 72)
+                    } else {
+                        VStack(alignment: .leading, spacing: 12) {
+                            if let d = device, d.isThermalAlert {
+                                thermalBanner(device: d)
+                            }
+                            // 기기 상세 ⌄ → 상세 + 대시보드 카드
+                            if showDeviceDetail {
+                                deviceExpandSection
+                                cards
+                                eventsSection
+                            } else {
+                                Text(L10n.string("menubar.device.detailHint"))
+                                    .font(OPFont.body(12))
+                                    .foregroundStyle(OPColor.inkDim)
+                                    .frame(maxWidth: .infinity, alignment: .center)
+                                    .padding(.top, 48)
+                            }
                         }
-                        if let d = device, d.isThermalAlert {
-                            thermalBanner(device: d)
-                        }
-                        cards
-                        deviceDetailSection
-                        eventsSection
+                        .padding(OPSpace.lg)
                     }
-                    .padding(OPSpace.lg)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
@@ -67,6 +82,12 @@ struct MenuBarPopoverView: View {
                     .foregroundStyle(OPColor.ink)
                     .lineLimit(1)
                 Spacer(minLength: 4)
+                if menubarMetrics && !devices.isEmpty {
+                    Text("\(devices.filter(\.isOnline).count)/\(devices.count)")
+                        .font(OPFont.number(11))
+                        .foregroundStyle(OPColor.inkDim)
+                        .lineLimit(1)
+                }
                 if let d = device, let level = d.batteryLevel {
                     Text("\(level)%")
                         .font(OPFont.number(11))
@@ -110,10 +131,6 @@ struct MenuBarPopoverView: View {
                     .help(multiDevice
                         ? L10n.string("menubar.device.list")
                         : L10n.string("menubar.device.detail"))
-                } else {
-                    Text(L10n.string("droid.empty.noDevice"))
-                        .font(OPFont.body(12))
-                        .foregroundStyle(OPColor.inkDim)
                 }
             }
         }
@@ -297,9 +314,32 @@ struct MenuBarPopoverView: View {
         }
     }
 
-    // MARK: - Device detail (legacy path — multi uses expand section)
+    // MARK: - Empty (연결된 기기 없음)
 
-    private var deviceDetailSection: some View { EmptyView() }
+    private var emptyState: some View {
+        VStack(spacing: 10) {
+            Image(systemName: "cable.connector")
+                .font(.system(size: 28, weight: .light))
+                .foregroundStyle(OPColor.inkDim)
+            Text(L10n.string("droid.empty.noDevice"))
+                .font(OPFont.title(15))
+                .foregroundStyle(OPColor.ink)
+            Text(L10n.string("droid.empty.noDeviceBody"))
+                .font(OPFont.body(12))
+                .foregroundStyle(OPColor.inkDim)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+            Text(L10n.string("droid.empty.noDeviceHint"))
+                .font(OPFont.number(11))
+                .foregroundStyle(OPColor.inkDim.opacity(0.85))
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 2)
+        }
+        .padding(.horizontal, OPSpace.xl)
+    }
+
+    // MARK: - Detail rows
 
     private func detailRow(_ label: String, _ value: String) -> some View {
         HStack {
@@ -369,10 +409,12 @@ struct MenuBarPopoverView: View {
 
     private var footer: some View {
         HStack(spacing: OPSpace.sm) {
-            OPPrimaryButton(title: L10n.string("menubar.button.openConsole"), action: openConsole)
+            if device != nil {
+                OPPrimaryButton(title: L10n.string("menubar.button.openConsole"), action: openConsole)
+            }
             OPSecondaryButton(title: L10n.string("menubar.button.debug"), action: openDebug)
             Spacer()
-            SettingsLink {
+            Button(action: openSettings) {
                 Image(systemName: "gearshape")
                     .foregroundStyle(OPColor.inkDim)
                     .frame(width: 32, height: 32)

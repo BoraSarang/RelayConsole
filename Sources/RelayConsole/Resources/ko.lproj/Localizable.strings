@@ -18,6 +18,8 @@
 "droid.storage.read" = "읽기";
 "droid.storage.write" = "쓰기";
 "droid.empty.noDevice" = "연결된 기기 없음";
+"droid.empty.noDeviceBody" = "USB로 Android 기기를 연결하면 여기에 표시됩니다.";
+"droid.empty.noDeviceHint" = "네트워크 기기: adb connect IP:PORT";
 "droid.footer.logcatHits" = "logcat 적중 (%d)";
 "droid.footer.settingsChanged" = "설정 변경 탐지 (%d)";
 "droid.header.title" = "Relay Console · 외부 관제 콘솔";
@@ -30,6 +32,7 @@
 "menubar.device.adb" = "ADB";
 "menubar.device.android" = "Android";
 "menubar.device.detail" = "기기 상세";
+"menubar.device.detailHint" = "기기 상세를 눌러 대시보드 보기";
 "menubar.device.model" = "모델";
 "menubar.events.empty" = "감지된 이벤트 없음";
 "menubar.events.recent" = "최신 이벤트 (%d)";
@@ -48,7 +51,7 @@
 "settings.version" = "버전";
 "ui.debug.clear" = "지우기";
 "ui.debug.title" = "디버그 로그";
-"settings.menubarMetrics" = "메뉴바 지표 표시";
+"settings.menubarMetrics" = "메뉴바 기기 수 표시";
 "menubar.device.list" = "기기 목록";
 "menubar.device.usb" = "USB";
 "menubar.device.network" = "Wi-Fi";
