@@ -1,9 +1,10 @@
-# session 2026-09-23 macos
-1. 무엇을: v0.3 목업 피델리티 + 다중 기기 완료 — DoD 전수 + 사용자 육안 3종 통과
-2. 플랫폼: macos (Swift 6.x, macOS 26.0) · SM_S901N 10.233.247.205:5555 · device_name S22 · 고스트 2대
-3. 빌드/PERF: swift test 50/50 · debug 0.3.0 OK · 금지어/iStat/GPU/SENSORS 0 · UI 한글 0 · `-s` shell 1곳
-4. 남은 TODO: (없음) · commit 미요청(보류) · bd RelayConsole-fgo 육안 완료→close 가능
-5. 전달로그: 다중 serial+`-s`, selectedSerial persist, cpufreq/signal 단일 shell(인자 분리 버그 수정), WiFi `Wifi is disabled`, Window/Button 키화, 메뉴바 5지표 토글
-6. 문서갱신: PLAN_v0.3 DoD 전수 체크·상태 완료 · TODO 진행중 없음 · session 갱신
-7. 큐상태: bd 1 in_progress (fgo) · 커밋 8a36177(v0.1) 푸시 · v0.2+v0.3 uncommitted
-8. E2E: 육안 완료 — 팝오버 목록/클릭→콘솔·S22/IP·8코어·압박·NET↑↓·THERMAL 존·BATTERY 6타일·5지표 ON/OFF
+# session-2026-09-23-macos — v0.4 P2 + UI 통일
+
+1. **범위**: P2 GPU·SENSORS·STORAGE R/W 카드 + 팝오버↔대시보드 형식 통일 + Samsung 센서 파서
+2. **구현**: kgsl GLES/busy/clk, sensorservice, diskstats sda delta → `DeviceInventory` P2 필드·`DeviceMonitor` 15s 폴링·`DroidMetrics` history
+3. **UI**: 신규 `Views/DroidCards.swift` 공용 8카드 — `DroidDashboardView` 2열 그리드, `MenuBarPopoverView` 단일 컬럼 (구 cardFull/Values 제거)
+4. **파서**: `parseSensorsSummary` Samsung 형식 — `이름(handle=0x…)` + `active-count` + `selected = ms` 이름·주기 추출; `droid.card.sensors.none` 폴백
+5. **검증**: `swift test` **60/60**, debug 빌드 **0.4.0** OK, 금지 grep 0, i18n ko/en/xcstrings **69키 3곳 정합**
+6. **문서**: `PLAN_v0.4` DoD 갱신 (육안 1항목), `TODO` 갱신, `PLAN_v0.1` C2 부분 해제 유지
+7. **bd**: `RelayConsole-or6` **closed** — 육안 확인 ✓
+8. **다음**: v0.4 완료. 커밋은 요청 시에만.

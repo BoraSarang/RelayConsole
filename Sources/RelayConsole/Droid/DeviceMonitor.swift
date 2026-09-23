@@ -30,6 +30,10 @@ actor DeviceMonitor {
         var cacheSDK: Int?
         var cacheGovernor: String?
         var cacheIP: String?
+        var cacheGpuRenderer: String?
+        var cacheGpuEs: String?
+        var prevDisk = AdbClient.DiskSample()
+        var prevDiskAt: Date?
         var prevAccelRotation: String?
         var prevUserRotation: String?
         var settingsChangedCount: Int = 0
@@ -261,6 +265,54 @@ actor DeviceMonitor {
                 state.cacheStorageTotalGB = df.totalGB
             }
 
+            // ── P2: GPU (SurfaceFlinger GLES + kgsl sysfs)
+            if state.cacheGpuRenderer == nil || state.cacheGpuEs == nil {
+                if let glesText = try? shell(serial, "dumpsys SurfaceFlinger | grep -E 'GLES:|OpenGL ES'") {
+                    let g = AdbClient.parseGpuGles(glesText)
+                    if let r = g.renderer { state.cacheGpuRenderer = r }
+                    if let e = g.esVersion { state.cacheGpuEs = e }
+                }
+            }
+            if let busyText = try? shell(serial, "cat /sys/class/kgsl/kgsl-3d0/gpu_busy_percentage"),
+               let busy = AdbClient.parseGpuBusyPercent(busyText) {
+                snap.gpuUtilPercent = busy
+            } else if let busy2 = try? shell(serial, "cat /sys/class/kgsl/kgsl-3d0/gpubusy"),
+                      let busy = AdbClient.parseGpuBusyPercent(busy2) {
+                snap.gpuUtilPercent = busy
+            }
+            if let clkText = try? shell(serial, "cat /sys/class/kgsl/kgsl-3d0/gpuclk"),
+               let mhz = AdbClient.parseGpuClkMHz(clkText) {
+                snap.gpuFreqMHz = mhz
+            }
+            snap.gpuRenderer = state.cacheGpuRenderer
+            snap.gpuEsVersion = state.cacheGpuEs
+
+            // ── P2: SENSORS summary (기기内 grep — 단일 shell 문자열)
+            if let sensText = try? shell(serial, "dumpsys sensorservice | grep -E 'Total [0-9]+ h/w sensors|active-count|\\) type 0x|active connections|Sensor Device|Sensor List'") {
+                let s = AdbClient.parseSensorsSummary(sensText)
+                if s.total != nil || s.activeCount != nil || !s.activeNames.isEmpty {
+                    snap.sensorTotalCount = s.total
+                    snap.sensorActiveCount = s.activeCount
+                    snap.sensorActiveNames = s.activeNames.isEmpty ? nil : s.activeNames
+                    snap.sensorActivePeriodsMs = s.activePeriodsMs.isEmpty ? nil : s.activePeriodsMs
+                }
+            }
+
+            // ── P2: diskstats R/W delta (sda)
+            if let diskText = try? shell(serial, "cat /proc/diskstats") {
+                let curr = AdbClient.parseDiskStats(diskText)
+                var rates: (read: Double, write: Double)?
+                if let at = state.prevDiskAt {
+                    rates = AdbClient.diskRatesMBps(prev: state.prevDisk, curr: curr, seconds: Date().timeIntervalSince(at))
+                }
+                state.prevDisk = curr
+                state.prevDiskAt = Date()
+                if let r = rates {
+                    snap.diskReadMBps = r.read
+                    snap.diskWriteMBps = r.write
+                }
+            }
+
             await pollLogcatWatch(serial: serial, state: &state)
         }
 
@@ -275,6 +327,8 @@ actor DeviceMonitor {
         snap.androidVersion = snap.androidVersion ?? state.cacheAndroidVersion
         snap.sdkInt = snap.sdkInt ?? state.cacheSDK
         snap.ipV4 = snap.ipV4 ?? state.cacheIP
+        snap.gpuRenderer = snap.gpuRenderer ?? state.cacheGpuRenderer
+        snap.gpuEsVersion = snap.gpuEsVersion ?? state.cacheGpuEs
         snap.settingsChangedCount = state.settingsChangedCount
         snap.logcatHitCount = state.logcatHitCount
 

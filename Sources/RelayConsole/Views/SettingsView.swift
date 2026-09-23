@@ -19,7 +19,7 @@ struct SettingsView: View {
                         Text(L10n.string("settings.theme.light")).tag(OPThemeMode.light)
                     }
                     Toggle(L10n.string("settings.menubarMetrics"), isOn: $menubarMetrics)
-                    LabeledContent(L10n.string("settings.version"), value: "0.3.0")
+                    LabeledContent(L10n.string("settings.version"), value: "0.4.0")
                     LabeledContent(L10n.string("settings.bundleId"), value: "com.borasarang.relayconsole")
                 }
                 Section(L10n.string("settings.section.droid")) {

@@ -8,6 +8,15 @@
 "droid.card.network.title" = "NETWORK";
 "droid.card.storage.title" = "STORAGE";
 "droid.card.thermal.title" = "THERMAL";
+"droid.card.gpu.title" = "GPU";
+"droid.card.gpu.util" = "Util %@%";
+"droid.card.gpu.freq" = "%@ MHz";
+"droid.card.gpu.es" = "OpenGL ES %@";
+"droid.card.sensors.title" = "SENSORS";
+"droid.card.sensors.none" = "No active sensors";
+"droid.card.sensors.count" = "%@ / %@ active";
+"droid.storage.read" = "Read";
+"droid.storage.write" = "Write";
 "droid.empty.noDevice" = "No Device Connected";
 "droid.footer.logcatHits" = "logcat Hits (%d)";
 "droid.footer.settingsChanged" = "Settings Changed (%d)";
@@ -49,6 +58,7 @@
 "droid.card.network.down" = "Down";
 "droid.card.network.wifiOff" = "Wi-Fi Off";
 "droid.battery.health" = "Health";
+"droid.battery.temp" = "Temp";
 "droid.battery.voltage" = "Voltage";
 "droid.battery.cycles" = "Cycles";
 "droid.battery.current" = "Current";

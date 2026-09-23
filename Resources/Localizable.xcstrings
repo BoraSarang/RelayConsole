@@ -18,6 +18,102 @@
         }
       }
     },
+    "droid.battery.current": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Current"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "전류"
+          }
+        }
+      }
+    },
+    "droid.battery.cycles": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cycles"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "사이클"
+          }
+        }
+      }
+    },
+    "droid.battery.health": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Health"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "건강"
+          }
+        }
+      }
+    },
+    "droid.battery.temp": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "온도"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Temp"
+          }
+        }
+      }
+    },
+    "droid.battery.type": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Type"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "유형"
+          }
+        }
+      }
+    },
+    "droid.battery.voltage": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Voltage"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "전압"
+          }
+        }
+      }
+    },
     "droid.card.battery.charging": {
       "localizations": {
         "en": {
@@ -82,6 +178,86 @@
         }
       }
     },
+    "droid.card.gpu.es": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OpenGL ES %@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OpenGL ES %@"
+          }
+        }
+      }
+    },
+    "droid.card.gpu.freq": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ MHz"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ MHz"
+          }
+        }
+      }
+    },
+    "droid.card.gpu.title": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GPU"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GPU"
+          }
+        }
+      }
+    },
+    "droid.card.gpu.util": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이용률 %@%"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Util %@%"
+          }
+        }
+      }
+    },
+    "droid.card.memory.pressure": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pressure %@"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "압박 %@"
+          }
+        }
+      }
+    },
     "droid.card.memory.title": {
       "localizations": {
         "en": {
@@ -98,6 +274,22 @@
         }
       }
     },
+    "droid.card.network.down": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Down"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "다운"
+          }
+        }
+      }
+    },
     "droid.card.network.title": {
       "localizations": {
         "en": {
@@ -110,6 +302,86 @@
           "stringUnit": {
             "state": "translated",
             "value": "NETWORK"
+          }
+        }
+      }
+    },
+    "droid.card.network.up": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Up"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "업"
+          }
+        }
+      }
+    },
+    "droid.card.network.wifiOff": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wi-Fi Off"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wi-Fi 꺼짐"
+          }
+        }
+      }
+    },
+    "droid.card.sensors.count": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ / %@ 활성"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ / %@ active"
+          }
+        }
+      }
+    },
+    "droid.card.sensors.none": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "활성 센서 없음"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No active sensors"
+          }
+        }
+      }
+    },
+    "droid.card.sensors.title": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SENSORS"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SENSORS"
           }
         }
       }
@@ -194,6 +466,22 @@
         }
       }
     },
+    "droid.header.picker": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Select device"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "기기 선택"
+          }
+        }
+      }
+    },
     "droid.header.title": {
       "localizations": {
         "en": {
@@ -206,6 +494,118 @@
           "stringUnit": {
             "state": "translated",
             "value": "Relay Console · 외부 관제 콘솔"
+          }
+        }
+      }
+    },
+    "droid.storage.read": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "읽기"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Read"
+          }
+        }
+      }
+    },
+    "droid.storage.remain": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ left"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ 남음"
+          }
+        }
+      }
+    },
+    "droid.storage.write": {
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "쓰기"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Write"
+          }
+        }
+      }
+    },
+    "event.deviceConnected": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Device connected %@"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "기기 연결 %@"
+          }
+        }
+      }
+    },
+    "event.deviceDisconnected": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Device disconnected %@"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "기기 연결 끊김 %@"
+          }
+        }
+      }
+    },
+    "event.logcatHits": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "logcat keyword hits +%d"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "logcat 키워드 적중 +%d"
+          }
+        }
+      }
+    },
+    "event.settingsChanged": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Settings changed %@ %@"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "설정 변경 %@ %@"
           }
         }
       }
@@ -358,6 +758,22 @@
         }
       }
     },
+    "menubar.device.list": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Devices"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "기기 목록"
+          }
+        }
+      }
+    },
     "menubar.device.model": {
       "extractionState": "manual",
       "localizations": {
@@ -371,6 +787,38 @@
           "stringUnit": {
             "state": "translated",
             "value": "모델"
+          }
+        }
+      }
+    },
+    "menubar.device.network": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wi-Fi"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wi-Fi"
+          }
+        }
+      }
+    },
+    "menubar.device.usb": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "USB"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "USB"
           }
         }
       }
@@ -499,6 +947,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "설정키 접두어: relay.*"
+          }
+        }
+      }
+    },
+    "settings.menubarMetrics": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show menubar metrics"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "메뉴바 지표 표시"
           }
         }
       }
@@ -645,120 +1109,6 @@
             "value": "디버그 로그"
           }
         }
-      }
-    },
-    "settings.menubarMetrics": {
-      "localizations": {
-        "en": { "stringUnit": { "state": "translated", "value": "Show menubar metrics" } },
-        "ko": { "stringUnit": { "state": "translated", "value": "메뉴바 지표 표시" } }
-      }
-    },
-    "menubar.device.list": {
-      "localizations": {
-        "en": { "stringUnit": { "state": "translated", "value": "Devices" } },
-        "ko": { "stringUnit": { "state": "translated", "value": "기기 목록" } }
-      }
-    },
-    "menubar.device.usb": {
-      "localizations": {
-        "en": { "stringUnit": { "state": "translated", "value": "USB" } },
-        "ko": { "stringUnit": { "state": "translated", "value": "USB" } }
-      }
-    },
-    "menubar.device.network": {
-      "localizations": {
-        "en": { "stringUnit": { "state": "translated", "value": "Wi-Fi" } },
-        "ko": { "stringUnit": { "state": "translated", "value": "Wi-Fi" } }
-      }
-    },
-    "droid.header.picker": {
-      "localizations": {
-        "en": { "stringUnit": { "state": "translated", "value": "Select device" } },
-        "ko": { "stringUnit": { "state": "translated", "value": "기기 선택" } }
-      }
-    },
-    "droid.card.memory.pressure": {
-      "localizations": {
-        "en": { "stringUnit": { "state": "translated", "value": "Pressure %@" } },
-        "ko": { "stringUnit": { "state": "translated", "value": "압박 %@" } }
-      }
-    },
-    "droid.card.network.up": {
-      "localizations": {
-        "en": { "stringUnit": { "state": "translated", "value": "Up" } },
-        "ko": { "stringUnit": { "state": "translated", "value": "업" } }
-      }
-    },
-    "droid.card.network.down": {
-      "localizations": {
-        "en": { "stringUnit": { "state": "translated", "value": "Down" } },
-        "ko": { "stringUnit": { "state": "translated", "value": "다운" } }
-      }
-    },
-    "droid.card.network.wifiOff": {
-      "localizations": {
-        "en": { "stringUnit": { "state": "translated", "value": "Wi-Fi Off" } },
-        "ko": { "stringUnit": { "state": "translated", "value": "Wi-Fi 꺼짐" } }
-      }
-    },
-    "droid.battery.health": {
-      "localizations": {
-        "en": { "stringUnit": { "state": "translated", "value": "Health" } },
-        "ko": { "stringUnit": { "state": "translated", "value": "건강" } }
-      }
-    },
-    "droid.battery.voltage": {
-      "localizations": {
-        "en": { "stringUnit": { "state": "translated", "value": "Voltage" } },
-        "ko": { "stringUnit": { "state": "translated", "value": "전압" } }
-      }
-    },
-    "droid.battery.cycles": {
-      "localizations": {
-        "en": { "stringUnit": { "state": "translated", "value": "Cycles" } },
-        "ko": { "stringUnit": { "state": "translated", "value": "사이클" } }
-      }
-    },
-    "droid.battery.current": {
-      "localizations": {
-        "en": { "stringUnit": { "state": "translated", "value": "Current" } },
-        "ko": { "stringUnit": { "state": "translated", "value": "전류" } }
-      }
-    },
-    "droid.battery.type": {
-      "localizations": {
-        "en": { "stringUnit": { "state": "translated", "value": "Type" } },
-        "ko": { "stringUnit": { "state": "translated", "value": "유형" } }
-      }
-    },
-    "droid.storage.remain": {
-      "localizations": {
-        "en": { "stringUnit": { "state": "translated", "value": "%@ left" } },
-        "ko": { "stringUnit": { "state": "translated", "value": "%@ 남음" } }
-      }
-    },
-    "event.settingsChanged": {
-      "localizations": {
-        "en": { "stringUnit": { "state": "translated", "value": "Settings changed %@ %@" } },
-        "ko": { "stringUnit": { "state": "translated", "value": "설정 변경 %@ %@" } }
-      }
-    },
-    "event.logcatHits": {
-      "localizations": {
-        "en": { "stringUnit": { "state": "translated", "value": "logcat keyword hits +%d" } },
-        "ko": { "stringUnit": { "state": "translated", "value": "logcat 키워드 적중 +%d" } }
-      }
-    },
-    "event.deviceConnected": {
-      "localizations": {
-        "en": { "stringUnit": { "state": "translated", "value": "Device connected %@" } },
-        "ko": { "stringUnit": { "state": "translated", "value": "기기 연결 %@" } }
-      }
-    },
-    "event.deviceDisconnected": {
-      "localizations": {
-        "en": { "stringUnit": { "state": "translated", "value": "Device disconnected %@" } },
-        "ko": { "stringUnit": { "state": "translated", "value": "기기 연결 끊김 %@" } }
       }
     }
   },

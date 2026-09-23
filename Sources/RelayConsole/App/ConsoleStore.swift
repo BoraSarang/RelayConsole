@@ -70,8 +70,17 @@ final class ConsoleStore: ObservableObject {
             }
         }
 
-        if cpu != nil || temp != nil || level != nil || netPush != nil {
-            m.push(cpu: cpu, temp: temp, level: level, net: netPush)
+        var diskRead: Double?
+        var diskWrite: Double?
+        if snapshot.diskReadMBps != nil || snapshot.diskWriteMBps != nil {
+            diskRead = snapshot.diskReadMBps
+            diskWrite = snapshot.diskWriteMBps
+        }
+
+        let gpu = snapshot.gpuUtilPercent
+
+        if cpu != nil || temp != nil || level != nil || netPush != nil || diskRead != nil || diskWrite != nil || gpu != nil {
+            m.push(cpu: cpu, temp: temp, level: level, net: netPush, diskRead: diskRead, diskWrite: diskWrite, gpu: gpu)
             metricsHistory[snapshot.serial] = m
         }
     }

@@ -588,6 +588,211 @@ enum AdbClient {
 
     // MARK: - Helpers
 
+    // MARK: - P2: GPU (SurfaceFlinger GLES + kgsl sysfs only)
+
+    struct GpuGlesSample: Equatable, Sendable {
+        var renderer: String?
+        var esVersion: String?
+    }
+
+    /// `GLES: Qualcomm, Adreno (TM) 730, OpenGL ES 3.2 V@0615.98 …`
+    static func parseGpuGles(_ text: String) -> GpuGlesSample {
+        var sample = GpuGlesSample()
+        for line in text.split(separator: "\n") {
+            let s = String(line)
+            guard s.contains("GLES:") || s.contains("OpenGL ES") else { continue }
+            // renderer: after GLES: up to ", OpenGL" or end
+            if let range = s.range(of: "GLES:") {
+                let rest = String(s[range.upperBound...]).trimmingCharacters(in: .whitespaces)
+                if let esIdx = rest.range(of: ", OpenGL ES") {
+                    sample.renderer = String(rest[..<esIdx.lowerBound]).trimmingCharacters(in: .whitespaces)
+                } else if let comma = rest.firstIndex(of: ",") {
+                    sample.renderer = String(rest[..<comma]).trimmingCharacters(in: .whitespaces)
+                } else {
+                    sample.renderer = rest.isEmpty ? nil : rest
+                }
+            }
+            if let esRange = s.range(of: "OpenGL ES") {
+                let after = s[esRange.upperBound...]
+                // " 3.2 V@…" → "3.2"
+                let digits = after.drop(while: { $0 == " " })
+                    .prefix { $0.isNumber || $0 == "." }
+                if !digits.isEmpty { sample.esVersion = String(digits) }
+            }
+            if sample.renderer != nil || sample.esVersion != nil { break }
+        }
+        return sample
+    }
+
+    /// kgsl `gpu_busy_percentage` → e.g. "12 %" / "12"; `gpubusy` → "busy idle"
+    static func parseGpuBusyPercent(_ text: String) -> Double? {
+        let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !t.isEmpty else { return nil }
+        let parts = t.split(whereSeparator: \.isWhitespace)
+        if parts.count >= 2, let busy = Double(parts[0]), let idle = Double(parts[1]) {
+            let total = busy + idle
+            if total > 0 { return min(max(busy / total * 100.0, 0), 100) }
+        }
+        if parts.count >= 1, let v = Double(parts[0]) {
+            return min(max(v, 0), 100)
+        }
+        return nil
+    }
+
+    /// kgsl `gpuclk` (Hz) → MHz
+    static func parseGpuClkMHz(_ text: String) -> Double? {
+        let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let hz = Double(t.split(whereSeparator: \.isWhitespace).first ?? "") else { return nil }
+        // 이미 MHz면 범위 가드 (보통 1e8~3e9 Hz)
+        if hz >= 1_000_000 { return hz / 1_000_000.0 }
+        if hz > 0 && hz < 10_000 { return hz } // already MHz
+        return nil
+    }
+
+    // MARK: - P2: Sensors summary
+
+    struct SensorsSummary: Equatable, Sendable {
+        var total: Int?
+        var activeCount: Int?
+        var activeNames: [String] = []
+        /// active 센서별 샘플 주기(ms) — activeNames와 같은 순서 (없으면 생략)
+        var activePeriodsMs: [Double?] = []
+    }
+
+    /// sensorservice — Samsung(AOSP 접두) + AOSP 형식
+    /// Samsung: `Total 39 h/w … clients:` + `Name … (handle=0x…)  active-count = N; … selected = 20.00 ms`
+    /// AOSP: `active connections:` + `0x…) type 0x… (accelerometer)`
+    static func parseSensorsSummary(_ text: String, nameLimit: Int = 8) -> SensorsSummary {
+        var sample = SensorsSummary()
+        for line in text.split(separator: "\n") {
+            let s = String(line)
+
+            if sample.total == nil, s.contains("Total"), s.contains("h/w sensors") {
+                let tokens = s.split(separator: " ")
+                for (i, tok) in tokens.enumerated() where tok == "Total" {
+                    if i + 1 < tokens.count, let n = Int(tokens[i + 1]) {
+                        sample.total = n
+                        break
+                    }
+                }
+            }
+
+            // ── 활성 센서 라인 (active-count 포함)
+            if s.contains("active-count") {
+                sample.activeCount = (sample.activeCount ?? 0) + 1
+                if sample.activeNames.count < nameLimit,
+                   let name = activeSensorName(s) {
+                    if !sample.activeNames.contains(name) {
+                        sample.activeNames.append(name)
+                        sample.activePeriodsMs.append(activeSensorPeriodMs(s))
+                    } else if let idx = sample.activeNames.firstIndex(of: name),
+                              sample.activePeriodsMs.indices.contains(idx),
+                              sample.activePeriodsMs[idx] == nil {
+                        sample.activePeriodsMs[idx] = activeSensorPeriodMs(s)
+                    }
+                }
+                continue
+            }
+
+            // ── AOSP 레거시: `0x…) type 0x… (accelerometer)`
+            if s.contains(") type 0x"), let typeRange = s.range(of: ") type 0x") {
+                let afterType = s[typeRange.upperBound...]
+                if let open = afterType.firstIndex(of: "("),
+                   let close = afterType.firstIndex(of: ")"),
+                   open < close {
+                    var name = String(afterType[afterType.index(after: open)..<close])
+                        .trimmingCharacters(in: .whitespaces)
+                    if let w = name.range(of: " Non-wakeup") { name = String(name[..<w.lowerBound]) }
+                    if let w = name.range(of: " Wakeup") { name = String(name[..<w.lowerBound]) }
+                    if !name.isEmpty, !sample.activeNames.contains(name),
+                       sample.activeNames.count < nameLimit {
+                        sample.activeNames.append(name)
+                        sample.activePeriodsMs.append(nil)
+                    }
+                }
+            }
+        }
+        return sample
+    }
+
+    /// `lsm6dso … Accelerometer Non-wakeup(handle=0x…)` → display name
+    /// `smd  Wakeup                        (handle=0x…)` → `smd`
+    private static func activeSensorName(_ line: String) -> String? {
+        guard let hRange = line.range(of: "(handle=") else { return nil }
+        var name = String(line[line.startIndex..<hRange.lowerBound])
+            .trimmingCharacters(in: .whitespaces)
+        // trailing Non-wakeup / Wakeup (optional space variants)
+        for suffix in [" Non-wakeup", "Wakeup", " Non-wakeup ", " Wakeup "] {
+            if name.hasSuffix(suffix.trimmingCharacters(in: .whitespaces)) ||
+                name.hasSuffix(suffix) {
+                name = String(name.dropLast(suffix.count)).trimmingCharacters(in: .whitespaces)
+            }
+        }
+        // 더 안전: 정규로 끝 wakeup 표기 제거
+        if let r = name.range(of: "\\s*Non-wakeup\\s*$", options: .regularExpression) {
+            name = String(name[..<r.lowerBound]).trimmingCharacters(in: .whitespaces)
+        }
+        if let r = name.range(of: "\\s+Wakeup\\s*$", options: .regularExpression) {
+            name = String(name[..<r.lowerBound]).trimmingCharacters(in: .whitespaces)
+        }
+        return name.isEmpty ? nil : name
+    }
+
+    /// `selected = 20.00 ms` 또는 `sampling_period(ms) = {20.0}` → ms
+    private static func activeSensorPeriodMs(_ line: String) -> Double? {
+        if let r = line.range(of: #"selected\s*=\s*([0-9.]+)\s*ms"#, options: .regularExpression) {
+            let s = line[r]
+            if let numRange = s.range(of: #"[0-9.]+"#, options: .regularExpression),
+               let v = Double(s[numRange]) {
+                return v
+            }
+        }
+        if let r = line.range(of: #"sampling_period\(ms\)\s*=\s*\{([0-9.]+)"#, options: .regularExpression) {
+            let s = line[r]
+            if let numRange = s.range(of: #"[0-9.]+$"#, options: .regularExpression),
+               let v = Double(s[numRange]) {
+                return v
+            }
+        }
+        return nil
+    }
+
+    // MARK: - P2: diskstats R/W (sda만 — 파티션/loop/dm/zram 제외)
+
+    struct DiskSample: Equatable, Sendable {
+        var readSectors: UInt64?
+        var writeSectors: UInt64?
+    }
+
+    /// `/proc/diskstats` — whole-disk `sda` only (partitions like sda1 excluded)
+    static func parseDiskStats(_ text: String) -> DiskSample {
+        for line in text.split(separator: "\n") {
+            let fields = line.split(whereSeparator: \.isWhitespace)
+            guard fields.count >= 10, fields[2] == "sda" else { continue }
+            // [0]=major [1]=minor [2]=name [3]=reads [4]=merged [5]=sectors_read
+            // [6]=ms [7]=writes [8]=merged_w [9]=sectors_written
+            guard let rs = UInt64(fields[5]), let ws = UInt64(fields[9]) else { continue }
+            return DiskSample(readSectors: rs, writeSectors: ws)
+        }
+        return DiskSample()
+    }
+
+    /// sector delta → MB/s. nil on first tick.
+    static func diskRatesMBps(
+        prev: DiskSample,
+        curr: DiskSample,
+        seconds: Double
+    ) -> (read: Double, write: Double)? {
+        guard seconds > 0,
+              let pr = prev.readSectors, let pw = prev.writeSectors,
+              let cr = curr.readSectors, let cw = curr.writeSectors,
+              cr >= pr, cw >= pw else { return nil }
+        // 1 sector = 512 bytes
+        let read = Double(cr - pr) * 512.0 / seconds / (1024 * 1024)
+        let write = Double(cw - pw) * 512.0 / seconds / (1024 * 1024)
+        return (read: read, write: write)
+    }
+
     static func shortId(_ serial: String) -> String {
         guard serial.count > 4 else { return serial }
         return "…" + serial.suffix(4)

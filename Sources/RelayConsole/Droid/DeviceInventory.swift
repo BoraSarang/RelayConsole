@@ -70,6 +70,26 @@ struct DeviceSnapshot: Sendable, Equatable {
     var wifiSsid: String?
     var wifiRssi: Int?
     var ipV4: String?
+    // ── P2 카드 필드 (PLAN_v0.4) ──
+    /// SurfaceFlinger GLES 렌더러 (예: Adreno (TM) 730)
+    var gpuRenderer: String?
+    /// OpenGL ES 버전 문자열
+    var gpuEsVersion: String?
+    /// kgsl gpuclk MHz
+    var gpuFreqMHz: Double?
+    /// kgsl gpu_busy_percentage 0…100
+    var gpuUtilPercent: Double?
+    /// sensorservice 전체 n/w 센서 수
+    var sensorTotalCount: Int?
+    /// 현재 active 센서 수
+    var sensorActiveCount: Int?
+    /// 활성 센서 이름 (최대 8)
+    var sensorActiveNames: [String]?
+    /// 활성 센서 샘플 주기(ms) — sensorActiveNames와 같은 순서
+    var sensorActivePeriodsMs: [Double?]?
+    /// diskstats sda delta MB/s
+    var diskReadMBps: Double?
+    var diskWriteMBps: Double?
     /// 세션 중 설정 변경 횟수 (accelerometer_rotation / user_rotation)
     var settingsChangedCount: Int?
     /// 세션 중 logcat 키워드 적중 수
@@ -154,6 +174,16 @@ struct DeviceInventory: Equatable {
                 merged.wifiSsid = merged.wifiSsid ?? prev.wifiSsid
                 merged.wifiRssi = merged.wifiRssi ?? prev.wifiRssi
                 merged.ipV4 = merged.ipV4 ?? prev.ipV4
+                merged.gpuRenderer = merged.gpuRenderer ?? prev.gpuRenderer
+                merged.gpuEsVersion = merged.gpuEsVersion ?? prev.gpuEsVersion
+                merged.gpuFreqMHz = merged.gpuFreqMHz ?? prev.gpuFreqMHz
+                merged.gpuUtilPercent = merged.gpuUtilPercent ?? prev.gpuUtilPercent
+                merged.sensorTotalCount = merged.sensorTotalCount ?? prev.sensorTotalCount
+                merged.sensorActiveCount = merged.sensorActiveCount ?? prev.sensorActiveCount
+                merged.sensorActiveNames = merged.sensorActiveNames ?? prev.sensorActiveNames
+                merged.sensorActivePeriodsMs = merged.sensorActivePeriodsMs ?? prev.sensorActivePeriodsMs
+                merged.diskReadMBps = merged.diskReadMBps ?? prev.diskReadMBps
+                merged.diskWriteMBps = merged.diskWriteMBps ?? prev.diskWriteMBps
             }
             devices[idx] = merged
         } else {

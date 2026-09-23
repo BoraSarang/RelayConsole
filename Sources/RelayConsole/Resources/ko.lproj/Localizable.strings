@@ -8,6 +8,15 @@
 "droid.card.network.title" = "NETWORK";
 "droid.card.storage.title" = "STORAGE";
 "droid.card.thermal.title" = "THERMAL";
+"droid.card.gpu.title" = "GPU";
+"droid.card.gpu.util" = "이용률 %@%";
+"droid.card.gpu.freq" = "%@ MHz";
+"droid.card.gpu.es" = "OpenGL ES %@";
+"droid.card.sensors.title" = "SENSORS";
+"droid.card.sensors.none" = "활성 센서 없음";
+"droid.card.sensors.count" = "%@ / %@ 활성";
+"droid.storage.read" = "읽기";
+"droid.storage.write" = "쓰기";
 "droid.empty.noDevice" = "연결된 기기 없음";
 "droid.footer.logcatHits" = "logcat 적중 (%d)";
 "droid.footer.settingsChanged" = "설정 변경 탐지 (%d)";
@@ -49,6 +58,7 @@
 "droid.card.network.down" = "다운";
 "droid.card.network.wifiOff" = "Wi-Fi 꺼짐";
 "droid.battery.health" = "건강";
+"droid.battery.temp" = "온도";
 "droid.battery.voltage" = "전압";
 "droid.battery.cycles" = "사이클";
 "droid.battery.current" = "전류";

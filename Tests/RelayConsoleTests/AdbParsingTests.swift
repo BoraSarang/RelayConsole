@@ -510,4 +510,125 @@ struct AdbParsingTests {
         #expect(w.ssid == "PixelLab_5G")
         #expect(w.rssi == -42)
     }
+
+    // MARK: - P2 GPU / Sensors / Disk (PLAN_v0.4)
+
+    @Test func parseGpuGlesAdreno() {
+        let sample = """
+        GLES: Qualcomm, Adreno (TM) 730, OpenGL ES 3.2 V@0615.98 (GIT8e3c4e392d)
+        """
+        let g = AdbClient.parseGpuGles(sample)
+        #expect(g.renderer != nil)
+        #expect(g.renderer!.contains("Adreno"))
+        #expect(g.esVersion == "3.2")
+    }
+
+    @Test func parseGpuGlesEmptyNil() {
+        let g = AdbClient.parseGpuGles("no gpu here")
+        #expect(g.renderer == nil)
+        #expect(g.esVersion == nil)
+    }
+
+    @Test func parseGpuBusyPercentAndGpubusy() {
+        #expect(AdbClient.parseGpuBusyPercent("12 %\n") == 12)
+        #expect(AdbClient.parseGpuBusyPercent("0 %") == 0)
+        // busy idle jiffies → ratio
+        let b = AdbClient.parseGpuBusyPercent("100 900")
+        #expect(b != nil)
+        #expect(abs(b! - 10.0) < 0.01)
+        #expect(AdbClient.parseGpuBusyPercent("") == nil)
+    }
+
+    @Test func parseGpuClkMHz() {
+        #expect(AdbClient.parseGpuClkMHz("285000000") == 285)
+        #expect(AdbClient.parseGpuClkMHz("315\n") == 315)
+        #expect(AdbClient.parseGpuClkMHz("") == nil)
+    }
+
+    @Test func parseSensorsSummaryTotalAndActive() {
+        let sample = """
+        Total 39 h/w sensors, 39 running 0 disabled
+        active connections:
+          Connection Number: 0, active-count = 1 rate = 200000000 ns
+            0x00000001) type 0x00000001 (accelerometer) | ver=1 | min=0ms | max=0ms
+            0x00000004) type 0x00000004 (gyroscope) | ver=1 | min=0ms | max=0ms
+        """
+        let s = AdbClient.parseSensorsSummary(sample)
+        #expect(s.total == 39)
+        #expect(s.activeCount == 1)
+        #expect(s.activeNames.contains("accelerometer"))
+        #expect(s.activeNames.contains("gyroscope"))
+    }
+
+    @Test func parseSensorsSummarySamsungActiveLines() {
+        // 실측 SM_S901N 형식 — 이름(handle=) + active-count 동일 라인
+        let sample = """
+        Sensor Device:
+        Total 39 h/w sensors, 39 running 0 disabled clients:
+        lsm6dso LSM6DSO Accelerometer Non-wakeup(handle=0x0000000b)  active-count = 1; sampling_period(ms) = {20.0}, selected = 20.00 ms; batching_period(ms) = {0.0}, selected = 0.00 ms
+        STK33915 Light Ambient Light Sensor Non-wakeup(handle=0x00000033)  active-count = 1; sampling_period(ms) = {200.0}, selected = 200.00 ms; batching_period(ms) = {0.0}, selected = 0.00 ms
+        smd  Wakeup                        (handle=0x000000ac)  active-count = 3; sampling_period(ms) = {1.0, 1.0, 1.0}, selected = 1.00 ms; batching_period(ms) = {0.0, 0.0, 0.0}, selected = 0.00 ms
+        step_counter  Non-wakeup           (handle=0x000000bf)  active-count = 1; sampling_period(ms) = {200.0}, selected = 200.00 ms; batching_period(ms) = {0.0}, selected = 0.00 ms
+        SensorHub type                     (handle=0x000005dd)  active-count = 1; sampling_period(ms) = {1.0}, selected = 1.00 ms; batching_period(ms) = {0.0}, selected = 0.00 ms
+        Flip Cover Detector  Wakeup        (handle=0x000007f0)  active-count = 1; sampling_period(ms) = {200.0}, selected = 200.00 ms; batching_period(ms) = {0.0}, selected = 0.00 ms
+        Sensor List:
+        """
+        let s = AdbClient.parseSensorsSummary(sample)
+        #expect(s.total == 39)
+        #expect(s.activeCount == 6)
+        #expect(s.activeNames.count == 6)
+        #expect(s.activeNames.contains { $0.contains("Accelerometer") })
+        #expect(s.activeNames.contains("smd"))
+        #expect(s.activeNames.contains("step_counter"))
+        #expect(s.activeNames.contains("Flip Cover Detector"))
+        #expect(s.activeNames.contains("SensorHub type"))
+        #expect(s.activePeriodsMs.first == 20.0)
+        // Non-wakeup suffix stripped
+        #expect(!s.activeNames.contains { $0.hasSuffix("Non-wakeup") })
+        #expect(!s.activeNames.contains { $0.hasSuffix("Wakeup") })
+    }
+
+    @Test func parseDiskStatsSdaOnly() {
+        let sample = """
+         8       0 sda 1000 0 8000 10 2000 0 16000 20 0 30 40
+         8       1 sda1 900 0 7000 10 1000 0 8000 20 0 10 10
+        """
+        let d = AdbClient.parseDiskStats(sample)
+        #expect(d.readSectors == 8000)
+        #expect(d.writeSectors == 16000)
+    }
+
+    @Test func diskRateFirstTickNil() {
+        let a = AdbClient.DiskSample()
+        let b = AdbClient.DiskSample(readSectors: 2048, writeSectors: 2048)
+        #expect(AdbClient.diskRatesMBps(prev: a, curr: b, seconds: 1) == nil)
+    }
+
+    @Test func diskRateFromDelta() {
+        // 2048 sectors * 512 B = 1 MiB over 1s → 1 MB/s
+        let a = AdbClient.DiskSample(readSectors: 0, writeSectors: 0)
+        let b = AdbClient.DiskSample(readSectors: 2048, writeSectors: 4096)
+        let r = AdbClient.diskRatesMBps(prev: a, curr: b, seconds: 1)
+        #expect(r != nil)
+        #expect(abs(r!.read - 1.0) < 0.01)
+        #expect(abs(r!.write - 2.0) < 0.01)
+    }
+
+    @Test func inventoryMergePreservesP2Fields() {
+        var inv = DeviceInventory()
+        var a = DeviceSnapshot(serial: "SER1", model: "SM", isOnline: true)
+        a.gpuRenderer = "Adreno (TM) 730"
+        a.gpuEsVersion = "3.2"
+        a.sensorTotalCount = 39
+        a.sensorActiveCount = 2
+        inv.merge(a)
+        var b = DeviceSnapshot(serial: "SER1", model: "SM", isOnline: true)
+        b.gpuUtilPercent = 12
+        b.diskReadMBps = 0.5
+        inv.merge(b)
+        #expect(inv.devices[0].gpuRenderer == "Adreno (TM) 730")
+        #expect(inv.devices[0].sensorTotalCount == 39)
+        #expect(inv.devices[0].gpuUtilPercent == 12)
+        #expect(inv.devices[0].diskReadMBps == 0.5)
+    }
 }

@@ -37,7 +37,7 @@
 | # | 항목 | 확정 |
 |---|------|------|
 | C1 | bundleId | **`com.borasarang.relayconsole`** 고정. `com.relay.console` 기각. Package.swift·Info.plist·UserDefaults 전부 이 값 + **`relay.*` 키만**. `outpost.*` 금지 |
-| C2 | GPU 카드 | **제외**. Adreno util 미보장. 6카드 = **[CPU, MEMORY, BATTERY, NETWORK, THERMAL, STORAGE]**. `dumpsys gfxinfo` 파싱 시도 금지 |
+| C2 | GPU 카드 | ~~제외~~ → **v0.4/P2 일부 해제**: kgsl + SurfaceFlinger GLES로 GPU 카드 허용 (2026-09-23 PLAN_v0.4). **`dumpsys gfxinfo` 파싱·호출은 계속 금지**. Adreno util 미보장 → nil `—` 폴백 |
 | C3 | Scrcpy 버튼 | **없음**. 팝오버·Droid 헤더에 `[Scrcpy로 열기]` 금지. 배너 클릭은 `openWindow(id:"console")`만 |
 | C4 | Thread model | AdbClient=순수 static 파서 / DeviceMonitor=**actor** 백그라운드 / DeviceInventory=**@MainActor** 유일 read 모델 / DroidMetrics=링 60점(5s×60=5분) |
 | C5 | Dark 강제 | 2표면 `.preferredColorScheme(.dark)`. 라이트 없음. card #1c1f2a r16, popBG #0f111a, thermal #ff8c32/#ffb86a, cta #2f6bff, border white 8%, 숫자 SF Mono |
