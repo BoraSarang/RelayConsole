@@ -2,6 +2,7 @@ import SwiftUI
 
 struct DebugPanelView: View {
     @ObservedObject private var logger = DebugLogger.shared
+    @ObservedObject private var store = ConsoleStore.shared
 
     var body: some View {
         ZStack {
@@ -19,6 +20,88 @@ struct DebugPanelView: View {
                 }
                 .padding(OPSpace.md)
                 Divider().overlay(OPColor.border)
+
+                // 합성 감시 이벤트 주입 — DoD 육안 검증 (release 미사용)
+                VStack(alignment: .leading, spacing: OPSpace.sm) {
+                    Text(L10n.string("ui.debug.inject.title"))
+                        .font(OPFont.body(12))
+                        .foregroundStyle(OPColor.inkDim)
+                    LazyVGrid(
+                        columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 3),
+                        spacing: 6
+                    ) {
+                        injectButton(L10n.string("ui.debug.inject.throttleEnter")) {
+                            store.debugInjectSynthetic(
+                                kind: .throttling,
+                                severity: .critical,
+                                title: L10n.string("event.throttling.enter"),
+                                detail: "DEBUG · Status 3"
+                            )
+                        }
+                        injectButton(L10n.string("ui.debug.inject.throttleClear")) {
+                            store.debugInjectSynthetic(
+                                kind: .throttling,
+                                severity: .info,
+                                title: L10n.string("event.throttling.clear"),
+                                detail: "DEBUG · Status 1",
+                                isClear: true,
+                                resetCooldown: false
+                            )
+                        }
+                        injectButton(L10n.string("ui.debug.inject.chargeOn")) {
+                            store.debugInjectSynthetic(
+                                kind: .chargeChanged,
+                                severity: .info,
+                                title: L10n.string("event.charge.start"),
+                                detail: "DEBUG"
+                            )
+                        }
+                        injectButton(L10n.string("ui.debug.inject.protectionOn")) {
+                            store.debugInjectSynthetic(
+                                kind: .protectionChanged,
+                                severity: .warning,
+                                title: L10n.string("event.protection.on"),
+                                detail: "DEBUG"
+                            )
+                        }
+                        injectButton(L10n.string("ui.debug.inject.protectionOff")) {
+                            store.debugInjectSynthetic(
+                                kind: .protectionChanged,
+                                severity: .info,
+                                title: L10n.string("event.protection.off"),
+                                detail: "DEBUG",
+                                isClear: true,
+                                resetCooldown: false
+                            )
+                        }
+                        injectButton(L10n.string("ui.debug.inject.lowPowerOn")) {
+                            store.debugInjectSynthetic(
+                                kind: .lowPowerChanged,
+                                severity: .info,
+                                title: L10n.string("event.lowPower.on"),
+                                detail: "DEBUG"
+                            )
+                        }
+                        injectButton(L10n.string("ui.debug.inject.battery20")) {
+                            store.debugInjectSynthetic(
+                                kind: .batteryThreshold,
+                                severity: .info,
+                                title: L10n.format("event.battery.low", "20"),
+                                detail: "DEBUG · 20%"
+                            )
+                        }
+                        injectButton(L10n.string("ui.debug.inject.badgeOff")) {
+                            store.debugClearCriticalBadge()
+                        }
+                    }
+                    Text(L10n.string("ui.debug.inject.hint"))
+                        .font(OPFont.body(10))
+                        .foregroundStyle(OPColor.inkDim)
+                        .lineLimit(2)
+                }
+                .padding(OPSpace.md)
+                Divider().overlay(OPColor.border)
+
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 2) {
                         ForEach(logger.logs.reversed()) { entry in
@@ -34,5 +117,22 @@ struct DebugPanelView: View {
         }
         .background(Color(hex: 0x0F111A))
         .preferredColorScheme(.dark)
+    }
+
+    private func injectButton(_ title: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(OPFont.body(11))
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 6)
+                .padding(.horizontal, 4)
+                .frame(maxWidth: .infinity)
+                .contentShape(Rectangle())
+                .background(OPColor.card, in: RoundedRectangle(cornerRadius: 8))
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(OPColor.border, lineWidth: 1))
+        }
+        .buttonStyle(.plain)
     }
 }

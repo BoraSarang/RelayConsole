@@ -20,8 +20,17 @@ struct SettingsView: View {
                     }
                     // 메뉴바는 아이콘만 — 이 토글은 팝오버 헤더 n/m 표시
                     Toggle(L10n.string("settings.menubarMetrics"), isOn: $menubarMetrics)
-                    LabeledContent(L10n.string("settings.version"), value: "0.4.0")
+                    LabeledContent(L10n.string("settings.version"), value: "0.5.0")
                     LabeledContent(L10n.string("settings.bundleId"), value: "com.borasarang.relayconsole")
+                }
+                Section(L10n.string("settings.section.watch")) {
+                    Toggle(L10n.string("settings.watch.enabled"), isOn: $store.watchNotifications)
+                    Toggle(L10n.string("settings.watch.banner"), isOn: $store.watchBanner)
+                    Toggle(L10n.string("settings.watch.throttling"), isOn: $store.watchThrottling)
+                    Toggle(L10n.string("settings.watch.charge"), isOn: $store.watchCharge)
+                    Toggle(L10n.string("settings.watch.protection"), isOn: $store.watchProtection)
+                    Toggle(L10n.string("settings.watch.lowPower"), isOn: $store.watchLowPower)
+                    Toggle(L10n.string("settings.watch.battery"), isOn: $store.watchBattery)
                 }
                 Section(L10n.string("settings.section.droid")) {
                     Text(L10n.string("settings.keyPrefix"))
@@ -33,7 +42,7 @@ struct SettingsView: View {
             }
             .formStyle(.grouped)
         }
-        .frame(width: 420, height: 340)
+        .frame(width: 420, height: 440)
         .background(Color(hex: 0x0F111A))
         .preferredColorScheme(.dark)
     }

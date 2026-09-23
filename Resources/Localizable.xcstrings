@@ -1,6 +1,38 @@
 {
   "sourceLanguage": "ko",
   "strings": {
+    "alert.banner.cleared": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cleared: %@"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "해제: %@"
+          }
+        }
+      }
+    },
+    "alert.banner.notify": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alert: %@"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "알림: %@"
+          }
+        }
+      }
+    },
     "common.na": {
       "comment": "nil 표시",
       "localizations": {
@@ -270,6 +302,182 @@
           "stringUnit": {
             "state": "translated",
             "value": "MEMORY"
+          }
+        }
+      }
+    },
+    "droid.process.close": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Close"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "닫기"
+          }
+        }
+      }
+    },
+    "droid.process.col.cpu": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CPU"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CPU"
+          }
+        }
+      }
+    },
+    "droid.process.col.name": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Name"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이름"
+          }
+        }
+      }
+    },
+    "droid.process.col.path": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Command"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "커맨드"
+          }
+        }
+      }
+    },
+    "droid.process.col.pid": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "PID"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "PID"
+          }
+        }
+      }
+    },
+    "droid.process.col.ram": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "RAM"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "RAM"
+          }
+        }
+      }
+    },
+    "droid.process.empty": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No process data"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "프로세스 데이터 없음"
+          }
+        }
+      }
+    },
+    "droid.process.hint": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Every 15s · Command=ps ARGS (app=packageId, native=path) · No icons"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "15초 주기 · 커맨드=ps ARGS(앱=패키지ID, 네이티브=경로) · 아이콘 없음"
+          }
+        }
+      }
+    },
+    "droid.process.more": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "More processes"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "프로세스 목록 더보기"
+          }
+        }
+      }
+    },
+    "droid.process.title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Processes — %@"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "프로세스 — %@"
+          }
+        }
+      }
+    },
+    "droid.process.titleShort": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Processes"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "프로세스"
           }
         }
       }
@@ -578,6 +786,54 @@
         }
       }
     },
+    "event.battery.low": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Battery %@%"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "배터리 %@%"
+          }
+        }
+      }
+    },
+    "event.charge.start": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Charging started"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "충전 시작"
+          }
+        }
+      }
+    },
+    "event.charge.stop": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Charging stopped"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "충전 중단"
+          }
+        }
+      }
+    },
     "event.deviceConnected": {
       "localizations": {
         "en": {
@@ -626,6 +882,70 @@
         }
       }
     },
+    "event.lowPower.off": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Low power mode off"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "저전력 모드 꺼짐"
+          }
+        }
+      }
+    },
+    "event.lowPower.on": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Low power mode on"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "저전력 모드 켜짐"
+          }
+        }
+      }
+    },
+    "event.protection.off": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Protection mode off"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "보호모드 꺼짐"
+          }
+        }
+      }
+    },
+    "event.protection.on": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Protection mode on"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "보호모드 켜짐"
+          }
+        }
+      }
+    },
     "event.settingsChanged": {
       "localizations": {
         "en": {
@@ -638,6 +958,38 @@
           "stringUnit": {
             "state": "translated",
             "value": "설정 변경 %@ %@"
+          }
+        }
+      }
+    },
+    "event.throttling.clear": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Throttling cleared"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "스로틀링 해제"
+          }
+        }
+      }
+    },
+    "event.throttling.enter": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Throttling started"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "스로틀링 진입"
           }
         }
       }
@@ -967,6 +1319,278 @@
         }
       }
     },
+    "remediation.battery": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Save battery"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "배터리 절약"
+          }
+        }
+      }
+    },
+    "remediation.battery.1": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Close unnecessary background apps"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "불필요한 백그라운드 앱 정리"
+          }
+        }
+      }
+    },
+    "remediation.battery.2": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Turn off location, sync, auto-update"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "위치·동기화·자동 업데이트 끄기 권장"
+          }
+        }
+      }
+    },
+    "remediation.battery.3": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enable low power mode if urgent"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "긴급 시 저전력 모드 켜기"
+          }
+        }
+      }
+    },
+    "remediation.lowPower": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Low power mode"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "저전력 모드"
+          }
+        }
+      }
+    },
+    "remediation.lowPower.1": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Performance cap may reduce throttling"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "성능 제한으로 스로틀링 완화될 수 있음"
+          }
+        }
+      }
+    },
+    "remediation.lowPower.2": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Turn off in Settings if not needed"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "불필요하면 설정에서 다시 OFF"
+          }
+        }
+      }
+    },
+    "remediation.protection": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Check battery protection"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "보호모드 확인"
+          }
+        }
+      }
+    },
+    "remediation.protection.1": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Settings → Battery → Protection mode toggle"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "설정 → 배터리 → 보호 모드 토글 상태 확인"
+          }
+        }
+      }
+    },
+    "remediation.protection.2": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Compare protection threshold with current level"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "보호 임계(%)와 현재 충전 레벨 대조"
+          }
+        }
+      }
+    },
+    "remediation.throttle.1": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Check top CPU processes — pause heavy apps"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "상단 CPU 프로세스 확인 — 고부하 앱 일시 중지"
+          }
+        }
+      }
+    },
+    "remediation.throttle.2": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open console → THERMAL card for temp/status"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "THERMAL 카드에서 온도·Status 확인 (콘솔 열기)"
+          }
+        }
+      }
+    },
+    "remediation.throttle.3": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "If charging, unplug; remove case"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "충전 중이면 충전기 분리, 케이스 벗기기"
+          }
+        }
+      }
+    },
+    "remediation.throttle.4": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lower brightness and game graphics"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "화면 밝기·게임 그래픽 낮추기"
+          }
+        }
+      }
+    },
+    "remediation.throttle.5": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pause background location/sync briefly"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "그림자·이통·위치 등 백그라운드 권한 잠시 OFF"
+          }
+        }
+      }
+    },
+    "remediation.throttling": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Throttling response"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "스로틀링 대응"
+          }
+        }
+      }
+    },
+    "remediation.title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recommended follow-up"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "권장 후속 조치"
+          }
+        }
+      }
+    },
     "settings.bundleId": {
       "localizations": {
         "en": {
@@ -1043,6 +1667,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "일반"
+          }
+        }
+      }
+    },
+    "settings.section.watch": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Watch alerts"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "감시 알림"
           }
         }
       }
@@ -1127,6 +1767,118 @@
         }
       }
     },
+    "settings.watch.banner": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Top alert banner"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "화면 상단 알림 배너"
+          }
+        }
+      }
+    },
+    "settings.watch.battery": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Battery thresholds (20/10/5%)"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "배터리 임계 (20/10/5%)"
+          }
+        }
+      }
+    },
+    "settings.watch.charge": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Charge transitions"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "충전 전이"
+          }
+        }
+      }
+    },
+    "settings.watch.enabled": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "System notifications"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "시스템 알림"
+          }
+        }
+      }
+    },
+    "settings.watch.lowPower": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Low power transitions"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "저전력 모드 전이"
+          }
+        }
+      }
+    },
+    "settings.watch.protection": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Protection transitions"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "보호모드 전이"
+          }
+        }
+      }
+    },
+    "settings.watch.throttling": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Throttling"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "스로틀링"
+          }
+        }
+      }
+    },
     "ui.debug.clear": {
       "localizations": {
         "en": {
@@ -1139,6 +1891,166 @@
           "stringUnit": {
             "state": "translated",
             "value": "지우기"
+          }
+        }
+      }
+    },
+    "ui.debug.inject.badgeOff": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clear badge"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "배지 해제"
+          }
+        }
+      }
+    },
+    "ui.debug.inject.battery20": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Battery 20%"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "배터리 20%"
+          }
+        }
+      }
+    },
+    "ui.debug.inject.chargeOn": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Charge start"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "충전 시작"
+          }
+        }
+      }
+    },
+    "ui.debug.inject.hint": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Visual check for alert, popover, menubar badge (not in release). Clear badge resets critical."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "알림·팝오버·메뉴바 배지 육안 확인용 (release 없음). 해제 버튼은 배지 초기화."
+          }
+        }
+      }
+    },
+    "ui.debug.inject.lowPowerOn": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Low power on"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "저전력 켜짐"
+          }
+        }
+      }
+    },
+    "ui.debug.inject.protectionOff": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Protection off"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "보호모드 해제"
+          }
+        }
+      }
+    },
+    "ui.debug.inject.protectionOn": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Protection on"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "보호모드 켜짐"
+          }
+        }
+      }
+    },
+    "ui.debug.inject.throttleClear": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Throttle clear"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "스로틀링 해제"
+          }
+        }
+      }
+    },
+    "ui.debug.inject.throttleEnter": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Throttle enter"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "스로틀링 진입"
+          }
+        }
+      }
+    },
+    "ui.debug.inject.title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Synthetic watch event inject"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "합성 감시 이벤트 주입"
           }
         }
       }

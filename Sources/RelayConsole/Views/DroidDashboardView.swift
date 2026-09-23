@@ -2,6 +2,7 @@ import SwiftUI
 
 struct DroidDashboardView: View {
     @ObservedObject var store: ConsoleStore
+    @State private var showProcessList = false
 
     private let columns = [
         GridItem(.flexible(), spacing: 16, alignment: .top),
@@ -34,7 +35,9 @@ struct DroidDashboardView: View {
                         LazyVGrid(columns: columns, spacing: 16) {
                             DroidCards.cpu(device: device, metrics: metrics)
                             DroidCards.gpu(device: device, metrics: metrics)
-                            DroidCards.memory(device: device, metrics: metrics)
+                            DroidCards.memory(device: device, metrics: metrics) {
+                                showProcessList = true
+                            }
                             DroidCards.sensors(device: device, metrics: metrics)
                             DroidCards.battery(device: device, metrics: metrics)
                             DroidCards.network(device: device, metrics: metrics)
@@ -50,6 +53,9 @@ struct DroidDashboardView: View {
         }
         .background(Color(hex: 0x0F111A))
         .preferredColorScheme(.dark)
+        .sheet(isPresented: $showProcessList) {
+            ProcessListSheet(store: store)
+        }
     }
 
     private var header: some View {
