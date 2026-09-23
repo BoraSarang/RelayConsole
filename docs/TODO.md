@@ -3,6 +3,7 @@
 
 ## 진행 중 (bd ready)
 - [ ] **WindowFocus 육안** — 팝오버에서 설정/콘솔/디버그 클릭 시 창이 앞으로 오는지 사용자 확인 (코드 ✓ · 자동 확인: status item 1개 존재, 창 0/LSUIElement)
+- [ ] **v0.5 감시 이벤트 계획 확정** — `PLAN_v0.5_relayconsole.md` + `RESEARCH_watch_events.md` 흡수 · ThresholdGate/hysteresis/severity 설계 완료 · 구현 착수 대기 (메뉴바 PR 머지 후 `feat/watch-events`)
 
 ## 완료 (2026-09-23)
 - [x] **메뉴바 UX v0.4.1** — 상태 아이콘(0대 흰 안테나 / 1대+ 흰 Android+초록점) · 텍스트 제거 · 팝오버 `n/m`+`relay.menubarMetrics` · 빈 상태 emptyState · 기기 상세 힌트 · `WindowFocus` 신규 · DEBUG-GHOST 제거 · i18n **72키** · 테스트 **60/60** · 금지 0
