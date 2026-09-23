@@ -1,0 +1,6 @@
+
+Keywords (KO): 릴레이, 안드로이드 모니터, 배터리 온도, scrcpy, iStat, 외부 관제, 개발자 도구
+Keywords (EN): relay console, android monitor, battery thermal, scrcpy, iStat Menus, external device, adb
+Category: Developer Tools / Utilities
+Bundle ID: com.borasarang.relayconsole (AGENTS 규칙: com.borasarang.{AppName})
+Minimum OS: macOS 26.0 Tahoe

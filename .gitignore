@@ -1,6 +1,13 @@
-
-# Beads / Dolt files (added by bd init)
-.dolt/
-*.db
-.beads-credential-key
-.beads/proxieddb/
+.DS_Store
+build/
+.build/
+*.xcodeproj/xcuserdata/
+DerivedData/
+.swiftpm/
+*.app
+env
+.env
+.env.*
+!env-expiry-check.sh
+.beads/local*
+*.log

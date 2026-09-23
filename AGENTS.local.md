@@ -1,0 +1,35 @@
+# AGENTS.local.md — 프로젝트별 확장 규칙
+> 위치: /Users/lee/Documents/Apps/RelayConsole/AGENTS.local.md
+> 이 파일은 프로젝트 특화 규칙만 기록. 공통 가이드 재작성 금지.
+> 이관: 2026-09-23 Outpost → RelayConsole (문서만, 코드 신규)
+
+## 1. 프로젝트 정보
+- **프로젝트명**: RelayConsole / 앱 이름 **Relay Console** (구 Outpost → 브랜드 이관, 코드 신규)
+- **플랫폼**: macos (확정 예정 — 이관 시점 가정: SwiftUI MenuBarExtra)
+- **기술 스택**: SwiftPM + SwiftUI MenuBarExtra + AppKit + 시스템 ADB 외부 호출 (GRDB·미러링은 범위 밖)
+- **최소 OS**: macOS 26.0 Tahoe (BrandKit/AppStore_Metadata)
+- **선정 이유**: 맥 메뉴바 상주 — 외부 안드로이드 기기 관제
+- **design_profile**: custom — "관제탑" (docs/DESIGN.md + 팝오버/대시보드 v2 토큰)
+- **작업 모드 기본값**: 정식
+
+## 2. 번들ID / 앱 ID
+- macOS bundleIdentifier: `com.borasarang.relayconsole` **확정** (AGENTS 플랫폼 규칙 `com.borasarang.{AppName}`)
+- 앱 표시명: Relay Console / 메뉴바: RELAY
+- **버전**: `0.1.0` 시작 (신규 프로이 · 구 Outpost 아카이브 v0.6은 참고용)
+- UserDefaults·설정 키 접두어: `relay.*` (구 `outpost.*` 계승 금지 — 코드 신규)
+
+## 3. 성능 예산 Override
+- ADB 폴링: 백그라운드 스레드, 메인 스레드 차단 금지
+- 무거운 dumpsys(meminfo·batterystats 등) 상시 폴링 금지 — RESEARCH §2-3
+
+## 4. 프로젝트 특화 예외 규칙
+- 외부 바이너리(adb, scrcpy)는 시스템 PATH 우선, 없으면 안내만 (자동 다운로드 금지)
+- Android 설정 변경(쓰기) 금지 — 감시(읽기) 전용
+- 로그 마스킹: 시리얼 전체 출력 금지 (뒤 4자리만 …5555)
+- **팝오버·Droid 대시보드 표시: 다크 전용** (밝은 테마/웹風 버튼/print 금지)
+
+## 5. 디자인 토큰
+- 색/폰트: docs/DESIGN.md
+- v2 카드: bg #1c1f2a, radius 16, 숫자 SF Mono, 발열 오렌지 배너
+- 아이콘: BrandKit/AppIcons + MenuBarIcons (Black Template = Xcode template)
+- 상세: docs/plans/PLAN_v0.1_relayconsole.md §4
