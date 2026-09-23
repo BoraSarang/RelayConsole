@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "embedded",
+  "dolt_database": "RelayConsole",
+  "project_id": "6d7d1614-63c8-4994-a437-b575e04a6c41"
+}
