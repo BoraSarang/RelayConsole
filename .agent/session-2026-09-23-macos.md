@@ -1,9 +1,9 @@
 # session 2026-09-23 macos
-1. 무엇을: Step 0b — SwiftPM 스캐폴드·BrandKit 아이콘·bundleId/버전 확정·빌드+테스트
-2. 플랫폼: macos (Swift 6.4, Xcode 27, macOS 26.0 target)
-3. 빌드/PERF/CACHE: swift build OK · swift test 5/5 · ~/Applications/RelayConsole.app 서명 OK · cold start 미측정(골격)
-4. 남은 TODO: T-103~T-109 (P0 병합·파서·팝오버·대시보드 실데이터)
-5. 전달로그: 금지 Outpost/com.relay.console/outpost.* 0건 · Scrcpy 버튼 없음 · 6카드 골격 · relay.* 키
-6. 문서갱신: TODO.md T-101/102 완료 · PLAN 유지 · AGENTS.local 0.1.0
-7. 큐상태: bd closed 9tg/cro · ready 7건 (19q P0 우선)
-8. E2E: 해당 없음 (실기기 SM_S901N 미연결)
+1. 무엇을: v0.3 목업 피델리티 + 다중 기기 완료 — DoD 전수 + 사용자 육안 3종 통과
+2. 플랫폼: macos (Swift 6.x, macOS 26.0) · SM_S901N 10.233.247.205:5555 · device_name S22 · 고스트 2대
+3. 빌드/PERF: swift test 50/50 · debug 0.3.0 OK · 금지어/iStat/GPU/SENSORS 0 · UI 한글 0 · `-s` shell 1곳
+4. 남은 TODO: (없음) · commit 미요청(보류) · bd RelayConsole-fgo 육안 완료→close 가능
+5. 전달로그: 다중 serial+`-s`, selectedSerial persist, cpufreq/signal 단일 shell(인자 분리 버그 수정), WiFi `Wifi is disabled`, Window/Button 키화, 메뉴바 5지표 토글
+6. 문서갱신: PLAN_v0.3 DoD 전수 체크·상태 완료 · TODO 진행중 없음 · session 갱신
+7. 큐상태: bd 1 in_progress (fgo) · 커밋 8a36177(v0.1) 푸시 · v0.2+v0.3 uncommitted
+8. E2E: 육안 완료 — 팝오버 목록/클릭→콘솔·S22/IP·8코어·압박·NET↑↓·THERMAL 존·BATTERY 6타일·5지표 ON/OFF

@@ -78,16 +78,20 @@ struct OPSparkline: View {
                 GeometryReader { geo in
                     let minV = points.min() ?? 0
                     let maxV = points.max() ?? 1
-                    let range = max(maxV - minV, 0.0001)
-                    ZStack(alignment: .bottom) {
+                    ZStack {
                         // baseline — 데이터 부족 시에도 영역 유지
                         Rectangle()
                             .fill(color.opacity(0.2))
                             .frame(height: 1)
                         Path { path in
+                            let rawRange = maxV - minV
+                            let flat = rawRange < 0.0001
                             for (i, v) in points.enumerated() {
                                 let x = geo.size.width * CGFloat(i) / CGFloat(points.count - 1)
-                                let y = geo.size.height * (1 - CGFloat((v - minV) / range))
+                                // 상수 구간: 중앙 평선 (min==max → 하단 고정 방지)
+                                let y: CGFloat = flat
+                                    ? geo.size.height * 0.5
+                                    : geo.size.height * (1 - CGFloat((v - minV) / rawRange))
                                 if i == 0 {
                                     path.move(to: CGPoint(x: x, y: y))
                                 } else {

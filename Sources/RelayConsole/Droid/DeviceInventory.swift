@@ -1,9 +1,33 @@
 import Foundation
 
+/// ADB 연결 방식 — serial에 `:` 유무로 판별 (IP:PORT = network)
+enum ConnectionKind: String, Sendable, Equatable {
+    case usb
+    case network
+}
+
+/// 메모리/스왑 프로세스 RSS 행
+struct ProcessRSS: Sendable, Equatable, Hashable {
+    var name: String
+    var rssMB: Double
+}
+
+/// thermalservice 온도 존 행
+struct ThermalZone: Sendable, Equatable, Hashable {
+    var name: String
+    var tempC: Double
+}
+
 struct DeviceSnapshot: Sendable, Equatable {
     var serial: String = ""
     var model: String = ""
     var isOnline: Bool = false
+    /// USB | network
+    var connectionKind: ConnectionKind?
+    /// 표시용 연결 라벨 — USB | 10.x.x.x:5555
+    var connectionLabel: String?
+    /// settings get global device_name (예: S22)
+    var deviceName: String?
     var batteryLevel: Int?
     var batteryTempC: Double?
     var isCharging: Bool?
@@ -25,9 +49,34 @@ struct DeviceSnapshot: Sendable, Equatable {
     var protectionThresholdPct: Int?
     var cycleEstimate: Int?
     var load1: Double?
+    var load5: Double?
+    var load15: Double?
     var androidVersion: String?
     var sdkInt: Int?
+    // ── Phase1 카드 필드 ──
+    var coreFreqsMHz: [Double]?
+    var coreMaxMHz: [Double]?
+    var coreUsePercents: [Double]?
+    var cpuGovernor: String?
+    /// PSI memory some avg10
+    var memPressurePct: Double?
+    /// none / low / moderate / full
+    var memPressureLabel: String?
+    var topProcesses: [ProcessRSS]?
+    var swapUsedGB: Double?
+    var thermalZones: [ThermalZone]?
+    var rsrp: Int?
+    var signalOperator: String?
+    var wifiSsid: String?
+    var wifiRssi: Int?
+    var ipV4: String?
+    /// 세션 중 설정 변경 횟수 (accelerometer_rotation / user_rotation)
+    var settingsChangedCount: Int?
+    /// 세션 중 logcat 키워드 적중 수
+    var logcatHitCount: Int?
     var lastError: String?
+
+    /// Equatable — 배열/옵셔널 필드 자동 합성 충분 (tuple 없음)
 
     /// ≥40°C or thermal Status≥2 (V0-2 Surface A)
     var isThermalAlert: Bool {
@@ -35,11 +84,24 @@ struct DeviceSnapshot: Sendable, Equatable {
         if let s = thermalStatus, s >= 2 { return true }
         return false
     }
+
+    /// 헤더 표시 이름 — deviceName > model > shortId
+    var displayName: String {
+        AdbClient.displayDeviceName(deviceName: deviceName, model: model, serial: serial)
+    }
 }
 
 /// UI 유일 read 모델 (값 타입 — ConsoleStore가 @Published로 보유)
 struct DeviceInventory: Equatable {
     var devices: [DeviceSnapshot] = []
+
+    func device(serial: String) -> DeviceSnapshot? {
+        devices.first { $0.serial == serial }
+    }
+
+    var onlineDevices: [DeviceSnapshot] {
+        devices.filter(\.isOnline)
+    }
 
     /// 부분 스냅샷 병합 — nil optional은 이전 값 유지 (5s 틱이 15s 필드를 덮지 않음)
     mutating func merge(_ snapshot: DeviceSnapshot) {
@@ -68,9 +130,30 @@ struct DeviceInventory: Equatable {
                 merged.protectionThresholdPct = merged.protectionThresholdPct ?? prev.protectionThresholdPct
                 merged.cycleEstimate = merged.cycleEstimate ?? prev.cycleEstimate
                 merged.load1 = merged.load1 ?? prev.load1
+                merged.load5 = merged.load5 ?? prev.load5
+                merged.load15 = merged.load15 ?? prev.load15
                 merged.androidVersion = merged.androidVersion ?? prev.androidVersion
                 merged.sdkInt = merged.sdkInt ?? prev.sdkInt
+                merged.settingsChangedCount = merged.settingsChangedCount ?? prev.settingsChangedCount
+                merged.logcatHitCount = merged.logcatHitCount ?? prev.logcatHitCount
                 if merged.model.isEmpty { merged.model = prev.model }
+                merged.connectionKind = merged.connectionKind ?? prev.connectionKind
+                merged.connectionLabel = merged.connectionLabel ?? prev.connectionLabel
+                merged.deviceName = merged.deviceName ?? prev.deviceName
+                merged.coreFreqsMHz = merged.coreFreqsMHz ?? prev.coreFreqsMHz
+                merged.coreMaxMHz = merged.coreMaxMHz ?? prev.coreMaxMHz
+                merged.coreUsePercents = merged.coreUsePercents ?? prev.coreUsePercents
+                merged.cpuGovernor = merged.cpuGovernor ?? prev.cpuGovernor
+                merged.memPressurePct = merged.memPressurePct ?? prev.memPressurePct
+                merged.memPressureLabel = merged.memPressureLabel ?? prev.memPressureLabel
+                merged.topProcesses = merged.topProcesses ?? prev.topProcesses
+                merged.swapUsedGB = merged.swapUsedGB ?? prev.swapUsedGB
+                merged.thermalZones = merged.thermalZones ?? prev.thermalZones
+                merged.rsrp = merged.rsrp ?? prev.rsrp
+                merged.signalOperator = merged.signalOperator ?? prev.signalOperator
+                merged.wifiSsid = merged.wifiSsid ?? prev.wifiSsid
+                merged.wifiRssi = merged.wifiRssi ?? prev.wifiRssi
+                merged.ipV4 = merged.ipV4 ?? prev.ipV4
             }
             devices[idx] = merged
         } else {

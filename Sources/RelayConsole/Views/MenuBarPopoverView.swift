@@ -6,16 +6,16 @@ struct MenuBarPopoverView: View {
     var openDebug: () -> Void = {}
 
     @State private var showDeviceDetail = false
-    @State private var showEvents = true
+    @State private var showEvents = false
 
-    private var device: DeviceSnapshot? { store.inventory.devices.first }
+    private var devices: [DeviceSnapshot] { store.inventory.devices }
+    private var device: DeviceSnapshot? { store.selectedDevice }
     private var metrics: DroidMetrics? {
         device.map { store.metrics(for: $0.serial) }
     }
+    private var multiDevice: Bool { devices.count > 1 }
 
     var body: some View {
-        // SOLID root — macOS 26 red/rainbow hotfix
-        // 구조: 고정 헤더 + 스크롤 중간 + 고정 푸터
         ZStack {
             Color(hex: 0x0F111A).ignoresSafeArea()
             VStack(spacing: 0) {
@@ -29,6 +29,9 @@ struct MenuBarPopoverView: View {
 
                 ScrollView(.vertical, showsIndicators: true) {
                     VStack(alignment: .leading, spacing: 12) {
+                        if showDeviceDetail {
+                            deviceExpandSection
+                        }
                         if let d = device, d.isThermalAlert {
                             thermalBanner(device: d)
                         }
@@ -69,23 +72,21 @@ struct MenuBarPopoverView: View {
                         .font(OPFont.number(11))
                         .foregroundStyle(OPColor.inkDim)
                 }
-                Text("0.1.0")
+                Text("0.3.0")
                     .font(OPFont.number(10))
                     .foregroundStyle(OPColor.inkDim)
             }
 
             HStack(spacing: 8) {
                 if let d = device {
-                    Text(d.model.isEmpty ? L10n.na : d.model)
+                    // 기기 이름 (deviceName > model)
+                    Text(d.displayName)
                         .font(OPFont.body(12))
                         .foregroundStyle(OPColor.ink)
                         .lineLimit(1)
                         .truncationMode(.tail)
-                    if !d.serial.isEmpty {
-                        Text(AdbClient.shortId(d.serial))
-                            .font(OPFont.number(11))
-                            .foregroundStyle(OPColor.inkDim)
-                    }
+                    // 연결 종류: USB | IP:5555
+                    connectionBadge(d)
                     StatusDot(state: d.isOnline ? .ok : .bad)
                     Text(d.isOnline
                         ? L10n.string("menubar.status.connected")
@@ -106,7 +107,9 @@ struct MenuBarPopoverView: View {
                             .background(OPColor.card, in: RoundedRectangle(cornerRadius: 6))
                     }
                     .buttonStyle(.plain)
-                    .help(L10n.string("menubar.device.detail"))
+                    .help(multiDevice
+                        ? L10n.string("menubar.device.list")
+                        : L10n.string("menubar.device.detail"))
                 } else {
                     Text(L10n.string("droid.empty.noDevice"))
                         .font(OPFont.body(12))
@@ -115,6 +118,127 @@ struct MenuBarPopoverView: View {
             }
         }
         .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private func connectionBadge(_ d: DeviceSnapshot) -> some View {
+        Text(d.connectionLabel ?? L10n.na)
+            .font(OPFont.number(9))
+            .foregroundStyle(d.connectionKind == .network ? OPColor.cta : OPColor.inkDim)
+            .lineLimit(1)
+            .truncationMode(.tail)
+            .padding(.horizontal, 5)
+            .padding(.vertical, 2)
+            .background(OPColor.card, in: RoundedRectangle(cornerRadius: 4))
+            .overlay(
+                RoundedRectangle(cornerRadius: 4)
+                    .stroke(OPColor.border, lineWidth: 1)
+            )
+    }
+
+    // MARK: - Device list / detail expand
+
+    /// 헤더 ⌄ 펼침 — 다중: 기기 목록 / 단일: 상세 3줄
+    private var deviceExpandSection: some View {
+        Group {
+            if multiDevice {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(L10n.string("menubar.device.list"))
+                        .font(OPFont.body(10))
+                        .foregroundStyle(OPColor.inkDim)
+                    ForEach(devices, id: \.serial) { d in
+                        deviceRow(d)
+                    }
+                }
+                .padding(OPSpace.md)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(OPColor.card)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(OPColor.border, lineWidth: 1)
+                )
+            } else if let d = device {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(L10n.string("menubar.device.detail"))
+                        .font(OPFont.body(10))
+                        .foregroundStyle(OPColor.inkDim)
+                    detailRow(L10n.string("menubar.device.model"), d.model.isEmpty ? L10n.na : d.model)
+                    detailRow(
+                        L10n.string("menubar.device.android"),
+                        [d.androidVersion, d.sdkInt.map { "SDK \($0)" } ?? nil]
+                            .compactMap { $0 }
+                            .joined(separator: " · ")
+                            .isEmpty ? L10n.na
+                            : [d.androidVersion, d.sdkInt.map { "SDK \($0)" } ?? nil]
+                                .compactMap { $0 }
+                                .joined(separator: " · ")
+                    )
+                    detailRow(L10n.string("menubar.device.adb"), adbValue(d))
+                }
+                .padding(OPSpace.md)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(OPColor.card)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(OPColor.border, lineWidth: 1)
+                )
+            }
+        }
+    }
+
+    /// 기기 행 클릭 → 선택 + 콘솔 대시보드 (PLAN_v0.3)
+    private func deviceRow(_ d: DeviceSnapshot) -> some View {
+        let isSelected = d.serial == store.selectedSerial
+        return Button {
+            store.select(d.serial)
+            openConsole()
+        } label: {
+            HStack(spacing: 8) {
+                StatusDot(state: d.isOnline ? (isSelected ? .ok : .ok) : .bad)
+                Text(d.displayName)
+                    .font(OPFont.body(12))
+                    .foregroundStyle(OPColor.ink)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                Text(d.connectionLabel ?? L10n.na)
+                    .font(OPFont.number(9))
+                    .foregroundStyle(OPColor.inkDim)
+                    .lineLimit(1)
+                Spacer(minLength: 4)
+                if let level = d.batteryLevel {
+                    Text("\(level)%")
+                        .font(OPFont.number(11))
+                        .foregroundStyle(OPColor.inkDim)
+                }
+                if let t = d.deviceTempC ?? d.batteryTempC {
+                    Text(String(format: "%.0f°", t))
+                        .font(OPFont.number(11))
+                        .foregroundStyle(OPColor.thermal)
+                }
+                if isSelected {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(OPColor.cta)
+                }
+            }
+            .padding(.vertical, 4)
+            .padding(.horizontal, 6)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(isSelected ? OPColor.cta.opacity(0.12) : Color.clear)
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func adbValue(_ d: DeviceSnapshot) -> String {
+        d.connectionKind == .network ? (d.connectionLabel ?? d.serial) : AdbClient.shortId(d.serial)
     }
 
     // MARK: - Thermal banner
@@ -169,9 +293,15 @@ struct MenuBarPopoverView: View {
                 spark: metrics?.cpuHistory,
                 sparkColor: OPColor.cta
             )
+            if let cores = device?.coreFreqsMHz, !cores.isEmpty {
+                coreMiniBars(freqs: cores, maxes: device?.coreMaxMHz ?? [], uses: device?.coreUsePercents ?? [])
+            }
             HStack(spacing: 12) {
                 cardMini(L10n.string("droid.card.memory.title"), memoryValue)
                 cardMini(L10n.string("droid.card.storage.title"), storageValue)
+            }
+            if let top = device?.topProcesses, !top.isEmpty {
+                topRssRows(top)
             }
             cardFull(
                 L10n.string("droid.card.battery.title"),
@@ -180,6 +310,9 @@ struct MenuBarPopoverView: View {
                 spark: metrics?.levelHistory,
                 sparkColor: OPColor.ok
             )
+            batteryTiles
+            networkUpRow
+            networkDownRow
             cardFull(
                 L10n.string("droid.card.network.title"),
                 networkValue,
@@ -194,44 +327,178 @@ struct MenuBarPopoverView: View {
                 sparkColor: OPColor.thermal,
                 isThermal: true
             )
+            thermalZoneRows
         }
     }
 
-    // MARK: - Device detail (expand)
-
-    private var deviceDetailSection: some View {
-        Group {
-            if showDeviceDetail, let d = device {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(L10n.string("menubar.device.detail"))
-                        .font(OPFont.body(10))
+    private func coreMiniBars(freqs: [Double], maxes: [Double], uses: [Double]) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            ForEach(Array(freqs.enumerated()), id: \.offset) { i, freq in
+                HStack(spacing: 6) {
+                    Text("C\(i)")
+                        .font(OPFont.number(8))
                         .foregroundStyle(OPColor.inkDim)
-                    detailRow(L10n.string("menubar.device.model"), d.model.isEmpty ? L10n.na : d.model)
-                    detailRow(
-                        L10n.string("menubar.device.android"),
-                        [d.androidVersion, d.sdkInt.map { "SDK \($0)" } ?? nil]
-                            .compactMap { $0 }
-                            .joined(separator: " · ")
-                            .isEmpty ? L10n.na
-                            : [d.androidVersion, d.sdkInt.map { "SDK \($0)" } ?? nil]
-                                .compactMap { $0 }
-                                .joined(separator: " · ")
-                    )
-                    detailRow(L10n.string("menubar.device.adb"), AdbClient.shortId(d.serial))
+                        .frame(width: 16, alignment: .leading)
+                    GeometryReader { geo in
+                        let maxF = i < maxes.count && maxes[i] > 0 ? maxes[i] : max(freq, 1)
+                        let ratio = min(1, max(0, freq / maxF))
+                        ZStack(alignment: .leading) {
+                            RoundedRectangle(cornerRadius: 2)
+                                .fill(Color.white.opacity(0.06))
+                            RoundedRectangle(cornerRadius: 2)
+                                .fill(OPColor.cta.opacity(0.7))
+                                .frame(width: geo.size.width * ratio)
+                        }
+                    }
+                    .frame(height: 5)
+                    Text(String(format: "%.2f", freq / 1000.0))
+                        .font(OPFont.number(8))
+                        .foregroundStyle(OPColor.inkDim)
+                        .frame(width: 28, alignment: .trailing)
+                    if i < uses.count {
+                        Text(String(format: "%.0f%%", uses[i]))
+                            .font(OPFont.number(8))
+                            .foregroundStyle(OPColor.inkDim)
+                            .frame(width: 24, alignment: .trailing)
+                    }
                 }
-                .padding(OPSpace.md)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            if let g = device?.cpuGovernor {
+                Text(g)
+                    .font(OPFont.number(8))
+                    .foregroundStyle(OPColor.inkDim)
+            }
+        }
+        .padding(OPSpace.sm)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color(hex: 0x1C1F2A))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color.white.opacity(0.08), lineWidth: 1)
+        )
+    }
+
+    private func topRssRows(_ top: [ProcessRSS]) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            ForEach(Array(top.enumerated()), id: \.offset) { _, p in
+                HStack(spacing: 6) {
+                    Text(p.name)
+                        .font(OPFont.number(9))
+                        .foregroundStyle(OPColor.ink.opacity(0.7))
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    Spacer(minLength: 4)
+                    Text(String(format: "%.0f MB", p.rssMB))
+                        .font(OPFont.number(9))
+                        .foregroundStyle(OPColor.inkDim)
+                }
+            }
+        }
+        .padding(.horizontal, OPSpace.sm)
+        .padding(.vertical, 4)
+    }
+
+    private var batteryTiles: some View {
+        let d = device
+        let cells: [(String, String)] = [
+            (L10n.string("droid.battery.health"), d?.batteryHealthPct.map { "\($0)%" } ?? L10n.na),
+            (L10n.string("droid.battery.voltage"), d?.voltageMV.map { String(format: "%.2fV", Double($0) / 1000) } ?? L10n.na),
+            (L10n.string("droid.battery.cycles"), d?.cycleEstimate.map(String.init) ?? L10n.na),
+            (L10n.string("droid.battery.current"), L10n.na),
+            (L10n.string("droid.battery.type"), L10n.na),
+            (L10n.string("menubar.device.detail"), (d?.isProtectionMode == true ? "ON" : L10n.na))
+        ]
+        return LazyVGrid(columns: [
+            GridItem(.flexible(), spacing: 4),
+            GridItem(.flexible(), spacing: 4),
+            GridItem(.flexible(), spacing: 4)
+        ], spacing: 4) {
+            ForEach(Array(cells.enumerated()), id: \.offset) { _, cell in
+                VStack(spacing: 1) {
+                    Text(cell.0)
+                        .font(OPFont.number(7))
+                        .foregroundStyle(OPColor.inkDim.opacity(0.7))
+                        .lineLimit(1)
+                    Text(cell.1)
+                        .font(OPFont.number(10))
+                        .foregroundStyle(OPColor.ink)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 4)
                 .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(OPColor.card)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(OPColor.border, lineWidth: 1)
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(Color.white.opacity(0.03))
                 )
             }
         }
     }
+
+    private var networkUpRow: some View {
+        HStack(spacing: 6) {
+            Circle().fill(OPColor.cta).frame(width: 5, height: 5)
+            Text(L10n.string("droid.card.network.up"))
+                .font(OPFont.body(9))
+                .foregroundStyle(OPColor.inkDim)
+            Spacer()
+            Text(device?.netUpMBps.map { String(format: "%.1f MB/s", $0) } ?? L10n.na)
+                .font(OPFont.number(11))
+                .foregroundStyle(OPColor.ink)
+        }
+    }
+
+    private var networkDownRow: some View {
+        HStack(spacing: 6) {
+            Circle().fill(OPColor.thermalSoft).frame(width: 5, height: 5)
+            Text(L10n.string("droid.card.network.down"))
+                .font(OPFont.body(9))
+                .foregroundStyle(OPColor.inkDim)
+            Spacer()
+            Text(device?.netDownMBps.map { String(format: "%.1f MB/s", $0) } ?? L10n.na)
+                .font(OPFont.number(11))
+                .foregroundStyle(OPColor.ink)
+        }
+    }
+
+    private var thermalZoneRows: some View {
+        Group {
+            if let zones = device?.thermalZones, !zones.isEmpty {
+                VStack(alignment: .leading, spacing: 3) {
+                    ForEach(Array(zones.prefix(6).enumerated()), id: \.offset) { _, z in
+                        HStack(spacing: 6) {
+                            Text(z.name)
+                                .font(OPFont.number(9))
+                                .foregroundStyle(OPColor.inkDim)
+                                .frame(width: 56, alignment: .leading)
+                            GeometryReader { geo in
+                                let ratio = min(1, max(0, z.tempC / 80.0))
+                                ZStack(alignment: .leading) {
+                                    RoundedRectangle(cornerRadius: 2)
+                                        .fill(Color.white.opacity(0.06))
+                                    RoundedRectangle(cornerRadius: 2)
+                                        .fill(z.tempC >= 45 ? OPColor.thermal : OPColor.ok.opacity(0.7))
+                                        .frame(width: geo.size.width * ratio)
+                                }
+                            }
+                            .frame(height: 4)
+                            Text(String(format: "%.1f°", z.tempC))
+                                .font(OPFont.number(9))
+                                .foregroundStyle(OPColor.ink)
+                                .frame(width: 32, alignment: .trailing)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: - Device detail (legacy path — multi uses expand section)
+
+    private var deviceDetailSection: some View { EmptyView() }
 
     private func detailRow(_ label: String, _ value: String) -> some View {
         HStack {
@@ -247,7 +514,7 @@ struct MenuBarPopoverView: View {
         }
     }
 
-    // MARK: - Events
+    // MARK: - Events (접힘 기본 · 점3)
 
     private var eventsSection: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -274,15 +541,24 @@ struct MenuBarPopoverView: View {
                         .font(OPFont.body(12))
                         .foregroundStyle(OPColor.inkDim)
                         .lineLimit(1)
-                        .truncationMode(.tail)
                 } else {
-                    ForEach(Array(store.recentEvents.prefix(5).enumerated()), id: \.offset) { _, e in
-                        Text(e)
-                            .font(OPFont.body(12))
-                            .foregroundStyle(OPColor.ink)
-                            .lineLimit(1)
-                            .truncationMode(.tail)
+                    VStack(alignment: .leading, spacing: 0) {
+                        ForEach(Array(store.recentEvents.prefix(5).enumerated()), id: \.offset) { _, e in
+                            HStack(alignment: .top, spacing: 6) {
+                                Circle()
+                                    .fill(OPColor.cta.opacity(0.7))
+                                    .frame(width: 5, height: 5)
+                                    .padding(.top, 5)
+                                Text(e)
+                                    .font(OPFont.body(11))
+                                    .foregroundStyle(OPColor.ink)
+                                    .lineLimit(2)
+                                    .truncationMode(.tail)
+                            }
+                            .padding(.vertical, 3)
+                        }
                     }
+                    .padding(.leading, 2)
                 }
             }
         }
@@ -328,7 +604,11 @@ struct MenuBarPopoverView: View {
         guard let d = device,
               let used = d.memoryUsedGB,
               let total = d.memoryTotalGB else { return "\(L10n.na) / \(L10n.na)" }
-        return String(format: "%.1f/%.0f", used, total)
+        var v = String(format: "%.1f/%.0f", used, total)
+        if let label = d.memPressureLabel {
+            v += " · " + L10n.format("droid.card.memory.pressure", label)
+        }
+        return v
     }
 
     private var storageValue: String {
@@ -346,19 +626,14 @@ struct MenuBarPopoverView: View {
         }
         if d.isCharging == true {
             parts.append(L10n.string("droid.card.battery.charging"))
-        } else if d.isCharging == false {
-            // nil이면 표시 없음 (P0-b)
         }
         return parts.joined(separator: " ")
     }
 
-    /// H · V · Cycle · 보호모드 — 있으면만
     private var batterySubline: String? {
         guard let d = device else { return nil }
         var parts: [String] = []
-        if let h = d.batteryHealthPct {
-            parts.append("H \(h)%")
-        }
+        if let h = d.batteryHealthPct { parts.append("H \(h)%") }
         if let v = d.voltageMV {
             parts.append(String(format: "%.2fV", Double(v) / 1000.0))
         }
@@ -367,21 +642,35 @@ struct MenuBarPopoverView: View {
         }
         if d.isProtectionMode == true {
             var p = L10n.string("droid.card.battery.protection")
-            if let th = d.protectionThresholdPct {
-                p += " \(th)%"
-            }
+            if let th = d.protectionThresholdPct { p += " \(th)%" }
             parts.append(p)
         }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
     private var networkValue: String {
-        device?.networkInfo ?? L10n.na
+        guard let d = device else { return L10n.na }
+        let up = d.netUpMBps.map { String(format: "↑%.1f", $0) } ?? "↑\(L10n.na)"
+        let down = d.netDownMBps.map { String(format: "↓%.1f", $0) } ?? "↓\(L10n.na)"
+        return "\(up) \(down) MB/s"
     }
 
     private var networkSubline: String? {
-        guard let d = device, let t = d.networkType, !t.isEmpty else { return nil }
-        return t
+        guard let d = device else { return nil }
+        var parts: [String] = []
+        if let ssid = d.wifiSsid {
+            parts.append(ssid)
+            if let rssi = d.wifiRssi { parts.append("\(rssi) dBm") }
+        } else if d.networkType == "Wi-Fi" {
+            parts.append(L10n.string("droid.card.network.wifiOff"))
+        } else if let op = d.signalOperator {
+            parts.append(op)
+            if let rsrp = d.rsrp { parts.append("RSRP \(rsrp)") }
+        } else if let t = d.networkType {
+            parts.append(t)
+        }
+        if let ip = d.ipV4 { parts.append(ip) }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
     private var thermalValue: String {

@@ -1,6 +1,7 @@
 # PLAN_v0.1_relayconsole.md — Android 안드로이드 v2 (팝오버 + Droid 대시보드)
 
-> 생성일: 2026-09-23 | 갱신: 2026-09-23 (PROMPT-FINAL-V0-2 흡수) | 상태: **확정 — 문서·브랜드 이관 완료, 코드는 신규**
+> 생성일: 2026-09-23 | 갱신: 2026-09-23 (PROMPT-FINAL-V0-2 흡수) | 상태: **확정 — v0.1/v0.2 구현 완료**
+> **후속 계획: `PLAN_v0.3_relayconsole.md` (목업 피델리티 + 다중 기기) — 현재 작업 기준 문서는 v0.3**
 > 앱: **Relay Console** (릴레이 콘솔) | bundleId: **`com.borasarang.relayconsole`** | 최소 OS: **macOS 26.0** | 버전: **0.1.0**
 > 빌드: Xcode 16+ / Swift 6 / macOS 26.0 Tahoe Liquid Glass
 > 원본 프로젝트: Outpost (macOS SwiftUI MenuBarExtra) — 본 RelayConsole로 이관
@@ -247,7 +248,7 @@ Tests/RelayConsoleTests/AdbParsingTests.swift
 - [x] **레드/레인보우 0건** — material/glass/`.bar`/backgroundStyle 0, 솔리드 `#0f111a` + 카드 `#1c1f2a` r16 opacity X, `darkAqua`
 - [x] **i18n ko/en 100%** — `Localizable.xcstrings` + `*.lproj`, UI Text 키화, 한글 하드코딩 0, 영어 360px lineLimit
 - [x] 파서 8종 + spark/미니바 실데이터 (전부 `—` 금지)
-- [x] 설정키 `relay.*`만 · 설정변경·logcat 연동 유지 (카운트 연동은 v0.2 후속)
+- [x] 설정키 `relay.*`만 · 설정변경·logcat 연동 유지 — **v0.2에서 카운트 실연동 완료**
 - [x] **UI는 `DeviceInventory.devices`만 읽음** (P0-a)
 - [x] swift test 통과 · 실기기 SM_S901N 수동 1회 (27/27 + 육안 확인)
 

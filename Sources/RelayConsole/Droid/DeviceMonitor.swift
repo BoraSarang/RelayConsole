@@ -1,34 +1,54 @@
 import Foundation
 
-/// ADB 백그라운드 폴링 — 5s fast / 15s slow / 2회 샘델타 CPU·NET
+/// ADB 백그라운드 폴링 — 5s fast / 15s slow / 다중 serial
 /// IO는 이 actor 안에서만. UI는 ConsoleStore.inventory.devices만 읽음 (P0-a)
 actor DeviceMonitor {
     static let shared = DeviceMonitor()
+    /// SKILLPACK §4 고정 키워드
+    static let logcatKeywords = ["accelerometer_rotation", "wm_user_rotation_changed", "thermal"]
+
+    /// 기기별 폴링 상태 (다중 serial)
+    private struct DeviceState {
+        var model: String?
+        var deviceName: String?
+        var connectionKind: ConnectionKind?
+        var connectionLabel: String?
+        var prevStat = AdbClient.ProcStatSample()
+        var prevCoreStat = AdbClient.CoreStatSample()
+        var prevNet = AdbClient.NetSample()
+        var prevNetAt: Date?
+        var cacheMemoryUsedGB: Double?
+        var cacheMemoryTotalGB: Double?
+        var cacheStorageUsedGB: Double?
+        var cacheStorageTotalGB: Double?
+        var cacheNetworkInfo: String?
+        var cacheNetUp: Double?
+        var cacheNetDown: Double?
+        var cacheNetworkType: String?
+        var cacheCPU: Double?
+        var cacheAndroidVersion: String?
+        var cacheSDK: Int?
+        var cacheGovernor: String?
+        var cacheIP: String?
+        var prevAccelRotation: String?
+        var prevUserRotation: String?
+        var settingsChangedCount: Int = 0
+        var logcatCursor: String?
+        var logcatHitCount: Int = 0
+        var logcatPrimed = false
+        var metaPrimed = false
+    }
 
     private var timer: Task<Void, Never>?
     private var onSnapshot: (@Sendable (DeviceSnapshot) -> Void)?
     private var onEvent: (@Sendable (String) -> Void)?
 
     private var adbPath: String?
-    private var serial: String?
-    private var model: String?
+    private var serials: [String] = []
+    private var states: [String: DeviceState] = [:]
+    private var knownSerials: Set<String> = []
     private var tickCount: Int = 0
-    private var prevStat = AdbClient.ProcStatSample()
-    private var prevNet = AdbClient.NetSample()
-    private var prevNetAt: Date?
     private var lastErrorLogged: String?
-    // 슬로우 필드 캐시 — 5s 틱에서도 이전 값 유지 (나왔다 사라졌다 방지)
-    private var cacheMemoryUsedGB: Double?
-    private var cacheMemoryTotalGB: Double?
-    private var cacheStorageUsedGB: Double?
-    private var cacheStorageTotalGB: Double?
-    private var cacheNetworkInfo: String?
-    private var cacheNetUp: Double?
-    private var cacheNetDown: Double?
-    private var cacheNetworkType: String?
-    private var cacheCPU: Double?
-    private var cacheAndroidVersion: String?
-    private var cacheSDK: Int?
 
     func attach(_ handler: @escaping @Sendable (DeviceSnapshot) -> Void) {
         onSnapshot = handler
@@ -48,7 +68,6 @@ actor DeviceMonitor {
                 await self.tick()
             }
         }
-        // 첫 틱 즉시
         await tick()
     }
 
@@ -59,20 +78,38 @@ actor DeviceMonitor {
 
     private func tick() async {
         tickCount += 1
-        resolveDevice()
+        await resolveDevices()
 
-        guard let serial else {
-            // 기기 없음 — 오프라인 통지하지 않음 (빈 스냅샷 병합 금지)
-            return
+        for serial in serials {
+            await pollDevice(serial)
         }
+    }
+
+    // MARK: - Per-device poll
+
+    private func pollDevice(_ serial: String) async {
+        var state = states[serial] ?? DeviceState()
 
         var snap = DeviceSnapshot()
         snap.serial = serial
-        snap.model = model ?? ""
+        snap.model = state.model ?? ""
         snap.isOnline = true
+        let conn = AdbClient.parseConnection(serial)
+        snap.connectionKind = conn.kind
+        snap.connectionLabel = conn.label
+        snap.deviceName = state.deviceName
+
+        // ── 메타 1회 (model/device_name/android/sdk)
+        if !state.metaPrimed {
+            primeMeta(serial: serial, state: &state)
+            snap.model = state.model ?? ""
+            snap.deviceName = state.deviceName
+            snap.androidVersion = state.cacheAndroidVersion
+            snap.sdkInt = state.cacheSDK
+        }
 
         // ── 5s fast: battery + thermal + loadavg + /proc/stat
-        if let battText = try? shell("dumpsys", "battery") {
+        if let battText = try? shell(serial, "dumpsys", "battery") {
             let batt = AdbClient.parseBatteryEx(battText)
             snap.batteryLevel = batt.batteryLevel
             snap.batteryTempC = batt.batteryTempC
@@ -88,108 +125,290 @@ actor DeviceMonitor {
             await logLast(msg)
         }
 
-        if let thText = try? shell("dumpsys", "thermalservice") {
+        if let thText = try? shell(serial, "dumpsys", "thermalservice") {
             let th = AdbClient.parseThermal(thText)
             snap.thermalStatus = th.status
-            // AP 우선, 없으면 SKIN, BAT
             snap.deviceTempC = th.apTempC ?? th.skinTempC ?? th.batTempC
-            if snap.batteryTempC == nil {
-                snap.batteryTempC = th.batTempC
+            if snap.batteryTempC == nil { snap.batteryTempC = th.batTempC }
+            // zones는 15s tick에서
+            if tickCount % 3 == 1 {
+                snap.thermalZones = AdbClient.parseThermalZones(thText).zones
             }
         }
 
-        if let loadText = try? shell("cat", "/proc/loadavg") {
-            snap.load1 = AdbClient.parseLoadAvg(loadText).load1
+        if let loadText = try? shell(serial, "cat", "/proc/loadavg") {
+            let la = AdbClient.parseLoadAvg(loadText)
+            snap.load1 = la.load1
+            snap.load5 = la.load5
+            snap.load15 = la.load15
         }
 
-        if let statText = try? shell("cat", "/proc/stat") {
+        await pollSettingWatch(serial: serial, state: &state, snap: &snap)
+
+        // /proc/stat + cores
+        if let statText = try? shell(serial, "cat", "/proc/stat") {
             let curr = AdbClient.parseProcStat(statText)
-            if let use = AdbClient.cpuUsePercent(prev: prevStat, curr: curr) {
+            if let use = AdbClient.cpuUsePercent(prev: state.prevStat, curr: curr) {
                 snap.cpuUsePercent = use
-                cacheCPU = use
+                state.cacheCPU = use
             }
-            prevStat = curr
+            state.prevStat = curr
+
+            let coreCurr = AdbClient.parseProcStatCores(statText)
+            if let uses = AdbClient.coreUsePercents(prev: state.prevCoreStat, curr: coreCurr) {
+                snap.coreUsePercents = uses
+            }
+            state.prevCoreStat = coreCurr
         }
-        // 첫 틱/실패 시 캐시 CPU
-        if snap.cpuUsePercent == nil {
-            snap.cpuUsePercent = cacheCPU
+        if snap.cpuUsePercent == nil { snap.cpuUsePercent = state.cacheCPU }
+
+        // ── cpufreq (15s 또는 첫 틱) — 단일 shell 문자열로 glob 확장 (sh -c 인자 분리 시 cat 만 실행되는 버그 회피)
+        if tickCount % 3 == 1 || state.cacheGovernor == nil {
+            let curCmd = "cat /sys/devices/system/cpu/cpu*/cpufreq/scaling_cur_freq"
+            let maxCmd = "cat /sys/devices/system/cpu/cpu*/cpufreq/cpuinfo_max_freq"
+            if let curText = try? shell(serial, curCmd),
+               let maxText = try? shell(serial, maxCmd) {
+                var gov: String?
+                if state.cacheGovernor == nil {
+                    gov = (try? shell(serial, "cat /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor"))
+                }
+                let cores = AdbClient.parseCpuCores(curText: curText, maxText: maxText, governorText: gov)
+                if !cores.curMHz.isEmpty { snap.coreFreqsMHz = cores.curMHz }
+                if !cores.maxMHz.isEmpty { snap.coreMaxMHz = cores.maxMHz }
+                if let g = cores.governor { state.cacheGovernor = g }
+                snap.cpuGovernor = state.cacheGovernor
+            }
+        } else {
+            snap.cpuGovernor = state.cacheGovernor
         }
 
-        // ── 15s slow: meminfo + netdev + df (tick % 3 == 0)
+        // ── 15s slow
         if tickCount % 3 == 1 {
-            // tickCount 1,4,7… 첫 틱도 포함해 즉시 채움
-            if let memText = try? shell("cat", "/proc/meminfo") {
+            if let memText = try? shell(serial, "cat", "/proc/meminfo") {
                 let mem = AdbClient.parseMemInfo(memText)
-                cacheMemoryTotalGB = mem.totalGB
-                cacheMemoryUsedGB = mem.usedGB
+                state.cacheMemoryTotalGB = mem.totalGB
+                state.cacheMemoryUsedGB = mem.usedGB
+                // swap used = total - free (SwapFree)
+                if let total = mem.swapTotalGB {
+                    snap.swapUsedGB = estimateSwapUsed(memText: memText, totalGB: total)
+                }
             }
 
-            if let netText = try? shell("cat", "/proc/net/dev") {
+            // PSI pressure
+            if let psiText = try? shell(serial, "cat", "/proc/pressure/memory") {
+                let p = AdbClient.parsePressure(psiText)
+                snap.memPressurePct = p.pct
+                snap.memPressureLabel = p.label
+            }
+            // swap fallback 라벨
+            if snap.memPressureLabel == nil, let swap = snap.swapUsedGB, swap > 1.5 {
+                snap.memPressureLabel = "moderate"
+            }
+
+            // Top RSS
+            if let psText = try? shell(serial, "ps", "-A", "-o", "RSS,NAME", "--sort=-rss") {
+                let top = AdbClient.parseTopRss(psText, limit: 3)
+                if !top.isEmpty { snap.topProcesses = top }
+            }
+
+            if let netText = try? shell(serial, "cat", "/proc/net/dev") {
                 let curr = AdbClient.parseNetDev(netText)
                 var upDown: (up: Double, down: Double)?
-                if let at = prevNetAt {
+                if let at = state.prevNetAt {
                     upDown = AdbClient.netRatesMBps(
-                        prev: prevNet,
+                        prev: state.prevNet,
                         curr: curr,
                         seconds: Date().timeIntervalSince(at)
                     )
                 }
-                prevNet = curr
-                prevNetAt = Date()
+                state.prevNet = curr
+                state.prevNetAt = Date()
                 if let r = upDown {
-                    cacheNetUp = r.up
-                    cacheNetDown = r.down
-                    cacheNetworkInfo = String(
-                        format: "↑%.1f ↓%.1f MB/s", r.up, r.down
-                    )
+                    state.cacheNetUp = r.up
+                    state.cacheNetDown = r.down
+                    state.cacheNetworkInfo = String(format: "↑%.1f ↓%.1f MB/s", r.up, r.down)
                 }
             }
 
-            if let connText = try? shell("dumpsys", "connectivity") {
+            if let connText = try? shell(serial, "dumpsys", "connectivity") {
                 if let type = AdbClient.parseNetworkType(connText) {
-                    cacheNetworkType = type
+                    state.cacheNetworkType = type
                 }
             }
 
-            if let dfText = try? shell("df", "-h", "/data") {
+            // Signal (기기内 grep — 단일 shell 문자열)
+            if let sigText = try? shell(serial, "dumpsys telephony.registry | grep -E 'mSignalStrength|mOperatorAlphaLong'") {
+                let sig = AdbClient.parseSignal(sigText)
+                snap.rsrp = sig.rsrp
+                snap.signalOperator = sig.carrier
+            }
+
+            // Wi-Fi
+            if let wifiText = try? shell(serial, "cmd", "wifi", "status") {
+                let w = AdbClient.parseWifiStatus(wifiText)
+                snap.wifiSsid = w.ssid
+                snap.wifiRssi = w.rssi
+            }
+
+            // IP
+            if let ipText = try? shell(serial, "ip", "-f", "inet", "addr", "show", "wlan0") {
+                state.cacheIP = parseInet4(ipText)
+            }
+
+            if let dfText = try? shell(serial, "df", "-h", "/data") {
                 let df = AdbClient.parseDf(dfText)
-                cacheStorageUsedGB = df.usedGB
-                cacheStorageTotalGB = df.totalGB
+                state.cacheStorageUsedGB = df.usedGB
+                state.cacheStorageTotalGB = df.totalGB
             }
+
+            await pollLogcatWatch(serial: serial, state: &state)
         }
 
-        // Android/SDK — 첫 틱 1회 (or 캐시)
-        if cacheAndroidVersion == nil {
-            if let v = (try? shell("getprop", "ro.build.version.release"))?
-                .trimmingCharacters(in: .whitespacesAndNewlines),
-               !v.isEmpty {
-                cacheAndroidVersion = v
-            }
-            if let s = (try? shell("getprop", "ro.build.version.sdk"))?
-                .trimmingCharacters(in: .whitespacesAndNewlines),
-               let n = Int(s) {
-                cacheSDK = n
-            }
-        }
+        snap.memoryUsedGB = snap.memoryUsedGB ?? state.cacheMemoryUsedGB
+        snap.memoryTotalGB = snap.memoryTotalGB ?? state.cacheMemoryTotalGB
+        snap.storageUsedGB = snap.storageUsedGB ?? state.cacheStorageUsedGB
+        snap.storageTotalGB = snap.storageTotalGB ?? state.cacheStorageTotalGB
+        snap.networkInfo = snap.networkInfo ?? state.cacheNetworkInfo
+        snap.netUpMBps = snap.netUpMBps ?? state.cacheNetUp
+        snap.netDownMBps = snap.netDownMBps ?? state.cacheNetDown
+        snap.networkType = snap.networkType ?? state.cacheNetworkType
+        snap.androidVersion = snap.androidVersion ?? state.cacheAndroidVersion
+        snap.sdkInt = snap.sdkInt ?? state.cacheSDK
+        snap.ipV4 = snap.ipV4 ?? state.cacheIP
+        snap.settingsChangedCount = state.settingsChangedCount
+        snap.logcatHitCount = state.logcatHitCount
 
-        // 캐시된 슬로우 값 항상 포함 — 빈 필드로 덮어쓰지 않음
-        snap.memoryUsedGB = snap.memoryUsedGB ?? cacheMemoryUsedGB
-        snap.memoryTotalGB = snap.memoryTotalGB ?? cacheMemoryTotalGB
-        snap.storageUsedGB = snap.storageUsedGB ?? cacheStorageUsedGB
-        snap.storageTotalGB = snap.storageTotalGB ?? cacheStorageTotalGB
-        snap.networkInfo = snap.networkInfo ?? cacheNetworkInfo
-        snap.netUpMBps = snap.netUpMBps ?? cacheNetUp
-        snap.netDownMBps = snap.netDownMBps ?? cacheNetDown
-        snap.networkType = snap.networkType ?? cacheNetworkType
-        snap.androidVersion = snap.androidVersion ?? cacheAndroidVersion
-        snap.sdkInt = snap.sdkInt ?? cacheSDK
-
+        states[serial] = state
         onSnapshot?(snap)
     }
 
-    // MARK: - ADB
+    private func primeMeta(serial: String, state: inout DeviceState) {
+        let conn = AdbClient.parseConnection(serial)
+        state.connectionKind = conn.kind
+        state.connectionLabel = conn.label
 
-    private func resolveDevice() {
+        if let m = (try? shell(serial, "getprop", "ro.product.model"))?
+            .trimmingCharacters(in: .whitespacesAndNewlines), !m.isEmpty {
+            state.model = m
+        }
+        if let n = (try? shell(serial, "settings", "get", "global", "device_name")),
+           let name = AdbClient.parseDeviceName(n) {
+            state.deviceName = name
+        }
+        if let v = (try? shell(serial, "getprop", "ro.build.version.release"))?
+            .trimmingCharacters(in: .whitespacesAndNewlines), !v.isEmpty {
+            state.cacheAndroidVersion = v
+        }
+        if let s = (try? shell(serial, "getprop", "ro.build.version.sdk"))?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+           let n = Int(s) {
+            state.cacheSDK = n
+        }
+        state.metaPrimed = true
+    }
+
+    private func estimateSwapUsed(memText: String, totalGB: Double) -> Double? {
+        for line in memText.split(separator: "\n") {
+            let parts = line.split(separator: ":", maxSplits: 1).map {
+                $0.trimmingCharacters(in: .whitespaces)
+            }
+            guard parts.count == 2, parts[0] == "SwapFree" else { continue }
+            let kb = parts[1].split(whereSeparator: \.isWhitespace).first
+                .flatMap { Double($0) }
+            guard let kb else { return nil }
+            let freeGB = kb / (1024 * 1024)
+            return max(0, totalGB - freeGB)
+        }
+        return nil
+    }
+
+    private func parseInet4(_ text: String) -> String? {
+        for line in text.split(separator: "\n") {
+            let s = String(line)
+            guard s.contains("inet ") else { continue }
+            guard let range = s.range(of: "inet ") else { continue }
+            let after = s[range.upperBound...]
+            let addr = after.prefix { $0.isNumber || $0 == "." }
+            if addr.contains(".") { return String(addr) }
+        }
+        return nil
+    }
+
+    // MARK: - SettingWatch / LogcatWatch
+
+    private func pollSettingWatch(
+        serial: String,
+        state: inout DeviceState,
+        snap: inout DeviceSnapshot
+    ) async {
+        guard let autoRaw = try? shell(serial, "settings", "get", "system", "accelerometer_rotation"),
+              let userRaw = try? shell(serial, "settings", "get", "system", "user_rotation") else {
+            return
+        }
+        let auto = AdbClient.parseSettingValue(autoRaw)
+        let user = AdbClient.parseSettingValue(userRaw)
+
+        if let prevA = state.prevAccelRotation, let auto, prevA != auto {
+            state.settingsChangedCount += 1
+            await notifyEvent(L10n.format(
+                "event.settingsChanged",
+                "accelerometer_rotation",
+                "\(prevA)→\(auto)"
+            ))
+        }
+        if let prevU = state.prevUserRotation, let user, prevU != user {
+            state.settingsChangedCount += 1
+            await notifyEvent(L10n.format(
+                "event.settingsChanged",
+                "user_rotation",
+                "\(prevU)→\(user)"
+            ))
+        }
+        if auto != nil { state.prevAccelRotation = auto }
+        if user != nil { state.prevUserRotation = user }
+        snap.settingsChangedCount = state.settingsChangedCount
+    }
+
+    private func pollLogcatWatch(serial: String, state: inout DeviceState) async {
+        let output: String?
+        if let cursor = state.logcatCursor {
+            output = try? shell(serial, "logcat", "-d", "-T", cursor)
+        } else {
+            output = try? shell(serial, "logcat", "-d", "-t", "30")
+        }
+        guard let output, !output.isEmpty else { return }
+
+        let prevCursor = state.logcatCursor
+        if !state.logcatPrimed {
+            state.logcatPrimed = true
+            state.logcatCursor = AdbClient.lastLogcatTimestamp(output) ?? prevCursor
+            return
+        }
+
+        let hits = AdbClient.countLogcatHits(
+            output,
+            keywords: Self.logcatKeywords,
+            afterTimestamp: prevCursor
+        )
+        if hits > 0 {
+            state.logcatHitCount += hits
+            await notifyEvent(L10n.format("event.logcatHits", hits))
+        }
+        if let ts = AdbClient.lastLogcatTimestamp(output) {
+            state.logcatCursor = ts
+        }
+    }
+
+    private func notifyEvent(_ text: String) async {
+        await MainActor.run {
+            DebugLogger.shared.info("Watch", "[INFO] [WATCH] \(text)")
+            ConsoleStore.shared.pushEvent(text)
+        }
+    }
+
+    // MARK: - Device list
+
+    private func resolveDevices() async {
         if adbPath == nil {
             adbPath = findAdb()
             if adbPath == nil {
@@ -197,13 +416,13 @@ actor DeviceMonitor {
                     DebugLogger.shared.error(
                         "Monitor",
                         "[ERROR] [ADB] " + ErrorCode.adbBinaryMissing.koMessage
-                )}
+                    )
+                }
                 return
             }
         }
         guard let adb = adbPath else { return }
 
-        // adb devices
         let list = (try? run(adb, ["devices"])) ?? ""
         let found = list.split(separator: "\n")
             .map(String.init)
@@ -211,44 +430,31 @@ actor DeviceMonitor {
             .compactMap { line -> String? in
                 line.split(whereSeparator: \.isWhitespace).first.map(String.init)
             }
-            .first
 
-        if let found, found != serial {
-            serial = found
-            let resolved = (try? run(adb, ["-s", found, "shell", "getprop", "ro.product.model"]))?
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-            model = resolved
-            // Android/SDK 즉시 1회
-            if let v = (try? run(adb, ["-s", found, "shell", "getprop", "ro.build.version.release"]))?
-                .trimmingCharacters(in: .whitespacesAndNewlines),
-               !v.isEmpty {
-                cacheAndroidVersion = v
-            }
-            if let s = (try? run(adb, ["-s", found, "shell", "getprop", "ro.build.version.sdk"]))?
-                .trimmingCharacters(in: .whitespacesAndNewlines),
-               let n = Int(s) {
-                cacheSDK = n
-            }
-            let short = AdbClient.shortId(found)
-            let modelName = resolved ?? "?"
-            Task { @MainActor in
-                DebugLogger.shared.info(
-                    "Monitor",
-                    "[INFO] [ADB] 기기 연결",
-                    meta: "serial=\(short) model=\(modelName)"
-                )
-                ConsoleStore.shared.pushEvent("기기 연결 \(short)")
-            }
-        } else if found == nil, let old = serial {
-            serial = nil
-            model = nil
-            let short = AdbClient.shortId(old)
-            Task { @MainActor in
-                ConsoleStore.shared.markDeviceOffline(old)
-                DebugLogger.shared.warn("Monitor", "[WARN] [ADB] 기기 연결 끊김")
-                ConsoleStore.shared.pushEvent("기기 연결 끊김 \(short)")
-            }
+        let foundSet = Set(found)
+
+        // 신규 연결
+        for s in found where !knownSerials.contains(s) {
+            if states[s] == nil { states[s] = DeviceState() }
+            knownSerials.insert(s)
+            let conn = AdbClient.parseConnection(s)
+            let short = conn.kind == .network ? s : AdbClient.shortId(s)
+            await notifyEvent(L10n.format("event.deviceConnected", short))
+            await log(.info, "[INFO] [ADB] 기기 연결 meta=\(short) kind=\(conn.kind.rawValue)")
         }
+
+        // 끊김
+        for s in knownSerials where !foundSet.contains(s) {
+            knownSerials.remove(s)
+            states.removeValue(forKey: s)
+            await MainActor.run {
+                ConsoleStore.shared.markDeviceOffline(s)
+            }
+            let short = AdbClient.parseConnection(s).kind == .network ? s : AdbClient.shortId(s)
+            await notifyEvent(L10n.format("event.deviceDisconnected", short))
+        }
+
+        serials = found
     }
 
     private func findAdb() -> String? {
@@ -260,7 +466,6 @@ actor DeviceMonitor {
         for path in candidates where FileManager.default.isExecutableFile(atPath: path) {
             return path
         }
-        // PATH 탐색
         let pathEnv = ProcessInfo.processInfo.environment["PATH"] ?? ""
         for dir in pathEnv.split(separator: ":") {
             let p = "\(dir)/adb"
@@ -269,11 +474,12 @@ actor DeviceMonitor {
         return nil
     }
 
-    private func shell(_ args: String...) throws -> String {
+    /// 모든 셸은 반드시 `-s serial` (PLAN_v0.3 DoD)
+    private func shell(_ serial: String, _ args: String...) throws -> String {
         guard let adb = adbPath else {
             throw ErrorCode.adbBinaryMissing
         }
-        return try run(adb, ["shell"] + args)
+        return try run(adb, ["-s", serial, "shell"] + args)
     }
 
     private func run(_ path: String, _ args: [String]) throws -> String {

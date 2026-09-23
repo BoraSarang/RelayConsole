@@ -276,4 +276,238 @@ struct AdbParsingTests {
         s.thermalStatus = 1
         #expect(!s.isThermalAlert)
     }
+
+    // MARK: - SettingWatch (parseSettingValue)
+
+    @Test func parseSettingValueOneZero() {
+        #expect(AdbClient.parseSettingValue("1") == "1")
+        #expect(AdbClient.parseSettingValue("0\n") == "0")
+    }
+
+    @Test func parseSettingValueNullEmptyNil() {
+        #expect(AdbClient.parseSettingValue("null") == nil)
+        #expect(AdbClient.parseSettingValue("") == nil)
+        #expect(AdbClient.parseSettingValue("  \n") == nil)
+    }
+
+    // MARK: - LogcatWatch (countLogcatHits / timestamp)
+
+    @Test func countLogcatHitsKeywords() {
+        let sample = """
+        09-23 19:30:04.962  1235  1235 I WindowManager: accelerometer_rotation set to 1
+        09-23 19:30:05.100  1235  1235 I wm: wm_user_rotation_changed rotation=0
+        09-23 19:30:05.200  1235  1235 I ThermalEngine: thermal level changed
+        09-23 19:30:05.300  1235  1235 I unrelated: hello world
+        """
+        #expect(AdbClient.countLogcatHits(sample) == 3)
+    }
+
+    @Test func countLogcatHitsEmptyNilKeywords() {
+        #expect(AdbClient.countLogcatHits("") == 0)
+        #expect(AdbClient.countLogcatHits("any line", keywords: []) == 0)
+    }
+
+    @Test func countLogcatHitsCaseInsensitive() {
+        let sample = "09-23 10:00:00.000  1  1 I T: THERMAL throttling"
+        #expect(AdbClient.countLogcatHits(sample) == 1)
+    }
+
+    @Test func logcatTimestampParses() {
+        let line = "09-23 19:30:04.962  12350 12350 I adbd    : service requested"
+        #expect(AdbClient.logcatLineTimestamp(line) == "09-23 19:30:04.962")
+        #expect(AdbClient.logcatLineTimestamp("not a log line") == nil)
+    }
+
+    @Test func firstLogcatTimestampSkipsEmpty() {
+        let text = "\n\n09-23 19:30:04.962  1  1 I tag: msg\n"
+        #expect(AdbClient.firstLogcatTimestamp(text) == "09-23 19:30:04.962")
+        #expect(AdbClient.firstLogcatTimestamp("") == nil)
+    }
+
+    @Test func lastLogcatTimestampTakesNewest() {
+        let text = """
+        09-23 19:30:04.962  1  1 I a: first
+        09-23 19:30:10.100  1  1 I b: last
+        """
+        #expect(AdbClient.lastLogcatTimestamp(text) == "09-23 19:30:10.100")
+        #expect(AdbClient.lastLogcatTimestamp("") == nil)
+    }
+
+    @Test func countLogcatHitsExcludesCursorLine() {
+        let text = """
+        09-23 19:30:04.962  1  1 I a: accelerometer_rotation hit
+        09-23 19:30:10.100  1  1 I b: thermal hit
+        """
+        // cursor = first line ts → first line 제외, second만 카운트
+        #expect(AdbClient.countLogcatHits(text, afterTimestamp: "09-23 19:30:04.962") == 1)
+        // cursor 없음 → 둘 다
+        #expect(AdbClient.countLogcatHits(text) == 2)
+        // cursor가 마지막보다 같거나 큼 → 0
+        #expect(AdbClient.countLogcatHits(text, afterTimestamp: "09-23 19:30:10.100") == 0)
+    }
+
+    // MARK: - Inventory merge (watch counts)
+
+    @Test func inventoryMergePreservesWatchCounts() {
+        var inv = DeviceInventory()
+        var a = DeviceSnapshot(serial: "SER1", model: "SM", isOnline: true)
+        a.settingsChangedCount = 2
+        a.logcatHitCount = 5
+        inv.merge(a)
+        var b = DeviceSnapshot(serial: "SER1", model: "SM", isOnline: true)
+        b.settingsChangedCount = nil
+        b.logcatHitCount = nil
+        inv.merge(b)
+        #expect(inv.devices[0].settingsChangedCount == 2)
+        #expect(inv.devices[0].logcatHitCount == 5)
+        var c = DeviceSnapshot(serial: "SER1", model: "SM", isOnline: true)
+        c.settingsChangedCount = 3
+        c.logcatHitCount = 7
+        inv.merge(c)
+        #expect(inv.devices[0].settingsChangedCount == 3)
+        #expect(inv.devices[0].logcatHitCount == 7)
+    }
+
+    // MARK: - Connection (PLAN_v0.3)
+
+    @Test func parseConnectionNetworkSerial() {
+        let c = AdbClient.parseConnection("10.233.247.205:5555")
+        #expect(c.kind == .network)
+        #expect(c.label == "10.233.247.205:5555")
+    }
+
+    @Test func parseConnectionUsbSerial() {
+        let c = AdbClient.parseConnection("R5CT10ABCDE")
+        #expect(c.kind == .usb)
+        #expect(c.label == "USB")
+    }
+
+    @Test func parseDeviceNameFromSettings() {
+        #expect(AdbClient.parseDeviceName("S22\n") == "S22")
+        #expect(AdbClient.parseDeviceName("null") == nil)
+        #expect(AdbClient.parseDeviceName("") == nil)
+    }
+
+    @Test func displayDeviceNamePrefersNameThenModel() {
+        #expect(AdbClient.displayDeviceName(deviceName: "S22", model: "SM_S901N", serial: "x") == "S22")
+        #expect(AdbClient.displayDeviceName(deviceName: nil, model: "SM_S901N", serial: "x") == "SM_S901N")
+        #expect(AdbClient.displayDeviceName(deviceName: nil, model: "", serial: "ABCD1234") == "…1234")
+    }
+
+    // MARK: - Two-serial inventory merge (PLAN_v0.3)
+
+    @Test func inventoryMergeTwoDistinctSerials() {
+        var inv = DeviceInventory()
+        var a = DeviceSnapshot(serial: "10.0.0.1:5555", model: "A", isOnline: true)
+        a.batteryLevel = 80
+        a.connectionKind = .network
+        a.deviceName = "Alpha"
+        inv.merge(a)
+        var b = DeviceSnapshot(serial: "R5USB2222", model: "B", isOnline: true)
+        b.batteryLevel = 91
+        b.connectionKind = .usb
+        b.deviceName = "Beta"
+        inv.merge(b)
+        #expect(inv.devices.count == 2)
+        #expect(inv.device(serial: "10.0.0.1:5555")?.batteryLevel == 80)
+        #expect(inv.device(serial: "R5USB2222")?.batteryLevel == 91)
+        #expect(inv.device(serial: "10.0.0.1:5555")?.connectionKind == .network)
+        #expect(inv.device(serial: "R5USB2222")?.connectionKind == .usb)
+        #expect(inv.onlineDevices.count == 2)
+    }
+
+    // MARK: - CPU cores
+
+    @Test func parseCpuCoresFreqs() {
+        let cur = "1171200\n1800000\n2400000\n800000\n"
+        let max = "1363200\n2400000\n3000000\n1800000\n"
+        let s = AdbClient.parseCpuCores(curText: cur, maxText: max, governorText: "walt\nwalt\n")
+        #expect(s.curMHz.count == 4)
+        #expect(abs(s.curMHz[0] - 1171.2) < 0.1)
+        #expect(s.maxMHz[2] == 3000)
+        #expect(s.governor == "walt")
+    }
+
+    @Test func parseProcStatCoresAndDelta() {
+        let text = """
+        cpu  100 0 50 800 20 0 10 0 0 0
+        cpu0 50 0 25 400 10 0 5 0 0 0
+        cpu1 50 0 25 400 10 0 5 0 0 0
+        """
+        let a = AdbClient.parseProcStatCores(text)
+        #expect(a.cores.count == 2)
+        let text2 = """
+        cpu  200 0 100 900 40 0 20 0 0 0
+        cpu0 100 0 50 450 20 0 10 0 0 0
+        cpu1 100 0 50 450 20 0 10 0 0 0
+        """
+        let b = AdbClient.parseProcStatCores(text2)
+        let uses = AdbClient.coreUsePercents(prev: a, curr: b)
+        #expect(uses != nil)
+        #expect(uses!.count == 2)
+    }
+
+    // MARK: - Pressure / Top RSS / Zones / Signal / Wi-Fi
+
+    @Test func parsePressureSomeAvg10() {
+        let sample = """
+        some avg10=12.50 avg60=8.20 avg300=5.10 total=123456
+        full avg10=1.00 avg60=0.50 avg300=0.20 total=999
+        """
+        let p = AdbClient.parsePressure(sample)
+        #expect(p.pct != nil)
+        #expect(abs(p.pct! - 12.5) < 0.01)
+        #expect(p.label == "moderate")
+    }
+
+    @Test func parseTopRssRows() {
+        let sample = """
+        RSS NAME
+        714368 com.example.app
+        532480 system_server
+        10240 lowmemkiller
+        """
+        let top = AdbClient.parseTopRss(sample, limit: 2)
+        #expect(top.count == 2)
+        #expect(top[0].name == "com.example.app")
+        #expect(top[0].rssMB > 600)
+    }
+
+    @Test func parseThermalZonesMulti() {
+        let sample = """
+        Temperature{mValue=53.0, mType=0, mName=AP, mStatus=0}
+        Temperature{mValue=44.3, mType=3, mName=SKIN, mStatus=3}
+        Temperature{mValue=42.3, mType=2, mName=BAT, mStatus=0}
+        """
+        let z = AdbClient.parseThermalZones(sample)
+        #expect(z.zones.count == 3)
+        #expect(z.zones[0].name == "AP")
+        #expect(z.zones[2].tempC == 42.3)
+    }
+
+    @Test func parseSignalRsrp() {
+        let sample = """
+        mSignalStrength=CellSignalStrengthLte: rssi=-67 rsrp=-100 rsrq=-13 rssnr=15 level=3
+        mOperatorAlphaLong=KT
+        """
+        let s = AdbClient.parseSignal(sample)
+        #expect(s.rsrp == -100)
+        #expect(s.carrier == "KT")
+    }
+
+    @Test func parseWifiStatusDisabled() {
+        #expect(AdbClient.parseWifiStatus("Wifi is disabled\n").enabled == false)
+        #expect(AdbClient.parseWifiStatus("Wi-Fi is disabled\n").enabled == false)
+    }
+
+    @Test func parseWifiStatusSsidRssi() {
+        let sample = """
+        Wi-Fi is enabled
+        SSID: PixelLab_5G, RSSI: -42
+        """
+        let w = AdbClient.parseWifiStatus(sample)
+        #expect(w.enabled == true)
+        #expect(w.ssid == "PixelLab_5G")
+        #expect(w.rssi == -42)
+    }
 }

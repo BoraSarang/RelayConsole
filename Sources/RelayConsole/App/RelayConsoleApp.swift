@@ -31,7 +31,7 @@ struct RelayConsoleApp: App {
         .menuBarExtraStyle(.window)
         .windowResizability(.contentSize)
 
-        Window("Relay Console · 외부 관제 콘솔", id: "console") {
+        Window(L10n.string("droid.header.title"), id: "console") {
             ZStack {
                 Color(hex: 0x0F111A).ignoresSafeArea()
                 ConsoleView(store: store)
@@ -59,7 +59,7 @@ struct RelayConsoleApp: App {
     @SceneBuilder
     private var debugScenes: some Scene {
 #if DEBUG
-        Window("디버그", id: "debug") {
+        Window(L10n.string("ui.debug.title"), id: "debug") {
             ZStack {
                 Color(hex: 0x0F111A).ignoresSafeArea()
                 DebugPanelView()
@@ -71,7 +71,7 @@ struct RelayConsoleApp: App {
         .defaultSize(width: 640, height: 480)
         .commands {
             CommandGroup(after: .sidebar) {
-                Button("디버그") { openWindow(id: "debug") }
+                Button(L10n.string("menubar.button.debug")) { openWindow(id: "debug") }
                     .keyboardShortcut("d", modifiers: [.command, .shift])
             }
         }
@@ -92,10 +92,33 @@ struct RelayConsoleApp: App {
 #endif
     }
 
+    /// `Relay n/m` + optional 5지표 (`relay.menubarMetrics`)
     private var menuTitle: String {
         let online = store.inventory.devices.filter(\.isOnline).count
         if store.inventory.devices.isEmpty { return "Relay" }
-        return "Relay \(online)/\(store.inventory.devices.count)"
+        let base = "Relay \(online)/\(store.inventory.devices.count)"
+        guard UserDefaults.standard.object(forKey: "relay.menubarMetrics") as? Bool ?? true else {
+            return base
+        }
+        guard let d = store.selectedDevice else { return base }
+        var parts: [String] = []
+        if let cpu = d.cpuUsePercent {
+            parts.append(String(format: "CPU %.0f%%", cpu))
+        }
+        if let used = d.memoryUsedGB, let total = d.memoryTotalGB, total > 0 {
+            parts.append(String(format: "MEM %.0f%%", used / total * 100))
+        }
+        if let level = d.batteryLevel {
+            parts.append(String(format: "BAT %d%%", level))
+        }
+        if let t = d.deviceTempC ?? d.batteryTempC {
+            parts.append(String(format: "%.0f°", t))
+        }
+        if d.netUpMBps != nil || d.netDownMBps != nil {
+            parts.append("NET")
+        }
+        if parts.isEmpty { return base }
+        return base + " · " + parts.joined(separator: " · ")
     }
 
     /// Black_Template_22 — must be template (not White preview)
