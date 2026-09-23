@@ -1,6 +1,6 @@
 import Foundation
 
-enum ErrorCode: String {
+enum ErrorCode: String, Error {
     case adbBinaryMissing = "E-MAC-ADB-0001"
     case adbConnectFailed = "E-MAC-ADB-0002"
     case adbParseFailed = "E-MAC-ADB-0003"

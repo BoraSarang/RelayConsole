@@ -14,9 +14,14 @@
 "droid.header.title" = "Relay Console · External Console";
 "menubar.alert.throttling" = "Throttling";
 "menubar.alert.thermal" = "Thermal Warning %@°C";
+"menubar.battery.cycle" = "cycle %d";
 "menubar.button.debug" = "Debug";
 "menubar.button.openConsole" = "◧ Open Console";
 "menubar.cpu.8core" = "CPU 8-Core";
+"menubar.device.adb" = "ADB";
+"menubar.device.android" = "Android";
+"menubar.device.detail" = "Device Details";
+"menubar.device.model" = "Model";
 "menubar.events.empty" = "No Events Detected";
 "menubar.events.recent" = "Recent Events (%d)";
 "menubar.label" = "RELAY";

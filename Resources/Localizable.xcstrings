@@ -1,217 +1,652 @@
 {
-  "sourceLanguage" : "ko",
-  "strings" : {
-    "common.na" : {
-      "comment" : "nil 표시",
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "—" } },
-        "ko" : { "stringUnit" : { "state" : "translated", "value" : "—" } }
+  "sourceLanguage": "ko",
+  "strings": {
+    "common.na": {
+      "comment": "nil 표시",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "—"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "—"
+          }
+        }
       }
     },
-    "droid.card.battery.charging" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Charging" } },
-        "ko" : { "stringUnit" : { "state" : "translated", "value" : "충전 중" } }
+    "droid.card.battery.charging": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Charging"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "충전 중"
+          }
+        }
       }
     },
-    "droid.card.battery.protection" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Battery Protection" } },
-        "ko" : { "stringUnit" : { "state" : "translated", "value" : "보호모드" } }
+    "droid.card.battery.protection": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Battery Protection"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "보호모드"
+          }
+        }
       }
     },
-    "droid.card.battery.title" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "BATTERY" } },
-        "ko" : { "stringUnit" : { "state" : "translated", "value" : "BATTERY" } }
+    "droid.card.battery.title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "BATTERY"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "BATTERY"
+          }
+        }
       }
     },
-    "droid.card.cpu.title" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "CPU" } },
-        "ko" : { "stringUnit" : { "state" : "translated", "value" : "CPU" } }
+    "droid.card.cpu.title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CPU"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CPU"
+          }
+        }
       }
     },
-    "droid.card.memory.title" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "MEMORY" } },
-        "ko" : { "stringUnit" : { "state" : "translated", "value" : "MEMORY" } }
+    "droid.card.memory.title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MEMORY"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MEMORY"
+          }
+        }
       }
     },
-    "droid.card.network.title" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "NETWORK" } },
-        "ko" : { "stringUnit" : { "state" : "translated", "value" : "NETWORK" } }
+    "droid.card.network.title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "NETWORK"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "NETWORK"
+          }
+        }
       }
     },
-    "droid.card.storage.title" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "STORAGE" } },
-        "ko" : { "stringUnit" : { "state" : "translated", "value" : "STORAGE" } }
+    "droid.card.storage.title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "STORAGE"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "STORAGE"
+          }
+        }
       }
     },
-    "droid.card.thermal.title" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "THERMAL" } },
-        "ko" : { "stringUnit" : { "state" : "translated", "value" : "THERMAL" } }
+    "droid.card.thermal.title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "THERMAL"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "THERMAL"
+          }
+        }
       }
     },
-    "droid.empty.noDevice" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "No Device Connected" } },
-        "ko" : { "stringUnit" : { "state" : "translated", "value" : "연결된 기기 없음" } }
+    "droid.empty.noDevice": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No Device Connected"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "연결된 기기 없음"
+          }
+        }
       }
     },
-    "droid.footer.logcatHits" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "logcat Hits (%d)" } },
-        "ko" : { "stringUnit" : { "state" : "translated", "value" : "logcat 적중 (%d)" } }
+    "droid.footer.logcatHits": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "logcat Hits (%d)"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "logcat 적중 (%d)"
+          }
+        }
       }
     },
-    "droid.footer.settingsChanged" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Settings Changed (%d)" } },
-        "ko" : { "stringUnit" : { "state" : "translated", "value" : "설정 변경 탐지 (%d)" } }
+    "droid.footer.settingsChanged": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Settings Changed (%d)"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "설정 변경 탐지 (%d)"
+          }
+        }
       }
     },
-    "droid.header.title" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Relay Console · External Console" } },
-        "ko" : { "stringUnit" : { "state" : "translated", "value" : "Relay Console · 외부 관제 콘솔" } }
+    "droid.header.title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Relay Console · External Console"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Relay Console · 외부 관제 콘솔"
+          }
+        }
       }
     },
-    "menubar.alert.throttling" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Throttling" } },
-        "ko" : { "stringUnit" : { "state" : "translated", "value" : "스로틀링" } }
+    "menubar.alert.thermal": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Thermal Warning %@°C"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "발열 주의 %@°C"
+          }
+        }
       }
     },
-    "menubar.alert.thermal" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Thermal Warning %@°C" } },
-        "ko" : { "stringUnit" : { "state" : "translated", "value" : "발열 주의 %@°C" } }
+    "menubar.alert.throttling": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Throttling"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "스로틀링"
+          }
+        }
       }
     },
-    "menubar.button.debug" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Debug" } },
-        "ko" : { "stringUnit" : { "state" : "translated", "value" : "디버그" } }
+    "menubar.battery.cycle": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "cycle %d"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "cycle %d"
+          }
+        }
       }
     },
-    "menubar.button.openConsole" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "◧ Open Console" } },
-        "ko" : { "stringUnit" : { "state" : "translated", "value" : "◧ 콘솔 열기" } }
+    "menubar.button.debug": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Debug"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "디버그"
+          }
+        }
       }
     },
-    "menubar.cpu.8core" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "CPU 8-Core" } },
-        "ko" : { "stringUnit" : { "state" : "translated", "value" : "CPU 8코어" } }
+    "menubar.button.openConsole": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "◧ Open Console"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "◧ 콘솔 열기"
+          }
+        }
       }
     },
-    "menubar.events.empty" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "No Events Detected" } },
-        "ko" : { "stringUnit" : { "state" : "translated", "value" : "감지된 이벤트 없음" } }
+    "menubar.cpu.8core": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CPU 8-Core"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CPU 8코어"
+          }
+        }
       }
     },
-    "menubar.events.recent" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Recent Events (%d)" } },
-        "ko" : { "stringUnit" : { "state" : "translated", "value" : "최신 이벤트 (%d)" } }
+    "menubar.device.adb": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ADB"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ADB"
+          }
+        }
       }
     },
-    "menubar.label" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "RELAY" } },
-        "ko" : { "stringUnit" : { "state" : "translated", "value" : "RELAY" } }
+    "menubar.device.android": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Android"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Android"
+          }
+        }
       }
     },
-    "menubar.status.connected" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Connected" } },
-        "ko" : { "stringUnit" : { "state" : "translated", "value" : "연결됨" } }
+    "menubar.device.detail": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Device Details"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "기기 상세"
+          }
+        }
       }
     },
-    "menubar.status.disconnected" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Disconnected" } },
-        "ko" : { "stringUnit" : { "state" : "translated", "value" : "연결 끊김" } }
+    "menubar.device.model": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Model"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "모델"
+          }
+        }
       }
     },
-    "relay.menubar.label" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "RELAY" } },
-        "ko" : { "stringUnit" : { "state" : "translated", "value" : "RELAY" } }
+    "menubar.events.empty": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No Events Detected"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "감지된 이벤트 없음"
+          }
+        }
       }
     },
-    "settings.bundleId" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Bundle ID" } },
-        "ko" : { "stringUnit" : { "state" : "translated", "value" : "번들 ID" } }
+    "menubar.events.recent": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recent Events (%d)"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "최신 이벤트 (%d)"
+          }
+        }
       }
     },
-    "settings.keyPrefix" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Key prefix: relay.*" } },
-        "ko" : { "stringUnit" : { "state" : "translated", "value" : "설정키 접두어: relay.*" } }
+    "menubar.label": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "RELAY"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "RELAY"
+          }
+        }
       }
     },
-    "settings.section.droid" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Droid" } },
-        "ko" : { "stringUnit" : { "state" : "translated", "value" : "Droid" } }
+    "menubar.status.connected": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connected"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "연결됨"
+          }
+        }
       }
     },
-    "settings.section.general" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "General" } },
-        "ko" : { "stringUnit" : { "state" : "translated", "value" : "일반" } }
+    "menubar.status.disconnected": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Disconnected"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "연결 끊김"
+          }
+        }
       }
     },
-    "settings.theme" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Theme" } },
-        "ko" : { "stringUnit" : { "state" : "translated", "value" : "테마" } }
+    "relay.menubar.label": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "RELAY"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "RELAY"
+          }
+        }
       }
     },
-    "settings.theme.dark" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Dark" } },
-        "ko" : { "stringUnit" : { "state" : "translated", "value" : "다크" } }
+    "settings.bundleId": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bundle ID"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "번들 ID"
+          }
+        }
       }
     },
-    "settings.theme.light" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Light" } },
-        "ko" : { "stringUnit" : { "state" : "translated", "value" : "라이트" } }
+    "settings.keyPrefix": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Key prefix: relay.*"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "설정키 접두어: relay.*"
+          }
+        }
       }
     },
-    "settings.theme.system" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "System" } },
-        "ko" : { "stringUnit" : { "state" : "translated", "value" : "시스템 추종" } }
+    "settings.section.droid": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Droid"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Droid"
+          }
+        }
       }
     },
-    "settings.version" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Version" } },
-        "ko" : { "stringUnit" : { "state" : "translated", "value" : "버전" } }
+    "settings.section.general": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "General"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "일반"
+          }
+        }
       }
     },
-    "ui.debug.clear" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Clear" } },
-        "ko" : { "stringUnit" : { "state" : "translated", "value" : "지우기" } }
+    "settings.theme": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Theme"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "테마"
+          }
+        }
       }
     },
-    "ui.debug.title" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Debug Log" } },
-        "ko" : { "stringUnit" : { "state" : "translated", "value" : "디버그 로그" } }
+    "settings.theme.dark": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dark"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "다크"
+          }
+        }
+      }
+    },
+    "settings.theme.light": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Light"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "라이트"
+          }
+        }
+      }
+    },
+    "settings.theme.system": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "System"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "시스템 추종"
+          }
+        }
+      }
+    },
+    "settings.version": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Version"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "버전"
+          }
+        }
+      }
+    },
+    "ui.debug.clear": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clear"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "지우기"
+          }
+        }
+      }
+    },
+    "ui.debug.title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Debug Log"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "디버그 로그"
+          }
+        }
       }
     }
   },
-  "version" : "1.0"
+  "version": "1.0"
 }

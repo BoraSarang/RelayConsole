@@ -14,9 +14,14 @@
 "droid.header.title" = "Relay Console · 외부 관제 콘솔";
 "menubar.alert.throttling" = "스로틀링";
 "menubar.alert.thermal" = "발열 주의 %@°C";
+"menubar.battery.cycle" = "cycle %d";
 "menubar.button.debug" = "디버그";
 "menubar.button.openConsole" = "◧ 콘솔 열기";
 "menubar.cpu.8core" = "CPU 8코어";
+"menubar.device.adb" = "ADB";
+"menubar.device.android" = "Android";
+"menubar.device.detail" = "기기 상세";
+"menubar.device.model" = "모델";
 "menubar.events.empty" = "감지된 이벤트 없음";
 "menubar.events.recent" = "최신 이벤트 (%d)";
 "menubar.label" = "RELAY";

@@ -9,15 +9,12 @@ struct RelayConsoleApp: App {
 
     var body: some Scene {
         MenuBarExtra {
-            ZStack {
-                Color(hex: 0x0F111A).ignoresSafeArea()
-                MenuBarPopoverView(store: store, openConsole: {
-                    openConsole()
-                }, openDebug: {
-                    openDebug()
-                })
-            }
-            .frame(width: 360)
+            MenuBarPopoverView(store: store, openConsole: {
+                openConsole()
+            }, openDebug: {
+                openDebug()
+            })
+            .frame(width: 360, height: 560)
             .preferredColorScheme(.dark)
             .background(Color(hex: 0x0F111A)) // SOLID — V0-2: no material/glass
         } label: {

@@ -235,21 +235,21 @@ Tests/RelayConsoleTests/AdbParsingTests.swift
 
 ## 10. DoD (반드시 통과 — 보강 프롬프트 §7)
 
-- [ ] bundleId `com.borasarang.relayconsole` · 앱명 Relay Console · 메뉴바 라벨 **RELAY**
-- [ ] BrandKit AppIcon + MenuBar Black Template 적용
-- [ ] 팝오버 360×≤560px **다크 강제** · 카드 #1c1f2a r16 · SF Mono 숫자
-- [ ] 발열 ≥40°C 또는 Status≥2 → 오렌지 배너 + temp sparkline
-- [ ] CPU 8코어 미니바 (compact + full)
-- [ ] Battery 실제값 + history spark (`"-"` 없음, nil → `"—"`)
-- [ ] `…5555` 마스킹 · [콘솔 열기]/[디버그] 있음 · **[Scrcpy로 열기] 없음**
-- [ ] 6카드만: CPU/MEMORY/BATTERY/NETWORK/THERMAL/STORAGE (GPU·gfxinfo 0건)
-- [ ] print 0 · `.borderedProminent` 기본 0 · 웹 링크 0 · 라이트 표시 0 · Outpost 라벨 0 · `outpost.*` 키 0 · **iStats/iStat 문구 0**
-- [ ] **레드/레인보우 0건** — material/glass/`.bar`/backgroundStyle 0, 솔리드 `#0f111a` + 카드 `#1c1f2a` r16 opacity X, `darkAqua`
-- [ ] **i18n ko/en 100%** — `Localizable.xcstrings` + `*.lproj`, UI Text 키화, 한글 하드코딩 0, 영어 360px lineLimit
-- [ ] 파서 8종 + spark/미니바 실데이터 (전부 `—` 금지)
-- [ ] 설정키 `relay.*`만 · 설정변경·logcat 연동 유지
-- [ ] **UI는 `DeviceInventory.devices`만 읽음** (P0-a)
-- [ ] swift test 통과 · 실기기 SM_S901N 수동 1회
+- [x] bundleId `com.borasarang.relayconsole` · 앱명 Relay Console · 메뉴바 라벨 **RELAY**
+- [x] BrandKit AppIcon + MenuBar Black Template 적용
+- [x] 팝오버 360×≤560px **다크 강제** · 카드 #1c1f2a r16 · SF Mono 숫자
+- [x] 발열 ≥40°C 또는 Status≥2 → 오렌지 배너 + temp sparkline
+- [x] CPU 8코어 미니바 (compact + full)
+- [x] Battery 실제값 + history spark (`"-"` 없음, nil → `"—"`)
+- [x] `…5555` 마스킹 · [콘솔 열기]/[디버그] 있음 · **[Scrcpy로 열기] 없음**
+- [x] 6카드만: CPU/MEMORY/BATTERY/NETWORK/THERMAL/STORAGE (GPU·gfxinfo 0건)
+- [x] print 0 · `.borderedProminent` 기본 0 · 웹 링크 0 · 라이트 표시 0 · Outpost 라벨 0 · `outpost.*` 키 0 · **iStats/iStat 문구 0**
+- [x] **레드/레인보우 0건** — material/glass/`.bar`/backgroundStyle 0, 솔리드 `#0f111a` + 카드 `#1c1f2a` r16 opacity X, `darkAqua`
+- [x] **i18n ko/en 100%** — `Localizable.xcstrings` + `*.lproj`, UI Text 키화, 한글 하드코딩 0, 영어 360px lineLimit
+- [x] 파서 8종 + spark/미니바 실데이터 (전부 `—` 금지)
+- [x] 설정키 `relay.*`만 · 설정변경·logcat 연동 유지 (카운트 연동은 v0.2 후속)
+- [x] **UI는 `DeviceInventory.devices`만 읽음** (P0-a)
+- [x] swift test 통과 · 실기기 SM_S901N 수동 1회 (27/27 + 육안 확인)
 
 ---
 

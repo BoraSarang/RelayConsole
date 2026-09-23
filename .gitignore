@@ -11,3 +11,4 @@ env
 !env-expiry-check.sh
 .beads/local*
 *.log
+RelayConsole_src_clean.zip
