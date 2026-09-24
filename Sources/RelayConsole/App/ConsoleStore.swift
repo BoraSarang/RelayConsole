@@ -62,6 +62,16 @@ final class ConsoleStore: ObservableObject {
     @AppStorage("relay.watch.crash") var watchCrash = true
     /// 알림형 상단 배너 (메뉴 팝오버 아님) — 기본 ON
     @AppStorage("relay.watch.banner") var watchBanner = true
+    /// 외부 알림 채널 (PLAN_notify_channels · relay.notify.*)
+    @AppStorage("relay.notify.ntfy") var notifyNtfy = false
+    @AppStorage("relay.notify.ntfy.server") var notifyNtfyServer = ""
+    @AppStorage("relay.notify.ntfy.topic") var notifyNtfyTopic = ""
+    @AppStorage("relay.notify.ntfy.token") var notifyNtfyToken = ""
+    @AppStorage("relay.notify.slack") var notifySlack = false
+    @AppStorage("relay.notify.slack.webhook") var notifySlackWebhook = ""
+    /// `warning` | `critical`
+    @AppStorage("relay.notify.minSeverity") var notifyMinSeverity = "warning"
+    @AppStorage("relay.notify.recovery") var notifyRecovery = false
     /// Phase v0.9 — 카드 On/Off (대시보드·팝오버 공통, 기본 전체 ON)
     @AppStorage("relay.cards.cpu") var cardCpu = true
     @AppStorage("relay.cards.gpu") var cardGpu = true
@@ -573,12 +583,87 @@ final class ConsoleStore: ObservableObject {
         }
         lastNotifiedAt[fp] = now
         postSystemNotification(for: event)
+        sendExternalNotify(for: event)
         if watchBanner {
             let name = device(for: event.serial)?.displayName
                 ?? AdbClient.displayDeviceName(deviceName: nil, model: nil, serial: event.serial)
             AlertBannerPresenter.shared.show(event: event, deviceName: name)
         }
         pruneNotifyCooldown(now: now)
+    }
+
+    // MARK: - 외부 알림 채널 (PLAN_notify_channels)
+
+    /// UserDefaults 기반 현재 외부 채널 설정
+    func notifyConfig() -> NotifyConfig {
+        NotifyConfig(
+            ntfyEnabled: notifyNtfy,
+            ntfyServer: notifyNtfyServer,
+            ntfyTopic: notifyNtfyTopic,
+            ntfyToken: notifyNtfyToken,
+            slackEnabled: notifySlack,
+            slackWebhook: notifySlackWebhook,
+            minSeverity: notifyMinSeverity == "critical" ? .critical : .warning,
+            sendRecovery: notifyRecovery
+        )
+    }
+
+    /// 시스템 알림 경로 통과분만 외부 전송 (fire-and-forget)
+    func sendExternalNotify(for event: WatchEvent, force: Bool = false) {
+        let config = notifyConfig()
+        guard force || Self.shouldSendExternal(event, config: config) else { return }
+        if config.ntfyReady, let req = NotifyChannel.ntfyRequest(event: event, config: config) {
+            performNotify(req, channel: "ntfy")
+        }
+        if config.slackReady, let req = NotifyChannel.slackRequest(event: event, config: config) {
+            performNotify(req, channel: "slack")
+        }
+    }
+
+    /// 순수 필터 — 테스트 대상
+    static func shouldSendExternal(_ event: WatchEvent, config: NotifyConfig) -> Bool {
+        NotifyChannel.shouldSend(event, config: config)
+    }
+
+    private func performNotify(_ request: URLRequest, channel: String) {
+        let task = URLSession.shared.dataTask(with: request) { _, response, error in
+            Task { @MainActor in
+                if let error {
+                    DebugLogger.shared.error(
+                        "Notify",
+                        "[ERROR] \(ErrorCode.notifyPublishFailed.rawValue) \(channel) 전송 실패: \(error.localizedDescription)"
+                    )
+                    return
+                }
+                if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
+                    DebugLogger.shared.error(
+                        "Notify",
+                        "[ERROR] \(ErrorCode.notifyPublishFailed.rawValue) \(channel) HTTP \(http.statusCode)"
+                    )
+                } else {
+                    DebugLogger.shared.info("Notify", "[INFO] \(channel) 외부 알림 전송 완료")
+                }
+            }
+        }
+        task.resume()
+    }
+
+    /// 설정 → 연동 · 테스트 전송 (성공/실패 로그)
+    func sendNotifyTest() {
+        let config = notifyConfig()
+        let event = WatchEvent(
+            kind: .siteDown,
+            severity: .critical,
+            serial: "TEST",
+            title: L10n.string("notify.test.title"),
+            detail: L10n.string("notify.test.detail")
+        )
+        guard config.anyReady else {
+            DebugLogger.shared.warn("Notify", "[WARN] 테스트 전송 불가 — 채널이 비활성입니다")
+            return
+        }
+        sendExternalNotify(for: event, force: true)
+        DebugLogger.shared.action("Notify", "[ACTION] 외부 알림 테스트 전송 요청")
     }
 
     private func watchEnabled(for kind: WatchKind) -> Bool {

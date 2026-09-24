@@ -3402,6 +3402,38 @@
         }
       }
     },
+    "notify.test.detail": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Relay Console external notify channel test"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Relay Console 외부 알림 채널 연결 테스트"
+          }
+        }
+      }
+    },
+    "notify.test.title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Test notification"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "테스트 알림"
+          }
+        }
+      }
+    },
     "relay.menubar.label": {
       "localizations": {
         "en": {
@@ -4584,6 +4616,214 @@
           "stringUnit": {
             "state": "translated",
             "value": "메뉴바 기기 수 표시"
+          }
+        }
+      }
+    },
+    "settings.notify.hint": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sends an HTTP POST to each enabled channel on events. Tokens and webhooks stay on this Mac."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이벤트 발생 시 지정한 채널로 HTTP 발송합니다. 토큰·웹훅은 기기에만 저장됩니다."
+          }
+        }
+      }
+    },
+    "settings.notify.minSeverity": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Minimum severity"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "최소 심각도"
+          }
+        }
+      }
+    },
+    "settings.notify.ntfy": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ntfy"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ntfy"
+          }
+        }
+      }
+    },
+    "settings.notify.ntfy.server": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Server URL (e.g. https://ntfy.sh)"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "서버 URL (예: https://ntfy.sh)"
+          }
+        }
+      }
+    },
+    "settings.notify.ntfy.token": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bearer token (optional)"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bearer 토큰 (선택)"
+          }
+        }
+      }
+    },
+    "settings.notify.ntfy.topic": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Topic"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "토픽"
+          }
+        }
+      }
+    },
+    "settings.notify.recovery": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Also send recovery events"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "복구 이벤트도 전송"
+          }
+        }
+      }
+    },
+    "settings.notify.section": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "External notify channels"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "외부 알림 채널"
+          }
+        }
+      }
+    },
+    "settings.notify.severity.critical": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Critical only"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "치명(critical)만"
+          }
+        }
+      }
+    },
+    "settings.notify.severity.warning": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Warning and above"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "경고(warning) 이상"
+          }
+        }
+      }
+    },
+    "settings.notify.slack": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Slack webhook"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Slack 웹훅"
+          }
+        }
+      }
+    },
+    "settings.notify.slack.webhook": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Incoming Webhook URL"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Incoming Webhook URL"
+          }
+        }
+      }
+    },
+    "settings.notify.test": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Send test"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "테스트 전송"
           }
         }
       }
