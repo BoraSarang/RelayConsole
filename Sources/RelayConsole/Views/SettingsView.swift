@@ -50,6 +50,15 @@ struct SettingsView: View {
                     Toggle(L10n.string("settings.cards.thermal"), isOn: $store.cardThermal)
                     Toggle(L10n.string("settings.cards.storage"), isOn: $store.cardStorage)
                 }
+                Section(L10n.string("settings.section.apple")) {
+                    LabeledContent(L10n.string("settings.apple.tools"), value: IdeviceClient.toolsAvailable
+                        ? L10n.string("settings.apple.toolsOk")
+                        : L10n.string("settings.apple.toolsMissing"))
+                    Text(L10n.string("apple.tools.policy"))
+                        .font(OPFont.body(11))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
                 Section(L10n.string("settings.section.scrcpy")) {
                     ScrcpySettingsSection()
                 }

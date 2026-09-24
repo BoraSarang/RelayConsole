@@ -41,6 +41,8 @@ enum OPColor {
     static let border = Color.white.opacity(0.08)
 
     static let droid = Color(hex: 0x33D973)
+    /// DESIGN.md apple 실버 — Phase1 Apple 카드 accent
+    static let apple = Color(hex: 0xD9E0F2)
 
     static func statusColor(_ state: StatusState) -> Color {
         switch state {

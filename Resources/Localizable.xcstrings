@@ -33,6 +33,422 @@
         }
       }
     },
+    "apple.badge.trust": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "TRUST"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "TRUST"
+          }
+        }
+      }
+    },
+    "apple.card.battery.cycle": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cycles %@"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "사이클 %@"
+          }
+        }
+      }
+    },
+    "apple.card.battery.health": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Health %@"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "건강 %@"
+          }
+        }
+      }
+    },
+    "apple.card.battery.title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "BATTERY"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "BATTERY"
+          }
+        }
+      }
+    },
+    "apple.card.info.model": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Model"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "모델"
+          }
+        }
+      }
+    },
+    "apple.card.info.os": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iOS/iPadOS"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iOS/iPadOS"
+          }
+        }
+      }
+    },
+    "apple.card.info.title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "DEVICE"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "DEVICE"
+          }
+        }
+      }
+    },
+    "apple.card.info.udid": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "UDID"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "UDID"
+          }
+        }
+      }
+    },
+    "apple.card.storage.title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "STORAGE"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "STORAGE"
+          }
+        }
+      }
+    },
+    "apple.card.thermal.na": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Thermal state unavailable"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "써멀 상태 미제공"
+          }
+        }
+      }
+    },
+    "apple.card.thermal.title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "THERMAL"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "THERMAL"
+          }
+        }
+      }
+    },
+    "apple.device.picker": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Device"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "기기 선택"
+          }
+        }
+      }
+    },
+    "apple.empty.noDevice": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No Apple device connected"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "연결된 Apple 기기 없음"
+          }
+        }
+      }
+    },
+    "apple.empty.noDeviceBody": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connect via USB and tap Trust on the device."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "USB 케이블로 연결하고 화면에서 신뢰를 눌러 주세요."
+          }
+        }
+      }
+    },
+    "apple.event.connected": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apple device connected: %@"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apple 기기 연결: %@"
+          }
+        }
+      }
+    },
+    "apple.event.disconnected": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apple device disconnected: %@"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apple 기기 연결 끊김: %@"
+          }
+        }
+      }
+    },
+    "apple.footer.poll": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "60s poll · Trust USB"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "60초 폴링 · Trust USB"
+          }
+        }
+      }
+    },
+    "apple.thermal.critical": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Critical"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "위험"
+          }
+        }
+      }
+    },
+    "apple.thermal.fair": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fair"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "양호"
+          }
+        }
+      }
+    },
+    "apple.thermal.nominal": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nominal"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "정상"
+          }
+        }
+      }
+    },
+    "apple.thermal.serious": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Serious"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "주의"
+          }
+        }
+      }
+    },
+    "apple.tools.body": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apple reads use Trust-only idevice_id / ideviceinfo. Install with Homebrew."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apple 기기 읽기는 Trust-only idevice_id / ideviceinfo 를 사용합니다. Homebrew로 설치할 수 있습니다."
+          }
+        }
+      }
+    },
+    "apple.tools.brew": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Install with Homebrew"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Homebrew로 설치"
+          }
+        }
+      }
+    },
+    "apple.tools.missing": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "libimobiledevice tools not found"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "libimobiledevice 도구를 찾을 수 없습니다"
+          }
+        }
+      }
+    },
+    "apple.tools.policy": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No auto-download · install runs once after confirmation."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "자동 다운로드 없음 · 설치는 확인 후 1회만 실행됩니다."
+          }
+        }
+      }
+    },
+    "apple.tools.title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "libimobiledevice required"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "libimobiledevice 필요"
+          }
+        }
+      }
+    },
     "cards.empty": {
       "localizations": {
         "en": {
@@ -2663,6 +3079,54 @@
         }
       }
     },
+    "settings.apple.tools": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "libimobiledevice tools"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "libimobiledevice 도구"
+          }
+        }
+      }
+    },
+    "settings.apple.toolsMissing": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not installed"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "미설치"
+          }
+        }
+      }
+    },
+    "settings.apple.toolsOk": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Installed"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "설치됨"
+          }
+        }
+      }
+    },
     "settings.bundleId": {
       "localizations": {
         "en": {
@@ -2899,6 +3363,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "다시 탐지"
+          }
+        }
+      }
+    },
+    "settings.section.apple": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apple"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apple"
           }
         }
       }
