@@ -3,13 +3,14 @@
 
 ## 진행 중 (bd ready)
 - [ ] **Alerts 육안 (PLAN_alerts · 0.9.1)** — 3탭·필터·그룹·ack/mute/메모·export · 탭 전영역 클릭 ✓ · **잔여 육안 대기**
-- [ ] **Sites/Jobs 육안 (PLAN_sites_jobs · 1.0.0)** — 구현 PR-A+B ✓ · **사용자 육안 대기**
+- [ ] **Sites/Jobs 육안 (PLAN_sites_jobs · 1.0.0)** — 구현 PR-A+B ✓ · 육안 피드백 수정(에딧·검증·curl 붙여넣기·token `%@` 크래시) 구현 ✓ · **사용자 육안 대기**
 
 ## 보류 (기기 확보 시)
 - [ ] **Apple 실기 Trust 육안** — iPad USB 데이터 불량(안드로이드 동일 케이블 OK·복구도 미인식). 기기 확보 후 `brew install libimobiledevice` → 배터리/스토리지 카드
 - [ ] **Apple Phase 2** — Developer Mode·sysmon 등 — 위 기기 확보 후 착수
 
 ## 완료 (2026-09-24)
+- [x] **Sites/Jobs 육안 피드백 수정** — `jobs.token`/`jobs.lastBeat` `%s`→`%@` (작업 추가 직후 카드 렌더 크래시 · IPS `L10n.format`) · Sites 연필 수정 + `updateSite` · 대상 검증 `validateTarget`(http/tcp/ping) · Jobs 추가 curl 붙여넣기→토큰 import · 카드 curl 선택/복사 · i18n **365** · SitesJobsTests **25**
 - [x] **Sites/Jobs 구현 (PR-A+B · 1.0.0)** — Site HTTP/TCP/ping · 90일 상태바·스파크라인 · Job 하트비트 127.0.0.1·overdue grace · Alerts siteDown/siteUp/jobOverdue/jobRecovered · SitesView·JobsView · 설정 포트 · i18n **353** · 테스트 신규 20 · **1.0.0** · `PLAN_sites_jobs` · PR **#14** + PR-B
 - [x] **Alerts 탭 전영역 클릭** — `contentShape(Rectangle())` · PR **#13** 머지
 - [x] **Alerts 구현 (PR-A+B)** — `WatchEvent` source/ack/note/mutedUntil · `WatchEventAlerts` 필터·그룹·export · Apple WatchEvent 편입 · `AlertsView` 3탭·심각도/기간/플랫폼 필터·serial 그룹·ack/mute 1h·24h/메모·JSON/CSV export · ConsoleView 연결 · 설정 기간 · i18n **315** · 테스트 **139/139** · **0.9.1** · `PLAN_alerts` · PR **#10**·**#11** 머지

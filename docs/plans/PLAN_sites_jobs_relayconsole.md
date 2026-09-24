@@ -135,19 +135,24 @@ Job.isOverdue(now:) → lastBeatAt == nil || now - lastBeatAt > expectEverySec *
 - [x] 금지 grep 0 · 버전 **1.0.0**
 - [x] `error_message_ko.json` 갱신 (E-MAC-NET/JOB)
 - [x] 하트비트 바인드 127.0.0.1 고정
+- [x] 육안 피드백 수정 — Sites 에딧·대상 검증 · Jobs curl 붙여넣기 토큰 import · `jobs.token`/`jobs.lastBeat` `%s`→`%@` 크래시 수정 · SitesJobsTests **25종** · i18n **365**
+- [x] 육안 피드백 수정 — Sites 에딧·대상 검증 · Jobs curl 붙여넣기 토큰 import · `jobs.token`/`jobs.lastBeat` `%s`→`%@` 크래시 수정 · SitesJobsTests **25종** · i18n **365**
 - [ ] Sites: HTTP localhost 성공/실패 주입 · 상태 바 갱신 — **육안**
+- [ ] Sites: 잘못된 URL 거부 + 수정(에딧) 저장 — **육안**
 - [ ] Jobs: curl 하트비트 → lastBeat · overdue 표시 — **육안**
+- [ ] Jobs: 추가 시트 curl 붙여넣기 → 토큰 import — **육안** (기존: 토큰 카드 `%s` 크래시 → `%@` 수정)
 - [ ] site down → Alerts 반영 — **육안**
 
 ### 육안 순서
 
 1. 디버그 → **Site down 주입** → Sites: 빨강 상태바 · Alerts에 siteDown
 2. **Site up 주입** → 초록 복구 · Alerts 해소
-3. 사이트 추가 (https://example.com, HTTP) → 즉시 체크 · ms 표시
-4. 작업 추가 → **curl 복사** → 터미널 실행 → lastBeat 갱신
-5. **Job beat 주입** → OK 배지
-6. 설정 → 하트비트 포트 변경 → 재시작 · Jobs 배너 갱신
-7. 앱 재시작 → Sites/Jobs 유지
+3. 사이트 추가 (https://example.com, HTTP) → 즉시 체크 · ms 표시 · 잘못된 URL → 오류 메시지
+4. 사이트 **연필(수정)** → 대상/주기 변경 저장 → 재체크
+5. 작업 추가 → **curl 붙여넣기 영역** 확인 · 카드 curl 선택/복사 → 터미널 실행 → lastBeat 갱신 (과거 추가 직후 크래시 수정 확인)
+6. **Job beat 주입** → OK 배지
+7. 설정 → 하트비트 포트 변경 → 재시작 · Jobs 배너 갱신
+8. 앱 재시작 → Sites/Jobs 유지
 
 ---
 

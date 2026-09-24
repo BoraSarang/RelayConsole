@@ -307,6 +307,22 @@ final class ConsoleStore: ObservableObject {
         SitesJobsStore.shared.saveSites(sites)
     }
 
+    /// 사이트 수정 (이름·대상·probe·주기) — 대상 변경 시 즉시 재체크
+    func updateSite(id: UUID, name: String, target: String, probe: SiteProbe, intervalSec: Int) {
+        guard let i = sites.firstIndex(where: { $0.id == id }) else { return }
+        let clean = SitesJobsLogic.sanitizeTarget(target, probe: probe)
+        let targetChanged = sites[i].target != clean || sites[i].probe != probe
+        sites[i].name = name
+        sites[i].target = clean
+        sites[i].probe = probe
+        sites[i].intervalSec = max(10, intervalSec)
+        SitesJobsStore.shared.saveSites(sites)
+        DebugLogger.shared.info("Sites", "[INFO] [FEATURE] 사이트 수정 \(name)")
+        if targetChanged {
+            Task { await runSiteCheck(sites[i]) }
+        }
+    }
+
     func clearSiteHistory(id: UUID) {
         guard let i = sites.firstIndex(where: { $0.id == id }) else { return }
         sites[i].history.removeAll()
@@ -317,8 +333,13 @@ final class ConsoleStore: ObservableObject {
     // MARK: - Jobs CRUD
 
     @discardableResult
-    func addJob(name: String, expectEverySec: Int) -> Job {
-        let job = Job(name: name, expectEverySec: expectEverySec)
+    func addJob(name: String, expectEverySec: Int, token: String? = nil) -> Job {
+        let job: Job
+        if let token, !token.isEmpty {
+            job = Job(name: name, token: token.lowercased(), expectEverySec: expectEverySec)
+        } else {
+            job = Job(name: name, expectEverySec: expectEverySec)
+        }
         jobs.append(job)
         SitesJobsStore.shared.saveJobs(jobs)
         DebugLogger.shared.info("Jobs", "[INFO] [FEATURE] 작업 추가 \(job.name) token=\(job.token)")

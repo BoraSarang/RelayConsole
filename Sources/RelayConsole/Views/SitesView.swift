@@ -3,11 +3,24 @@ import SwiftUI
 /// Sites — 업타임 목록 · 90일 상태 바 · ms 스파크라인 (PLAN_sites_jobs)
 struct SitesView: View {
     @ObservedObject var store: ConsoleStore
-    @State private var showingAdd = false
+    @State private var sheetMode: SiteSheetMode?
     @State private var name = ""
     @State private var target = ""
     @State private var probe: SiteProbe = .http
     @State private var interval = 60
+    @State private var formError: String?
+
+    private enum SiteSheetMode: Identifiable {
+        case add
+        case edit(Site)
+
+        var id: String {
+            switch self {
+            case .add: return "add"
+            case .edit(let site): return site.id.uuidString
+            }
+        }
+    }
 
     var body: some View {
         ZStack {
@@ -32,7 +45,9 @@ struct SitesView: View {
         .background(Color(hex: 0x0F111A))
         .preferredColorScheme(.dark)
         .navigationTitle(L10n.string("sidebar.sites"))
-        .sheet(isPresented: $showingAdd) { addSheet }
+        .sheet(item: $sheetMode) { mode in
+            siteFormSheet(mode)
+        }
     }
 
     private var header: some View {
@@ -42,7 +57,7 @@ struct SitesView: View {
                 .foregroundStyle(OPColor.inkDim)
             Spacer()
             Button(L10n.string("sites.add")) {
-                showingAdd = true
+                openAdd()
             }
             .buttonStyle(.plain)
             .font(OPFont.body(12))
@@ -59,7 +74,7 @@ struct SitesView: View {
             Text(L10n.string("sites.empty"))
                 .font(OPFont.body(13))
                 .foregroundStyle(OPColor.inkDim)
-            OPSecondaryButton(title: L10n.string("sites.add")) { showingAdd = true }
+            OPSecondaryButton(title: L10n.string("sites.add")) { openAdd() }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(.top, 80)
@@ -102,6 +117,16 @@ struct SitesView: View {
                 .labelsHidden()
                 .controlSize(.mini)
                 Button {
+                    openEdit(site)
+                } label: {
+                    Image(systemName: "pencil")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(OPColor.inkDim)
+                        .frame(width: 24, height: 24)
+                }
+                .buttonStyle(.plain)
+                .help(L10n.string("sites.edit"))
+                Button {
                     Task { await store.runSiteCheck(site) }
                 } label: {
                     Image(systemName: "arrow.clockwise")
@@ -125,6 +150,7 @@ struct SitesView: View {
                 .font(OPFont.body(11))
                 .foregroundStyle(OPColor.inkDim)
                 .lineLimit(1)
+                .textSelection(.enabled)
 
             // 90일 상태 바
             if !site.history.isEmpty {
@@ -179,11 +205,39 @@ struct SitesView: View {
         .clipShape(RoundedRectangle(cornerRadius: 2))
     }
 
-    private var addSheet: some View {
-        ZStack {
+    private func openAdd() {
+        name = ""
+        target = ""
+        probe = .http
+        interval = 60
+        formError = nil
+        sheetMode = .add
+    }
+
+    private func openEdit(_ site: Site) {
+        name = site.name
+        target = site.target
+        probe = site.probe
+        interval = site.intervalSec
+        formError = nil
+        sheetMode = .edit(site)
+    }
+
+    private func siteFormSheet(_ mode: SiteSheetMode) -> some View {
+        let isEdit: Bool
+        let title: String
+        switch mode {
+        case .add:
+            isEdit = false
+            title = L10n.string("sites.add.title")
+        case .edit:
+            isEdit = true
+            title = L10n.string("sites.edit.title")
+        }
+        return ZStack {
             Color(hex: 0x0F111A).ignoresSafeArea()
             VStack(alignment: .leading, spacing: 14) {
-                Text(L10n.string("sites.add.title"))
+                Text(title)
                     .font(OPFont.title(15))
                     .foregroundStyle(OPColor.ink)
 
@@ -204,13 +258,16 @@ struct SitesView: View {
                     Text(L10n.string("sites.field.target"))
                         .font(OPFont.body(11))
                         .foregroundStyle(OPColor.inkDim)
-                    TextField(probe == .http ? "https://example.com" : probe == .tcp ? "host:443" : "example.com", text: $target)
-                        .textFieldStyle(.plain)
-                        .font(OPFont.body(13))
-                        .foregroundStyle(OPColor.ink)
-                        .padding(8)
-                        .background(OPColor.popBG, in: RoundedRectangle(cornerRadius: 8))
-                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(OPColor.border, lineWidth: 1))
+                    TextField(
+                        probe == .http ? "https://example.com" : probe == .tcp ? "host:443" : "example.com",
+                        text: $target
+                    )
+                    .textFieldStyle(.plain)
+                    .font(OPFont.body(13))
+                    .foregroundStyle(OPColor.ink)
+                    .padding(8)
+                    .background(OPColor.popBG, in: RoundedRectangle(cornerRadius: 8))
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(OPColor.border, lineWidth: 1))
                 }
 
                 Picker(L10n.string("sites.field.probe"), selection: $probe) {
@@ -229,27 +286,50 @@ struct SitesView: View {
                 .font(OPFont.body(12))
                 .foregroundStyle(OPColor.ink)
 
+                if let formError {
+                    Text(formError)
+                        .font(OPFont.body(11))
+                        .foregroundStyle(OPColor.bad)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
                 HStack {
                     Spacer()
                     OPSecondaryButton(title: L10n.string("alerts.note.cancel")) {
-                        showingAdd = false
-                        name = ""
-                        target = ""
+                        sheetMode = nil
+                        formError = nil
                     }
-                    OPPrimaryButton(title: L10n.string("sites.add")) {
-                        let n = name.trimmingCharacters(in: .whitespaces)
-                        let t = target.trimmingCharacters(in: .whitespaces)
-                        guard !n.isEmpty, !t.isEmpty else { return }
-                        store.addSite(name: n, target: t, probe: probe, intervalSec: interval)
-                        showingAdd = false
-                        name = ""
-                        target = ""
+                    OPPrimaryButton(title: L10n.string(isEdit ? "alerts.note.save" : "sites.add")) {
+                        submit(mode)
                     }
                 }
             }
             .padding(OPSpace.xl)
         }
-        .frame(minWidth: 380, minHeight: 340)
+        .frame(minWidth: 380, minHeight: 380)
         .preferredColorScheme(.dark)
+    }
+
+    private func submit(_ mode: SiteSheetMode) {
+        let n = name.trimmingCharacters(in: .whitespaces)
+        let t = target.trimmingCharacters(in: .whitespaces)
+        guard !n.isEmpty else {
+            formError = L10n.string("sites.error.name")
+            return
+        }
+        if let errKey = SitesJobsLogic.validateTarget(t, probe: probe) {
+            formError = L10n.string(errKey)
+            return
+        }
+        formError = nil
+        switch mode {
+        case .add:
+            store.addSite(name: n, target: t, probe: probe, intervalSec: interval)
+        case .edit(let site):
+            store.updateSite(id: site.id, name: n, target: t, probe: probe, intervalSec: interval)
+        }
+        sheetMode = nil
+        name = ""
+        target = ""
     }
 }
