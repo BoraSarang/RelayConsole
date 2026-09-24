@@ -92,7 +92,7 @@ struct RelayConsoleApp: App {
                 Color(hex: 0x0F111A).ignoresSafeArea()
                 SettingsView(store: store)
             }
-            .frame(minWidth: 420, minHeight: 280)
+            .frame(minWidth: 560, minHeight: 400)
             .preferredColorScheme(.dark)
             .background(Color(hex: 0x0F111A))
         }

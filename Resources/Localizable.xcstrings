@@ -4652,6 +4652,22 @@
         }
       }
     },
+    "settings.section.about": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "About"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "정보"
+          }
+        }
+      }
+    },
     "settings.section.alerts": {
       "extractionState": "manual",
       "localizations": {
@@ -4665,6 +4681,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "알림(Alerts)"
+          }
+        }
+      }
+    },
+    "settings.section.alertsJobs": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alerts & Jobs"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "알림·작업"
           }
         }
       }
@@ -4729,6 +4761,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "일반"
+          }
+        }
+      }
+    },
+    "settings.section.integrations": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Integrations"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "연동"
           }
         }
       }
@@ -4970,6 +5018,70 @@
           "stringUnit": {
             "state": "translated",
             "value": "시스템 알림"
+          }
+        }
+      }
+    },
+    "settings.watch.group.device": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Device"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "기기 상태"
+          }
+        }
+      }
+    },
+    "settings.watch.group.fatal": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fatal"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "치명"
+          }
+        }
+      }
+    },
+    "settings.watch.group.overview": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Overview"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "전체"
+          }
+        }
+      }
+    },
+    "settings.watch.group.perf": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Performance"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "성능"
           }
         }
       }

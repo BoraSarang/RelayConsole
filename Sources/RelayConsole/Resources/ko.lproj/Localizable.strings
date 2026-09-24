@@ -284,11 +284,14 @@
 "settings.scrcpy.opts" = "추가 옵션 (기본 8종 뒤에 추가)";
 "settings.scrcpy.path" = "scrcpy 경로 (비워두면 PATH)";
 "settings.scrcpy.rescan" = "다시 탐지";
+"settings.section.about" = "정보";
 "settings.section.alerts" = "알림(Alerts)";
+"settings.section.alertsJobs" = "알림·작업";
 "settings.section.apple" = "Apple";
 "settings.section.cards" = "카드 표시";
 "settings.section.droid" = "Droid";
 "settings.section.general" = "일반";
+"settings.section.integrations" = "연동";
 "settings.section.jobs" = "하트비트";
 "settings.section.scrcpy" = "scrcpy 미러링";
 "settings.section.watch" = "감시 알림";
@@ -304,6 +307,10 @@
 "settings.watch.charge" = "충전 전이";
 "settings.watch.crash" = "크래시 감지 (logcat)";
 "settings.watch.enabled" = "시스템 알림";
+"settings.watch.group.device" = "기기 상태";
+"settings.watch.group.fatal" = "치명";
+"settings.watch.group.overview" = "전체";
+"settings.watch.group.perf" = "성능";
 "settings.watch.load" = "load 급증";
 "settings.watch.lowPower" = "저전력 모드 전이";
 "settings.watch.memory" = "메모리 부족 (Available)";

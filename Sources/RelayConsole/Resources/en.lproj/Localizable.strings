@@ -284,11 +284,14 @@
 "settings.scrcpy.opts" = "Extra options (appended after defaults)";
 "settings.scrcpy.path" = "scrcpy path (blank = PATH)";
 "settings.scrcpy.rescan" = "Rescan";
+"settings.section.about" = "About";
 "settings.section.alerts" = "Alerts";
+"settings.section.alertsJobs" = "Alerts & Jobs";
 "settings.section.apple" = "Apple";
 "settings.section.cards" = "Card visibility";
 "settings.section.droid" = "Droid";
 "settings.section.general" = "General";
+"settings.section.integrations" = "Integrations";
 "settings.section.jobs" = "Heartbeat";
 "settings.section.scrcpy" = "scrcpy mirroring";
 "settings.section.watch" = "Watch alerts";
@@ -304,6 +307,10 @@
 "settings.watch.charge" = "Charge transitions";
 "settings.watch.crash" = "Crash detection (logcat)";
 "settings.watch.enabled" = "System notifications";
+"settings.watch.group.device" = "Device";
+"settings.watch.group.fatal" = "Fatal";
+"settings.watch.group.overview" = "Overview";
+"settings.watch.group.perf" = "Performance";
 "settings.watch.load" = "Load spike";
 "settings.watch.lowPower" = "Low power transitions";
 "settings.watch.memory" = "Low memory (Available)";
