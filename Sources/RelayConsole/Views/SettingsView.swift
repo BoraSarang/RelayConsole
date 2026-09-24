@@ -347,8 +347,18 @@ struct SettingsView: View {
     @ViewBuilder
     private var aboutSection: some View {
         Section(L10n.string("settings.section.about")) {
-            LabeledContent(L10n.string("settings.version"), value: "1.9.0")
+            LabeledContent(L10n.string("settings.version"), value: "1.10.0")
             LabeledContent(L10n.string("settings.bundleId"), value: "com.borasarang.relayconsole")
+        }
+        Section(L10n.string("settings.mcp.section")) {
+            Text(L10n.string("settings.mcp.help"))
+                .font(OPFont.body(11))
+                .foregroundStyle(.secondary)
+                .lineLimit(3)
+            Text(L10n.string("settings.mcp.command"))
+                .font(OPFont.number(11))
+                .foregroundStyle(OPColor.inkDim)
+                .textSelection(.enabled)
         }
     }
 }

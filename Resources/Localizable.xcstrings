@@ -5566,6 +5566,57 @@
         }
       }
     },
+    "settings.mcp.command": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Run: relay-mcp"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "실행: relay-mcp"
+          }
+        }
+      }
+    },
+    "settings.mcp.help": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Expose read-only tools to MCP clients such as Claude via the relay-mcp executable (stdio)."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "relay-mcp 실행 파일로 Claude 등 MCP 클라이언트에 읽기 전용 도구를 노출합니다 (stdio)."
+          }
+        }
+      }
+    },
+    "settings.mcp.section": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Local MCP"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "로컬 MCP"
+          }
+        }
+      }
+    },
     "settings.menubarMetrics": {
       "localizations": {
         "en": {
