@@ -1,12 +1,14 @@
 import SwiftUI
 import AppKit
 
-/// Jobs — 하트비트 작업 · overdue · 토큰 복사 (PLAN_sites_jobs)
+/// Jobs — 하트비트 작업 · overdue · 토큰/curl (PLAN_sites_jobs)
 struct JobsView: View {
     @ObservedObject var store: ConsoleStore
     @State private var showingAdd = false
     @State private var name = ""
     @State private var expectSec = 3600
+    @State private var curlPaste = ""
+    @State private var formError: String?
     @State private var copiedToken: String?
 
     var body: some View {
@@ -36,7 +38,7 @@ struct JobsView: View {
         .background(Color(hex: 0x0F111A))
         .preferredColorScheme(.dark)
         .navigationTitle(L10n.string("sidebar.jobs"))
-        .sheet(isPresented: $showingAdd) { addSheet }
+        .sheet(isPresented: $showingAdd, onDismiss: resetAddForm) { addSheet }
     }
 
     private var header: some View {
@@ -46,6 +48,7 @@ struct JobsView: View {
                 .foregroundStyle(OPColor.inkDim)
             Spacer()
             Button(L10n.string("jobs.add")) {
+                resetAddForm()
                 showingAdd = true
             }
             .buttonStyle(.plain)
@@ -84,7 +87,10 @@ struct JobsView: View {
             Text(L10n.string("jobs.empty"))
                 .font(OPFont.body(13))
                 .foregroundStyle(OPColor.inkDim)
-            OPSecondaryButton(title: L10n.string("jobs.add")) { showingAdd = true }
+            OPSecondaryButton(title: L10n.string("jobs.add")) {
+                resetAddForm()
+                showingAdd = true
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(.top, 80)
@@ -163,12 +169,30 @@ struct JobsView: View {
                 }
                 .buttonStyle(.plain)
                 Spacer()
-                Button(L10n.string("jobs.copy.curl")) {
-                    copyToken(curl(job.token))
+            }
+
+            // curl 전체 — 선택·복사용 (붙여넣기 대상)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(L10n.string("jobs.copy.curl"))
+                    .font(OPFont.body(10))
+                    .foregroundStyle(OPColor.inkDim)
+                Text(curl(job.token))
+                    .font(OPFont.number(10))
+                    .foregroundStyle(OPColor.jobs)
+                    .textSelection(.enabled)
+                    .padding(6)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(OPColor.popBG, in: RoundedRectangle(cornerRadius: 6))
+                    .overlay(RoundedRectangle(cornerRadius: 6).stroke(OPColor.border, lineWidth: 1))
+                HStack {
+                    Spacer()
+                    Button(L10n.string("jobs.copy.curl")) {
+                        copyToken(curl(job.token))
+                    }
+                    .buttonStyle(.plain)
+                    .font(OPFont.body(11))
+                    .foregroundStyle(OPColor.jobs)
                 }
-                .buttonStyle(.plain)
-                .font(OPFont.body(11))
-                .foregroundStyle(OPColor.jobs)
             }
 
             HStack(spacing: 10) {
@@ -186,23 +210,18 @@ struct JobsView: View {
                 }
                 Spacer()
             }
-
-            Text(hintURL(job.token))
-                .font(OPFont.number(10))
-                .foregroundStyle(OPColor.inkDim.opacity(0.8))
-                .textSelection(.enabled)
         }
         .padding(OPSpace.md)
         .background(OPColor.card, in: RoundedRectangle(cornerRadius: 12))
         .overlay(RoundedRectangle(cornerRadius: 12).stroke(OPColor.border, lineWidth: 1))
     }
 
-    private func hintURL(_ token: String) -> String {
-        "http://127.0.0.1:\(store.heartbeatPort)/hb/\(token)"
-    }
-
     private func curl(_ token: String) -> String {
         "curl -fsS \"\(hintURL(token))\" || true"
+    }
+
+    private func hintURL(_ token: String) -> String {
+        "http://127.0.0.1:\(store.heartbeatPort)/hb/\(token)"
     }
 
     private func copyToken(_ s: String) {
@@ -212,6 +231,13 @@ struct JobsView: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
             if copiedToken == s { copiedToken = nil }
         }
+    }
+
+    private func resetAddForm() {
+        name = ""
+        expectSec = 3600
+        curlPaste = ""
+        formError = nil
     }
 
     private var addSheet: some View {
@@ -244,29 +270,73 @@ struct JobsView: View {
                 .font(OPFont.body(12))
                 .foregroundStyle(OPColor.ink)
 
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(L10n.string("jobs.field.curl"))
+                        .font(OPFont.body(11))
+                        .foregroundStyle(OPColor.inkDim)
+                    TextEditor(text: $curlPaste)
+                        .font(OPFont.number(11))
+                        .foregroundStyle(OPColor.ink)
+                        .scrollContentBackground(.hidden)
+                        .padding(4)
+                        .frame(minHeight: 64, maxHeight: 96)
+                        .background(OPColor.popBG, in: RoundedRectangle(cornerRadius: 8))
+                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(OPColor.border, lineWidth: 1))
+                    Text(L10n.string("jobs.field.curl.hint"))
+                        .font(OPFont.body(10))
+                        .foregroundStyle(OPColor.inkDim)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
                 Text(L10n.string("jobs.add.hint"))
                     .font(OPFont.body(11))
                     .foregroundStyle(OPColor.inkDim)
                     .fixedSize(horizontal: false, vertical: true)
 
+                if let formError {
+                    Text(formError)
+                        .font(OPFont.body(11))
+                        .foregroundStyle(OPColor.bad)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
                 HStack {
                     Spacer()
                     OPSecondaryButton(title: L10n.string("alerts.note.cancel")) {
                         showingAdd = false
-                        name = ""
                     }
                     OPPrimaryButton(title: L10n.string("jobs.add")) {
-                        let n = name.trimmingCharacters(in: .whitespaces)
-                        guard !n.isEmpty else { return }
-                        store.addJob(name: n, expectEverySec: expectSec)
-                        showingAdd = false
-                        name = ""
+                        submitAdd()
                     }
                 }
             }
             .padding(OPSpace.xl)
         }
-        .frame(minWidth: 380, minHeight: 300)
+        .frame(minWidth: 400, minHeight: 420)
         .preferredColorScheme(.dark)
+    }
+
+    private func submitAdd() {
+        let n = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !n.isEmpty else {
+            formError = L10n.string("jobs.error.name")
+            return
+        }
+        var token: String?
+        let paste = curlPaste.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !paste.isEmpty {
+            guard let parsed = SitesJobsLogic.token(fromCurl: paste) else {
+                formError = L10n.string("jobs.error.curl")
+                return
+            }
+            if store.jobs.contains(where: { $0.token.lowercased() == parsed.lowercased() }) {
+                formError = L10n.string("jobs.error.dup")
+                return
+            }
+            token = parsed
+        }
+        formError = nil
+        store.addJob(name: n, expectEverySec: expectSec, token: token)
+        showingAdd = false
     }
 }

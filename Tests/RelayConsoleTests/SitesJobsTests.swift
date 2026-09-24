@@ -121,6 +121,49 @@ final class SitesJobsTests: XCTestCase {
         XCTAssertEqual(job.lastBeatOk, true)
     }
 
+    // MARK: - 검증 · curl
+
+    func testValidateTargetHTTP() {
+        XCTAssertNil(SitesJobsLogic.validateTarget("https://example.com", probe: .http))
+        XCTAssertNil(SitesJobsLogic.validateTarget("http://127.0.0.1:8080/health", probe: .http))
+        XCTAssertEqual(SitesJobsLogic.validateTarget("", probe: .http), "sites.error.target.empty")
+        XCTAssertEqual(SitesJobsLogic.validateTarget("example.com", probe: .http), "sites.error.target.http")
+        XCTAssertEqual(SitesJobsLogic.validateTarget("ftp://example.com", probe: .http), "sites.error.target.http")
+        XCTAssertEqual(SitesJobsLogic.validateTarget("https://", probe: .http), "sites.error.target.http")
+    }
+
+    func testValidateTargetTCP() {
+        XCTAssertNil(SitesJobsLogic.validateTarget("example.com", probe: .tcp))
+        XCTAssertNil(SitesJobsLogic.validateTarget("example.com:443", probe: .tcp))
+        XCTAssertNil(SitesJobsLogic.validateTarget("[::1]:9", probe: .tcp))
+        XCTAssertEqual(SitesJobsLogic.validateTarget("example.com:abc", probe: .tcp), "sites.error.target.tcp")
+        XCTAssertEqual(SitesJobsLogic.validateTarget("example.com:0", probe: .tcp), "sites.error.target.tcp")
+        XCTAssertEqual(SitesJobsLogic.validateTarget("bad host:80", probe: .tcp), "sites.error.target.tcp")
+    }
+
+    func testValidateTargetPing() {
+        XCTAssertNil(SitesJobsLogic.validateTarget("example.com", probe: .ping))
+        XCTAssertEqual(SitesJobsLogic.validateTarget("", probe: .ping), "sites.error.target.empty")
+        XCTAssertEqual(SitesJobsLogic.validateTarget("a b", probe: .ping), "sites.error.target.ping")
+        XCTAssertEqual(SitesJobsLogic.validateTarget("-c 1", probe: .ping), "sites.error.target.ping")
+    }
+
+    func testTokenFromCurl() {
+        let curl = #"curl -fsS "http://127.0.0.1:8787/hb/ab12cd34" || true"#//
+        XCTAssertEqual(SitesJobsLogic.token(fromCurl: curl), "ab12cd34")
+        XCTAssertEqual(SitesJobsLogic.token(fromCurl: "GET /hb/xyz789 HTTP/1.1"), "xyz789")
+        XCTAssertNil(SitesJobsLogic.token(fromCurl: "curl https://example.com"))
+        XCTAssertNil(SitesJobsLogic.token(fromCurl: ""))
+    }
+
+    func testStrictHostPort() {
+        XCTAssertEqual(SitesJobsLogic.strictHostPort("a:1")?.0, "a")
+        XCTAssertEqual(SitesJobsLogic.strictHostPort("a:1")?.1, 1)
+        XCTAssertNil(SitesJobsLogic.strictHostPort("a"))
+        XCTAssertNil(SitesJobsLogic.strictHostPort("a:port"))
+        XCTAssertNil(SitesJobsLogic.strictHostPort(":80"))
+    }
+
     // MARK: - parse
 
     func testParseHostPort() {

@@ -172,6 +172,61 @@ enum SitesJobsLogic {
         }
     }
 
+    /// 대상 형식 검증 — nil이면 유효, 아니면 i18n 키
+    static func validateTarget(_ raw: String, probe: SiteProbe) -> String? {
+        let t = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !t.isEmpty else { return "sites.error.target.empty" }
+        switch probe {
+        case .http:
+            guard let u = URL(string: t),
+                  let scheme = u.scheme?.lowercased(),
+                  scheme == "http" || scheme == "https",
+                  let host = u.host, !host.isEmpty
+            else { return "sites.error.target.http" }
+            return nil
+        case .tcp:
+            guard !t.contains(" "), !t.contains(";") else { return "sites.error.target.tcp" }
+            if t.contains(":") {
+                guard let (host, port) = strictHostPort(t), !host.isEmpty, (1...65535).contains(port) else {
+                    return "sites.error.target.tcp"
+                }
+            }
+            return nil
+        case .ping:
+            guard !t.contains(" "), !t.contains(";"), !t.hasPrefix("-") else {
+                return "sites.error.target.ping"
+            }
+            return nil
+        }
+    }
+
+    /// host:port 엄격 파싱 (숫자 포트 없으면 실패)
+    static func strictHostPort(_ target: String) -> (String, Int)? {
+        let t = target.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !t.isEmpty else { return nil }
+        if t.hasPrefix("["), let close = t.firstIndex(of: "]") {
+            let host = String(t[t.index(after: t.startIndex)..<close])
+            let rest = t[t.index(after: close)...]
+            guard rest.hasPrefix(":"), let p = Int(rest.dropFirst()), (1...65535).contains(p) else { return nil }
+            return (host, p)
+        }
+        let parts = t.split(separator: ":", maxSplits: 1, omittingEmptySubsequences: false)
+        guard parts.count == 2, !parts[0].isEmpty, let p = Int(parts[1]), (1...65535).contains(p) else {
+            return nil
+        }
+        return (String(parts[0]), p)
+    }
+
+    /// 붙여넣은 curl/텍스트에서 하트비트 토큰 추출 (/hb/{token})
+    static func token(fromCurl text: String) -> String? {
+        guard let re = try? NSRegularExpression(pattern: #"/hb/([A-Za-z0-9_-]+)"#) else { return nil }
+        let range = NSRange(text.startIndex..<text.endIndex, in: text)
+        guard let match = re.firstMatch(in: text, range: range),
+              let r = Range(match.range(at: 1), in: text)
+        else { return nil }
+        return String(text[r])
+    }
+
     /// 체크 오류 한 줄 (요약)
     static func summarize(error: Error?, httpStatus: Int? = nil) -> String {
         if let code = httpStatus {
