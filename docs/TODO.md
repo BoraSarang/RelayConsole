@@ -2,8 +2,8 @@
 > 작업 추적 — bd 연동 (이슈 prefix: RelayConsole)
 
 ## 진행 중 (bd ready)
-- (육안 대기) **S1 아침 브리핑 한 줄** — 구현·테스트·빌드 **1.3.0** · `RelayConsole-psh` · 팝오버 헤더 + 설정 토글 육안 후 close
-- (육안 대기) **외부 알림 채널 A1** — 구현·테스트·빌드·**PR #21 머지 `44e2cd6`** · 설정→연동 ntfy/Slack 테스트 전송 확인 후 `RelayConsole-avf` close
+- (육안 대기) **S1 아침 브리핑 한 줄** — 구현·테스트·빌드 1.3.0 · **PR #22 머지 `c57d546`** · 팝오버 헤더 + 설정 토글 육안 후 close `RelayConsole-psh`
+- (육안 대기) **외부 알림 채널 A1** — **PR #21 머지 `44e2cd6`** · 설정→연동 ntfy/Slack 테스트 전송 후 `RelayConsole-avf` close
 
 ## 보류 (기기 확보 시)
 - [ ] **Apple 실기 Trust 육안** — iPad USB 데이터 불량(안드로이드 동일 케이블 OK·복구도 미인식). 기기 확보 후 `brew install libimobiledevice` → 배터리/스토리지 카드
@@ -17,7 +17,7 @@
 - 보류: A9 Apple Phase 2
 
 ## 완료 (2026-09-24)
-- [x] **S1 아침 브리핑 구현** — `Briefing`·`BriefingLogic` · `relay.briefing.enabled` · 팝오버 헤더 한 줄 · i18n **411** · XCTest Briefing 7 + swift-testing 156 · **1.3.0** · `PLAN_briefing` · `RelayConsole-psh`
+- [x] **S1 아침 브리핑 구현** — `Briefing`·`BriefingLogic` · `relay.briefing.enabled` · 팝오버 헤더 한 줄 · i18n **411** · XCTest Briefing 7 + swift-testing 156 · **1.3.0** · `PLAN_briefing` · **PR #22 머지 `c57d546`**
 - [x] **리서치 재검토** — `RelayConsole-p1w` · `RESEARCH_competitive_v1` §8 갱신 · P1 3건 도출
 - [x] **외부 알림 채널 A1 구현** — `NotifyChannel` · `relay.notify.*` · 설정 연동 · i18n 409 · 테스트 156 · **1.2.0** · `PLAN_notify_channels` · **PR #21 머지 `44e2cd6`**
 - [x] **README 공개용** — `README.md` · 포지셔닝·기능·설치·ntfy/Slack 설정
