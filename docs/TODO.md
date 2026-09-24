@@ -2,7 +2,7 @@
 > 작업 추적 — bd 연동 (이슈 prefix: RelayConsole)
 
 ## 진행 중 (bd ready)
-- **A2 Wi-Fi ADB 온보딩** — 리서치 §8 P1-3 · 다음 PR
+- **A2 Wi-Fi ADB 온보딩** — 리서치 §8 P1-3 · `PLAN_wifi_onboarding` · 다음 PR
 
 ## 다음 스프린트 (사용자 선택 대기 · 리서치 §8)
 - P2: S4 Incident Bundle · A3 앱 미니 허브 · A8 로그인 항목
@@ -14,7 +14,7 @@
 - [ ] **Apple Phase 2** — Developer Mode·sysmon 등 — 위 기기 확보 후 착수
 
 ## 완료 (2026-09-24)
-- [x] **A5 Sites SSL 만료 + HTTP assertion** — `Site.sslExpiresAt`·`assertBody` · `SslAssertLogic` · `TrustExpiryBox` · `WatchKind.sslExpiring` · `relay.sites.sslWarnDays`(14) · SSL D-day 배지 · 폼 assertion · Settings Stepper · i18n **439** · 테스트 **59+158** · **1.5.0** · `PLAN_sites_ssl` · bd `RelayConsole-2tt`
+- [x] **A5 Sites SSL 만료 + HTTP assertion** — `Site.sslExpiresAt`·`assertBody` · `SslAssertLogic` · `TrustExpiryBox` · `WatchKind.sslExpiring` · `relay.sites.sslWarnDays`(14) · SSL D-day 배지 · 폼 assertion · Settings Stepper · i18n **439** · 테스트 **59+158** · **1.5.0** · `PLAN_sites_ssl` · **PR #30 머지** · bd `RelayConsole-2tt` closed
 - [x] **네트워크 속도 단위 유동 전환** — `formatNetRate`/`formatNetRatePair` · ≥1 MB/s → MB/s, 미만 KB/s · 카드↑↓·cacheNetworkInfo · 테스트 +2 · **PR #29 머지 `da0d9e1`**
 - [x] **F1 기기 그래프 플로팅창 육안 마감** — 투명도·헤더 안정화·통합 테스트 **사용자 확인** · `RelayConsole-d2e` closed · **PR #25·#28** · 1.4.0
 - [x] **S1 아침 브리핑 육안 마감** — 팝오버 헤더 한 줄 + 설정 토글 **사용자 확인** · `RelayConsole-psh` closed
