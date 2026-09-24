@@ -35,6 +35,8 @@ final class ConsoleStore: ObservableObject {
     private var lastNetPushAt: [String: Date] = [:]
     /// fingerprint → 마지막 시스템 알림 시각 (2중 쿨다운: Gate + notify 5분)
     private var lastNotifiedAt: [String: Date] = [:]
+    /// fingerprint → 마지막 incident 번들 캡처 (S4)
+    private var incidentBundleLastAt: [String: Date] = [:]
     private let notifyCooldown: TimeInterval = 300
     private var notificationsRequested = false
     /// Sites 체크 루프 / Job overdue 추적
@@ -87,6 +89,8 @@ final class ConsoleStore: ObservableObject {
     @AppStorage("relay.cards.storage") var cardStorage = true
     /// 아침 브리핑 한 줄 (PLAN_briefing · S1)
     @AppStorage("relay.briefing.enabled") var briefingEnabled = true
+    /// S4 Incident Bundle 자동 캡처
+    @AppStorage("relay.incident.auto") var incidentAuto = true
 
     private init() {
         selectedSerial = UserDefaults.standard.string(forKey: selectedKey)
@@ -640,6 +644,7 @@ final class ConsoleStore: ObservableObject {
         if recentWatchEvents.count > 500 { recentWatchEvents.removeLast() }
         pushEvent(event.summary)
         EventStore.shared.save(recentWatchEvents)
+        maybeCaptureIncident(event)
 
         if !forceNotify {
             guard watchEnabled(for: event.kind), watchNotifications else { return }
@@ -666,6 +671,21 @@ final class ConsoleStore: ObservableObject {
             AlertBannerPresenter.shared.show(event: event, deviceName: name)
         }
         pruneNotifyCooldown(now: now)
+    }
+
+    /// S4 — ANR/crash/siteDown 자동 번들 (fingerprint 5분 쿨다운)
+    private func maybeCaptureIncident(_ event: WatchEvent) {
+        guard incidentAuto, !event.isClear else { return }
+        guard IncidentBundleLogic.captures(kind: event.kind) else { return }
+        let fp = "\(event.fingerprint):bundle"
+        guard IncidentBundleLogic.shouldAutoCapture(fingerprint: fp, lastAt: incidentBundleLastAt) else {
+            return
+        }
+        incidentBundleLastAt[fp] = .now
+        IncidentBundleStore.shared.capture(
+            event: event,
+            adbPath: DeviceMonitor.adbPathNow()
+        )
     }
 
     // MARK: - 외부 알림 채널 (PLAN_notify_channels)

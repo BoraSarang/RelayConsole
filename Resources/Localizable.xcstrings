@@ -2852,6 +2852,57 @@
         }
       ]
     },
+    "incident.capture": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Capture incident bundle"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Incident bundle capture"
+          }
+        }
+      }
+    },
+    "incident.open": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Incident bundles"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Incident bundles"
+          }
+        }
+      }
+    },
+    "incident.open.help": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open the incident bundles folder"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open the incident bundles folder"
+          }
+        }
+      }
+    },
     "jobs.add": {
       "extractionState": "manual",
       "localizations": {
@@ -4951,6 +5002,40 @@
           "stringUnit": {
             "state": "translated",
             "value": "서버 재시작"
+          }
+        }
+      }
+    },
+    "settings.incident.auto": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auto-capture incident bundles"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auto-capture incident bundles"
+          }
+        }
+      }
+    },
+    "settings.incident.auto.help": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "On ANR·crash·site down, save manifest·logcat·screenshot as a local bundle (5 min cooldown)."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ANR·크래시·사이트 down 시 manifest·logcat·스크린샷을 로컬 번들로 저장합니다 (5분 쿨다운)."
           }
         }
       }

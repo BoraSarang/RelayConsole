@@ -109,6 +109,16 @@ struct AlertsView: View {
 
                 Spacer()
 
+                Button {
+                    IncidentBundleStore.shared.openRoot()
+                } label: {
+                    Label(L10n.string("incident.open"), systemImage: "folder")
+                }
+                .buttonStyle(.plain)
+                .font(OPFont.body(12))
+                .foregroundStyle(OPColor.cta)
+                .help(L10n.string("incident.open.help"))
+
                 Button(L10n.string("alerts.export.json")) { exportJSON() }
                     .buttonStyle(.plain)
                     .font(OPFont.body(12))
@@ -351,6 +361,23 @@ struct AlertsView: View {
 
     private func rowActions(_ e: WatchEvent) -> some View {
         HStack(spacing: 4) {
+            if IncidentBundleLogic.captures(kind: e.kind) && !e.isClear {
+                Button {
+                    IncidentBundleStore.shared.capture(
+                        event: e,
+                        adbPath: DeviceMonitor.adbPathNow()
+                    )
+                } label: {
+                    Image(systemName: "camera.viewfinder")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(OPColor.cta)
+                        .frame(width: 22, height: 22)
+                        .background(OPColor.cta.opacity(0.12), in: RoundedRectangle(cornerRadius: 5))
+                }
+                .buttonStyle(.plain)
+                .help(L10n.string("incident.capture"))
+            }
+
             if e.ackAt == nil {
                 Button {
                     store.ackWatchEvent(id: e.id)

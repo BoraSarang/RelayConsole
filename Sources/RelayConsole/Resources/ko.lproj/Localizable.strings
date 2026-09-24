@@ -174,6 +174,9 @@
 "float.opacity.help" = "창 투명도 조절";
 "float.toggle" = "플로팅 그래프";
 "float.toggle.help" = "네트워크·CPU 그래프를 떠 있는 창으로 표시";
+"incident.capture" = "Incident 번들 캡처";
+"incident.open" = "Incident 번들";
+"incident.open.help" = "Incident 번들 폴더 열기";
 "jobs.add" = "작업 추가";
 "jobs.add.hint" = "cron에서 아래 URL로 curl하면 마지막 수신 시각이 갱신됩니다.";
 "jobs.add.title" = "하트비트 작업 추가";
@@ -304,6 +307,8 @@
 "settings.float.section" = "플로팅 그래프";
 "settings.hb.port" = "하트비트 포트";
 "settings.hb.restart" = "서버 재시작";
+"settings.incident.auto" = "Incident 번들 자동 캡처";
+"settings.incident.auto.help" = "ANR·크래시·사이트 down 시 manifest·logcat·스크린샷을 로컬 번들로 저장합니다 (5분 쿨다운).";
 "settings.keyPrefix" = "설정키 접두어: relay.*";
 "settings.menubarMetrics" = "메뉴바 기기 수 표시";
 "settings.notify.hint" = "이벤트 발생 시 지정한 채널로 HTTP 발송합니다. 토큰·웹훅은 기기에만 저장됩니다.";
