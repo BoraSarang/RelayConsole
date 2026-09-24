@@ -56,9 +56,9 @@ struct ConsoleView: View {
                 case .devices, .none:
                     devicesDetail
                 case .sites:
-                    placeholder(ConsoleSection.sites.label, systemImage: ConsoleSection.sites.icon)
+                    SitesView(store: store)
                 case .jobs:
-                    placeholder(ConsoleSection.jobs.label, systemImage: ConsoleSection.jobs.icon)
+                    JobsView(store: store)
                 case .alerts:
                     AlertsView(store: store)
                 }

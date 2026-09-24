@@ -372,6 +372,16 @@ final class ConsoleStore: ObservableObject {
         handleHeartbeat(token: jobs[i].token)
     }
 
+    /// DEBUG: Sites·Jobs 비우기
+    func clearSitesJobsDebug() {
+        sites = []
+        jobs = []
+        lastSiteUp = [:]
+        lastJobOverdue = [:]
+        SitesJobsStore.shared.saveSites(sites)
+        SitesJobsStore.shared.saveJobs(jobs)
+    }
+
     /// stop 스레드 (앱 종료 시)
     func stopSitesJobs() {
         sitesCheckTask?.cancel()
