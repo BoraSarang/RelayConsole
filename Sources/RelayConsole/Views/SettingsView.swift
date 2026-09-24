@@ -21,7 +21,7 @@ struct SettingsView: View {
                     }
                     // 메뉴바는 아이콘만 — 이 토글은 팝오버 헤더 n/m 표시
                     Toggle(L10n.string("settings.menubarMetrics"), isOn: $menubarMetrics)
-                    LabeledContent(L10n.string("settings.version"), value: "1.0.0")
+                    LabeledContent(L10n.string("settings.version"), value: "1.1.0")
                     LabeledContent(L10n.string("settings.bundleId"), value: "com.borasarang.relayconsole")
                 }
                 Section(L10n.string("settings.section.watch")) {

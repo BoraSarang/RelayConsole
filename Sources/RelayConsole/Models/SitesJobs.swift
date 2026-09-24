@@ -42,6 +42,8 @@ struct Site: Codable, Equatable, Sendable, Identifiable {
     var probe: SiteProbe
     var intervalSec: Int
     var enabled: Bool
+    /// 연속 실패 N회째에만 down (UptimeRobot delay 유사) — 1...5, 기본 2
+    var failThreshold: Int
     /// 최근 체크 (최신 last) — 90일 / 300건 cap
     var history: [SiteCheck]
     var createdAt: Date
@@ -53,6 +55,7 @@ struct Site: Codable, Equatable, Sendable, Identifiable {
         probe: SiteProbe,
         intervalSec: Int = 60,
         enabled: Bool = true,
+        failThreshold: Int = 2,
         history: [SiteCheck] = [],
         createdAt: Date = .now
     ) {
@@ -62,16 +65,108 @@ struct Site: Codable, Equatable, Sendable, Identifiable {
         self.probe = probe
         self.intervalSec = max(10, intervalSec)
         self.enabled = enabled
+        self.failThreshold = min(5, max(1, failThreshold))
         self.history = history
         self.createdAt = createdAt
+    }
+
+    /// 하위호환: failThreshold 키 없던 기존 JSON → 기본 2
+    private enum CodingKeys: String, CodingKey {
+        case id, name, target, probe, intervalSec, enabled, failThreshold, history, createdAt
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        name = try c.decode(String.self, forKey: .name)
+        target = try c.decode(String.self, forKey: .target)
+        probe = try c.decode(SiteProbe.self, forKey: .probe)
+        intervalSec = try c.decode(Int.self, forKey: .intervalSec)
+        enabled = try c.decode(Bool.self, forKey: .enabled)
+        failThreshold = min(5, max(1, try c.decodeIfPresent(Int.self, forKey: .failThreshold) ?? 2))
+        history = try c.decode([SiteCheck].self, forKey: .history)
+        createdAt = try c.decode(Date.self, forKey: .createdAt)
     }
 
     /// Alerts serial 그룹 키
     var serialKey: String { "site:\(id.uuidString)" }
 
-    /// 최신 유효 체크 기준 up 여부 — 이력 없으면 nil(모름)
+    /// raw 최신 체크 기준 up — 이력 없으면 nil (기존 API 유지)
     func isUp() -> Bool? {
         history.last?.ok
+    }
+
+    /// 임계값 적용 현재 상태 — 연속 fail ≥ failThreshold 전까지 up
+    func effectiveUp() -> Bool? {
+        guard !history.isEmpty else { return nil }
+        var consecutiveFails = 0
+        for check in history.reversed() {
+            if check.ok { return true }
+            consecutiveFails += 1
+            if consecutiveFails >= failThreshold { return false }
+        }
+        // 실패했으나 임계 미달 → 아직 up (flapping 보호)
+        return true
+    }
+
+    /// 현재 effective 상태가 시작된 시각 — nil = 이력 없음
+    func stateSince() -> Date? {
+        guard !history.isEmpty else { return nil }
+        var fails = 0
+        var state: Bool?
+        var stateStart: Date?
+        for check in history {
+            if check.ok {
+                fails = 0
+                if state != true {
+                    state = true
+                    stateStart = check.at
+                }
+            } else {
+                fails += 1
+                if fails >= failThreshold, state != false {
+                    state = false
+                    stateStart = check.at
+                }
+            }
+        }
+        return stateStart
+    }
+
+    /// 창 가동률 % (0...100) — 체크 0건이면 nil
+    func uptimePercent(since: Date) -> Double? {
+        let checks = history.filter { $0.at >= since }
+        guard !checks.isEmpty else { return nil }
+        let ok = checks.filter(\.ok).count
+        return Double(ok) / Double(checks.count) * 100
+    }
+
+    /// 일 단위 집계 (과거 → 최신) — Google식 행 바
+    func dayBars(days: Int, now: Date = .now, calendar: Calendar = .current) -> [(date: Date, status: DayBarStatus)] {
+        let startOfToday = calendar.startOfDay(for: now)
+        var result: [(date: Date, status: DayBarStatus)] = []
+        result.reserveCapacity(days)
+        for offset in stride(from: days - 1, through: 0, by: -1) {
+            guard let dayStart = calendar.date(byAdding: .day, value: -offset, to: startOfToday),
+                  let dayEnd = calendar.date(byAdding: .day, value: 1, to: dayStart)
+            else { continue }
+            let checks = history.filter { $0.at >= dayStart && $0.at < dayEnd }
+            let status: DayBarStatus
+            if checks.isEmpty {
+                status = .unknown
+            } else {
+                let okCount = checks.filter(\.ok).count
+                if okCount == checks.count {
+                    status = .up
+                } else if okCount == 0 {
+                    status = .down
+                } else {
+                    status = .partial
+                }
+            }
+            result.append((dayStart, status))
+        }
+        return result
     }
 
     /// 체크 결과 append + cap (300건 / 90일)
@@ -251,9 +346,9 @@ enum SitesJobsLogic {
         return parts.last
     }
 
-    /// 사이트 down 전이 감지 — before nil(첫 체크)은 전이 아님
-    static func siteTransition(before: Bool?, after: Bool) -> SiteTransition? {
-        guard let before else { return nil }
+    /// 사이트 down 전이 감지 — before nil(첫 체크)은 전이 아님 · after는 effectiveUp()
+    static func siteTransition(before: Bool?, after: Bool?) -> SiteTransition? {
+        guard let before, let after else { return nil }
         if before, !after { return .down }
         if !before, after { return .up }
         return nil
@@ -276,6 +371,14 @@ enum SitesJobsLogic {
 enum SiteTransition: Equatable, Sendable {
     case down
     case up
+}
+
+/// 일 단위 업타임 상태 (Google식 세그먼트)
+enum DayBarStatus: Equatable, Sendable {
+    case unknown
+    case up
+    case down
+    case partial
 }
 
 enum JobTransition: Equatable, Sendable {

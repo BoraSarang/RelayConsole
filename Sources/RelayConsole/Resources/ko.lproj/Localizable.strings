@@ -1,5 +1,3 @@
-/* Relay Console — Korean (source) */
-
 "alert.banner.cleared" = "해제: %@";
 "alert.banner.notify" = "알림: %@";
 "alerts.action.ack" = "확인";
@@ -181,6 +179,7 @@
 "jobs.hb.error" = "하트비트 서버 오류";
 "jobs.hb.listening" = "하트비트 대기 :%d";
 "jobs.lastBeat" = "마지막 %@";
+"jobs.menubar.overdue" = "작업 overdue %d개";
 "jobs.noBeat" = "수신 전";
 "jobs.token" = "토큰 %@";
 "menubar.alert.thermal" = "발열 주의 %@°C";
@@ -327,11 +326,27 @@
 "sites.error.target.http" = "http(s):// 형식 URL이 아닙니다";
 "sites.error.target.ping" = "호스트 형식이 아닙니다";
 "sites.error.target.tcp" = "host 또는 host:port 형식이 아닙니다";
+"sites.field.hint" = "HTTP: https://host/health · TCP: host:5432 · PING: host";
 "sites.field.interval" = "주기";
 "sites.field.name" = "이름";
 "sites.field.probe" = "방식";
 "sites.field.target" = "대상 (URL·host:port·host)";
+"sites.field.threshold" = "연속 실패";
+"sites.field.threshold.help" = "N회 연속 실패 시에만 장애 알림";
+"sites.incident.active" = "진행 중: %@";
 "sites.interval" = "주기";
+"sites.legend.down" = "중단";
+"sites.legend.none" = "데이터 없음";
+"sites.legend.partial" = "장애";
+"sites.legend.up" = "정상";
+"sites.menubar.more" = "외 %d개";
+"sites.menubar.summary" = "%d 정상 · %d 장애";
+"sites.range.30d" = "30일";
+"sites.range.7d" = "7일";
+"sites.state.down" = "장애";
+"sites.state.down.for" = "장애 %@";
+"sites.state.up" = "정상";
+"sites.state.up.for" = "정상 %@";
 "ui.debug.clear" = "지우기";
 "ui.debug.inject.alertClear" = "Alert 해소 주입";
 "ui.debug.inject.alertCritical" = "Alert critical 주입";

@@ -57,6 +57,113 @@ final class SitesJobsTests: XCTestCase {
         XCTAssertEqual(SitesJobsLogic.siteTransition(before: false, after: true), .up)
         XCTAssertNil(SitesJobsLogic.siteTransition(before: true, after: true))
         XCTAssertNil(SitesJobsLogic.siteTransition(before: false, after: false))
+        XCTAssertNil(SitesJobsLogic.siteTransition(before: true, after: nil))
+    }
+
+    // MARK: - failThreshold · effectiveUp · dayBars (v1.1)
+
+    func testEffectiveUpSingleFailStaysUpWhenThreshold2() {
+        var site = Site(name: "api", target: "https://example.com", probe: .http, failThreshold: 2)
+        site.appendCheck(SiteCheck(ok: true), now: .now)
+        site.appendCheck(SiteCheck(ok: false, detail: "HTTP 503"), now: .now)
+        XCTAssertEqual(site.effectiveUp(), true)
+        site.appendCheck(SiteCheck(ok: false, detail: "HTTP 503"), now: .now)
+        XCTAssertEqual(site.effectiveUp(), false)
+    }
+
+    func testEffectiveUpRecoversOnSingleSuccess() {
+        var site = Site(name: "api", target: "https://example.com", probe: .http, failThreshold: 3)
+        site.appendCheck(SiteCheck(ok: true), now: .now)
+        site.appendCheck(SiteCheck(ok: false), now: .now)
+        site.appendCheck(SiteCheck(ok: false), now: .now)
+        XCTAssertEqual(site.effectiveUp(), true)
+        site.appendCheck(SiteCheck(ok: true), now: .now)
+        XCTAssertEqual(site.effectiveUp(), true)
+    }
+
+    func testEffectiveUpNilWhenEmpty() {
+        let site = Site(name: "api", target: "https://example.com", probe: .http)
+        XCTAssertNil(site.effectiveUp())
+    }
+
+    func testEffectiveUpThreshold1FailsImmediately() {
+        var site = Site(name: "api", target: "https://example.com", probe: .http, failThreshold: 1)
+        site.appendCheck(SiteCheck(ok: false), now: .now)
+        XCTAssertEqual(site.effectiveUp(), false)
+    }
+
+    func testStateSinceTracksTransition() {
+        var site = Site(name: "api", target: "https://example.com", probe: .http, failThreshold: 2)
+        let t0 = Date().addingTimeInterval(-1000)
+        site.appendCheck(SiteCheck(at: t0, ok: true), now: .now)
+        site.appendCheck(SiteCheck(at: t0.addingTimeInterval(60), ok: false), now: .now)
+        // 1회 실패 → 아직 up, stateSince = t0
+        XCTAssertEqual(site.stateSince(), t0)
+        site.appendCheck(SiteCheck(at: t0.addingTimeInterval(120), ok: false), now: .now)
+        // 2회 연속 → down, stateSince = 120s
+        XCTAssertEqual(site.stateSince(), t0.addingTimeInterval(120))
+    }
+
+    func testUptimePercentWindow() {
+        var site = Site(name: "api", target: "https://example.com", probe: .http)
+        let now = Date()
+        site.appendCheck(SiteCheck(at: now.addingTimeInterval(-3600), ok: true), now: now)
+        site.appendCheck(SiteCheck(at: now.addingTimeInterval(-1800), ok: true), now: now)
+        site.appendCheck(SiteCheck(at: now.addingTimeInterval(-60), ok: false), now: now)
+        let pct = site.uptimePercent(since: now.addingTimeInterval(-7200))
+        XCTAssertEqual(pct ?? -1, 2.0 / 3.0 * 100.0, accuracy: 0.01)
+        XCTAssertNil(site.uptimePercent(since: now.addingTimeInterval(60)))
+    }
+
+    func testDayBarsAggregation() {
+        var site = Site(name: "api", target: "https://example.com", probe: .http)
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: .now)
+        // 어제: 전부 ok, 오늘: 혼합
+        let y = today.addingTimeInterval(-86400 + 3600)
+        site.appendCheck(SiteCheck(at: y, ok: true), now: .now)
+        site.appendCheck(SiteCheck(at: y.addingTimeInterval(60), ok: true), now: .now)
+        site.appendCheck(SiteCheck(at: today.addingTimeInterval(3600), ok: true), now: .now)
+        site.appendCheck(SiteCheck(at: today.addingTimeInterval(7200), ok: false), now: .now)
+        let bars = site.dayBars(days: 7, now: .now, calendar: cal)
+        XCTAssertEqual(bars.count, 7)
+        XCTAssertEqual(bars.last?.status, .partial)
+        // 5일 전(offsetof) unknown
+        XCTAssertEqual(bars[0].status, .unknown)
+        // 어제 up
+        if let idx = bars.firstIndex(where: { cal.isDate($0.date, inSameDayAs: y) }) {
+            XCTAssertEqual(bars[idx].status, .up)
+        } else {
+            XCTFail("어제 버킷 없음")
+        }
+    }
+
+    func testSiteJSONBackCompatWithoutFailThreshold() throws {
+        // 기존 1.0.0 JSON: failThreshold 키 없음 → 기본 2
+        let json = """
+        {"id":"6BA7B810-9DAD-11D1-80B4-00C04FD430C8","name":"api","target":"https://example.com","probe":"http","intervalSec":60,"enabled":true,"history":[],"createdAt":"2026-09-24T00:00:00Z"}
+        """
+        let dec = JSONDecoder()
+        dec.dateDecodingStrategy = .iso8601
+        let site = try dec.decode(Site.self, from: Data(json.utf8))
+        XCTAssertEqual(site.failThreshold, 2)
+    }
+
+    func testSiteJSONRoundTripWithFailThreshold() throws {
+        var site = Site(name: "api", target: "https://example.com", probe: .http, failThreshold: 4)
+        site.appendCheck(SiteCheck(ok: true), now: .now)
+        let enc = JSONEncoder()
+        enc.dateEncodingStrategy = .iso8601
+        let data = try enc.encode(site)
+        let dec = JSONDecoder()
+        dec.dateDecodingStrategy = .iso8601
+        let back = try dec.decode(Site.self, from: data)
+        XCTAssertEqual(back.failThreshold, 4)
+    }
+
+    func testFailThresholdClampedOnInit() {
+        XCTAssertEqual(Site(name: "a", target: "https://e.com", probe: .http, failThreshold: 0).failThreshold, 1)
+        XCTAssertEqual(Site(name: "a", target: "https://e.com", probe: .http, failThreshold: 99).failThreshold, 5)
     }
 
     // MARK: - Job

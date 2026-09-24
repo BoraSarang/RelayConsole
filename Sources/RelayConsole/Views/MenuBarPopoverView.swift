@@ -41,38 +41,38 @@ struct MenuBarPopoverView: View {
                 Divider().overlay(OPColor.border)
 
                 ScrollView(.vertical, showsIndicators: true) {
-                    if device == nil {
-                        emptyState
-                            .frame(maxWidth: .infinity)
-                            .padding(.top, 72)
-                    } else {
-                        VStack(alignment: .leading, spacing: 12) {
-                            // 감시 이벤트 상단 배너 — 5분 TTL (해제·충전 등 일회성 자동 제거)
-                            if let ev = freshWatchEvent {
-                                watchEventBanner(ev)
-                            }
-                            if let d = device, d.isThermalAlert {
-                                thermalBanner(device: d)
-                            }
-                            // 미해결 warning+ → 후속 조치 가이드
-                            if !store.activeRemediationEvents.isEmpty {
-                                remediationGuide(store.activeRemediationEvents)
-                            }
-                            // 기기 상세 ⌄ → 상세 + 대시보드 카드
-                            if showDeviceDetail {
-                                deviceExpandSection
-                                cards
-                                eventsSection
-                            } else {
-                                // 접힘: 이벤트는 배너 바로 아래, 힌트는 남은 빈 영역 중앙
-                                eventsSection
-                                Spacer(minLength: 24)
-                                detailHint
-                                Spacer(minLength: 24)
-                            }
+                    VStack(alignment: .leading, spacing: 12) {
+                        // 감시 이벤트 상단 배너 — 5분 TTL (해제·충전 등 일회성 자동 제거)
+                        if let ev = freshWatchEvent {
+                            watchEventBanner(ev)
                         }
-                        .padding(OPSpace.lg)
+                        if let d = device, d.isThermalAlert {
+                            thermalBanner(device: d)
+                        }
+                        // 미해결 warning+ → 후속 조치 가이드
+                        if !store.activeRemediationEvents.isEmpty {
+                            remediationGuide(store.activeRemediationEvents)
+                        }
+                        // Sites 요약 (PLAN_sites_v1_1) — 기기 없어도 노출
+                        if !store.sites.isEmpty {
+                            sitesSection
+                        }
+                        if device == nil {
+                            emptyState
+                                .frame(maxWidth: .infinity)
+                                .padding(.top, 24)
+                        } else if showDeviceDetail {
+                            deviceExpandSection
+                            cards
+                            eventsSection
+                        } else {
+                            eventsSection
+                            Spacer(minLength: 24)
+                            detailHint
+                            Spacer(minLength: 24)
+                        }
                     }
+                    .padding(OPSpace.lg)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
@@ -121,7 +121,7 @@ struct MenuBarPopoverView: View {
                         .font(OPFont.number(11))
                         .foregroundStyle(OPColor.inkDim)
                 }
-                Text("1.0.0")
+                Text("1.1.0")
                     .font(OPFont.number(10))
                     .foregroundStyle(OPColor.inkDim)
             }
@@ -623,7 +623,98 @@ struct MenuBarPopoverView: View {
         }
     }
 
-    // MARK: - Events (접힘 기본 · 점3)
+    // MARK: - Sites (PLAN_sites_v1_1 — UptimeRobot식 요약 · 7일 바)
+
+    private var sitesSection: some View {
+        let sites = store.sites.filter(\.enabled)
+        let upCount = sites.filter { $0.effectiveUp() == true }.count
+        let downCount = sites.filter { $0.effectiveUp() == false }.count
+        let summaryColor: Color = downCount > 0 ? OPColor.bad : (upCount > 0 ? OPColor.ok : OPColor.inkDim)
+        return VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 6) {
+                Text(L10n.string("sidebar.sites"))
+                    .font(OPFont.body(11))
+                    .foregroundStyle(OPColor.ink)
+                Spacer()
+                Text(L10n.format("sites.menubar.summary", upCount, downCount))
+                    .font(OPFont.number(10))
+                    .foregroundStyle(summaryColor)
+            }
+            ForEach(sites.prefix(5)) { site in
+                siteMiniRow(site)
+            }
+            if sites.count > 5 {
+                Text(L10n.format("sites.menubar.more", sites.count - 5))
+                    .font(OPFont.body(9))
+                    .foregroundStyle(OPColor.inkDim)
+            }
+            // Jobs overdue 한 줄 (모델 유지 · 폭오버에서만 합쳐 표시)
+            let overdueJobs = store.jobs.filter { $0.enabled && $0.isOverdue() == true }
+            if !overdueJobs.isEmpty {
+                HStack(spacing: 6) {
+                    StatusDot(state: .bad)
+                    Text(L10n.format("jobs.menubar.overdue", overdueJobs.count))
+                        .font(OPFont.body(10))
+                        .foregroundStyle(OPColor.bad)
+                    Spacer()
+                }
+            }
+        }
+        .padding(OPSpace.sm)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(OPColor.card.opacity(0.6), in: RoundedRectangle(cornerRadius: 8))
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(OPColor.border, lineWidth: 1))
+    }
+
+    private func siteMiniRow(_ site: Site) -> some View {
+        let up = site.effectiveUp()
+        let state: StatusState = {
+            switch up {
+            case .some(true): return .ok
+            case .some(false): return .bad
+            case nil: return .idle
+            }
+        }()
+        return HStack(spacing: 6) {
+            StatusDot(state: state)
+            Text(site.name)
+                .font(OPFont.body(11))
+                .foregroundStyle(OPColor.ink)
+                .lineLimit(1)
+            Spacer(minLength: 4)
+            if let up, let since = site.stateSince() {
+                let dur = SitesView.relativeDuration(now.timeIntervalSince(since))
+                Text(up
+                    ? L10n.format("sites.state.up.for", dur)
+                    : L10n.format("sites.state.down.for", dur))
+                    .font(OPFont.number(9))
+                    .foregroundStyle(up ? OPColor.inkDim : OPColor.bad)
+            } else if let ms = site.history.last?.latencyMs, site.history.last?.ok == true {
+                Text("\(ms)ms")
+                    .font(OPFont.number(9))
+                    .foregroundStyle(OPColor.inkDim)
+            }
+            // 7일 미니 바
+            HStack(spacing: 1) {
+                ForEach(Array(site.dayBars(days: 7, now: now).enumerated()), id: \.offset) { _, b in
+                    Rectangle()
+                        .fill(miniBarColor(b.status))
+                        .frame(width: 4, height: 8)
+                }
+            }
+        }
+    }
+
+    private func miniBarColor(_ status: DayBarStatus) -> Color {
+        switch status {
+        case .up: return OPColor.ok.opacity(0.85)
+        case .partial: return OPColor.warn.opacity(0.9)
+        case .down: return OPColor.bad
+        case .unknown: return OPColor.inkDim.opacity(0.18)
+        }
+    }
+
+    // MARK: - Events (접힘 기본 · �점3)
 
     private var eventsSection: some View {
         VStack(alignment: .leading, spacing: 4) {
