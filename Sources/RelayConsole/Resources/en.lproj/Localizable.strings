@@ -1,5 +1,3 @@
-/* Relay Console — English */
-
 "alert.banner.cleared" = "Cleared: %@";
 "alert.banner.notify" = "Alert: %@";
 "alerts.action.ack" = "Acknowledge";
@@ -181,6 +179,7 @@
 "jobs.hb.error" = "Heartbeat server error";
 "jobs.hb.listening" = "Heartbeat listening :%d";
 "jobs.lastBeat" = "Last %@";
+"jobs.menubar.overdue" = "%d overdue jobs";
 "jobs.noBeat" = "No beat yet";
 "jobs.token" = "Token %@";
 "menubar.alert.thermal" = "Thermal Warning %@°C";
@@ -327,11 +326,27 @@
 "sites.error.target.http" = "Must be an http(s):// URL";
 "sites.error.target.ping" = "Invalid host";
 "sites.error.target.tcp" = "Must be host or host:port";
+"sites.field.hint" = "HTTP: https://host/health · TCP: host:5432 · PING: host";
 "sites.field.interval" = "Interval";
 "sites.field.name" = "Name";
 "sites.field.probe" = "Probe";
 "sites.field.target" = "Target (URL·host:port·host)";
+"sites.field.threshold" = "Fail threshold";
+"sites.field.threshold.help" = "Alert only after N consecutive failures";
+"sites.incident.active" = "Active: %@";
 "sites.interval" = "Interval";
+"sites.legend.down" = "Down";
+"sites.legend.none" = "No data";
+"sites.legend.partial" = "Partial";
+"sites.legend.up" = "Up";
+"sites.menubar.more" = "+%d more";
+"sites.menubar.summary" = "%d up · %d down";
+"sites.range.30d" = "30d";
+"sites.range.7d" = "7d";
+"sites.state.down" = "Down";
+"sites.state.down.for" = "Down %@";
+"sites.state.up" = "Up";
+"sites.state.up.for" = "Up %@";
 "ui.debug.clear" = "Clear";
 "ui.debug.inject.alertClear" = "Alert cleared inject";
 "ui.debug.inject.alertCritical" = "Alert critical";

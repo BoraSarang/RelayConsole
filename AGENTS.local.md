@@ -15,7 +15,7 @@
 ## 2. 번들ID / 앱 ID
 - macOS bundleIdentifier: `com.borasarang.relayconsole` **확정** (AGENTS 플랫폼 규칙 `com.borasarang.{AppName}`)
 - 앱 표시명: Relay Console / 메뉴바: RELAY
-- **버전**: `1.0.0` (v0.7 scrcpy A안 · v0.8 ANR/크래시 · v0.9 카드 On/Off · EventStore 1차)
+- **버전**: `1.1.0` (Sites v1.1 UptimeRobot·Google식 진행 중 — 이전 1.0.0 Sites/Jobs)
 - UserDefaults·설정 키 접두어: `relay.*` (구 `outpost.*` 계승 금지 — 코드 신규)
 
 ## 3. 성능 예산 Override
@@ -28,6 +28,7 @@
 - C3 "Scrcpy 버튼 없음" **해제** (PLAN_v0.7 사용자 승인) · 금지 grep `Scrcpy` 제거
 - 로그 마스킹: 시리얼 전체 출력 금지 (뒤 4자리만 …5555)
 - **팝오버·Droid 대시보드 표시: 다크 전용** (밝은 테마/웹風 버튼/print 금지)
+- **[HARD] 소스·리소스 수정 후에는 항상 `./scripts/build-macos.sh debug` 실행** — 번들 재생성·재서명·`open` 재실행까지 한 번에. 생략하면 구버전 앱이 떠서 육안/크래시 재검증이 깨짐 (2026-09-24 구버전 `%s` 크래시 재발 사례). 테스트만으로 끝내지 말 것.
 
 ## 5. 디자인 토큰
 - 색/폰트: docs/DESIGN.md

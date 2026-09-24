@@ -3,7 +3,8 @@
 
 ## 진행 중 (bd ready)
 - [ ] **Alerts 육안 (PLAN_alerts · 0.9.1)** — 3탭·필터·그룹·ack/mute/메모·export · 탭 전영역 클릭 ✓ · **잔여 육안 대기**
-- [ ] **Sites/Jobs 육안 (PLAN_sites_jobs · 1.0.0)** — 구현 PR-A+B ✓ · 육안 피드백 수정(에딧·검증·curl 붙여넣기·token `%@` 크래시) 구현 ✓ · **사용자 육안 대기**
+- [ ] **Sites/Jobs 육안 (PLAN_sites_jobs · 1.0.0)** — 구현 PR-A+B ✓ · 육안 피드백 수정 완료 · **사용자 육안 대기**
+- [ ] **Sites v1.1 (PLAN_sites_v1_1 · UptimeRobot+Google식)** — C1 임계값·가동률·dayBars · C2 Sites 행 UI · C3 메뉴바 폭오버 구현 ✓ · i18n 382 · 테스트 ✓ · build 1.1.0 ✓ · **육안 대기**
 
 ## 보류 (기기 확보 시)
 - [ ] **Apple 실기 Trust 육안** — iPad USB 데이터 불량(안드로이드 동일 케이블 OK·복구도 미인식). 기기 확보 후 `brew install libimobiledevice` → 배터리/스토리지 카드

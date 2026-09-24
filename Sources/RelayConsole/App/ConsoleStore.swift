@@ -183,11 +183,12 @@ final class ConsoleStore: ObservableObject {
         emitSiteTransition(site: sites[idx], check: check)
     }
 
-    /// down/up 전이 → WatchEvent
+    /// down/up 전이 → WatchEvent — effectiveUp (연속 failThreshold) 기준
     private func emitSiteTransition(site: Site, check: SiteCheck) {
+        let after = site.effectiveUp()
         let before = lastSiteUp[site.id]
-        lastSiteUp[site.id] = check.ok
-        guard let tr = SitesJobsLogic.siteTransition(before: before, after: check.ok) else { return }
+        lastSiteUp[site.id] = after
+        guard let tr = SitesJobsLogic.siteTransition(before: before, after: after) else { return }
         let event: WatchEvent
         switch tr {
         case .down:
@@ -282,12 +283,13 @@ final class ConsoleStore: ObservableObject {
 
     // MARK: - Sites CRUD
 
-    func addSite(name: String, target: String, probe: SiteProbe, intervalSec: Int) {
+    func addSite(name: String, target: String, probe: SiteProbe, intervalSec: Int, failThreshold: Int = 2) {
         let site = Site(
             name: name,
             target: SitesJobsLogic.sanitizeTarget(target, probe: probe),
             probe: probe,
-            intervalSec: intervalSec
+            intervalSec: intervalSec,
+            failThreshold: failThreshold
         )
         sites.append(site)
         SitesJobsStore.shared.saveSites(sites)
@@ -307,8 +309,8 @@ final class ConsoleStore: ObservableObject {
         SitesJobsStore.shared.saveSites(sites)
     }
 
-    /// 사이트 수정 (이름·대상·probe·주기) — 대상 변경 시 즉시 재체크
-    func updateSite(id: UUID, name: String, target: String, probe: SiteProbe, intervalSec: Int) {
+    /// 사이트 수정 (이름·대상·probe·주기·임계값) — 대상 변경 시 즉시 재체크
+    func updateSite(id: UUID, name: String, target: String, probe: SiteProbe, intervalSec: Int, failThreshold: Int = 2) {
         guard let i = sites.firstIndex(where: { $0.id == id }) else { return }
         let clean = SitesJobsLogic.sanitizeTarget(target, probe: probe)
         let targetChanged = sites[i].target != clean || sites[i].probe != probe
@@ -316,6 +318,7 @@ final class ConsoleStore: ObservableObject {
         sites[i].target = clean
         sites[i].probe = probe
         sites[i].intervalSec = max(10, intervalSec)
+        sites[i].failThreshold = min(5, max(1, failThreshold))
         SitesJobsStore.shared.saveSites(sites)
         DebugLogger.shared.info("Sites", "[INFO] [FEATURE] 사이트 수정 \(name)")
         if targetChanged {
@@ -379,12 +382,16 @@ final class ConsoleStore: ObservableObject {
     }
 
     /// DEBUG: 사이트 체크 결과 주입 (실제 네트워크 없이)
+    /// down 주입은 failThreshold만큼 연속 실패를 넣어 전이를 보장
     func debugInjectSiteCheck(id: UUID, ok: Bool, detail: String? = nil) {
         guard let i = sites.firstIndex(where: { $0.id == id }) else { return }
-        let check = SiteCheck(ok: ok, latencyMs: ok ? Int.random(in: 12...180) : nil, detail: detail)
-        sites[i].appendCheck(check)
+        let rounds = ok ? 1 : max(1, sites[i].failThreshold)
+        for _ in 0..<rounds {
+            let check = SiteCheck(ok: ok, latencyMs: ok ? Int.random(in: 12...180) : nil, detail: detail)
+            sites[i].appendCheck(check)
+            emitSiteTransition(site: sites[i], check: check)
+        }
         SitesJobsStore.shared.saveSites(sites)
-        emitSiteTransition(site: sites[i], check: check)
     }
 
     /// DEBUG: 하트비트 주입
