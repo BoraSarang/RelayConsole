@@ -116,20 +116,30 @@ ConsoleStore:
 
 | PR | 내용 |
 |----|------|
-| **A** | 스키마 · 필터/update/export · Apple WatchEvent · 테스트 |
-| **B** | AlertsView 3탭·필터·그룹 · ConsoleView · i18n |
-| **C** | 행 액션 · export UI · DEBUG 주입 · 설정 · 육안 |
+| **A #10** | 스키마 · 필터/update/export · Apple WatchEvent · 테스트 |
+| **B #11** | AlertsView 3탭·필터·그룹·액션·export · ConsoleView · 설정 · 0.9.1 |
+| **육안** | 사용자 체크리스트 (아래) |
 
 ---
 
 ## 8. 검증 (DoD)
 
-- [ ] `swift test` 통과 (기존 + 신규)
-- [ ] 기존 JSON (신규 필드 없음) 로드 OK
-- [ ] debug 0 error · i18n 3곳 일치 · missing 0
-- [ ] 3탭 · 필터 · 그룹 · ack/mute/메모 재시작 유지
-- [ ] Apple 연결/해소 Alerts 반영 · export 파일
-- [ ] 금지 grep 0 · 버전 0.9.1
+- [x] `swift test` **139/139**
+- [x] 기존 JSON (신규 필드 없음) 로드 OK — Optional defaults
+- [x] debug 0 error · i18n **315/315/315** missing 0
+- [x] 금지 grep 0 · 버전 **0.9.1**
+- [ ] 3탭 · 필터 · 그룹 · ack/mute/메모 재시작 유지 — **육안**
+- [ ] Apple 연결/해소 Alerts 반영 · export 파일 — **육안**
+
+### 육안 순서
+
+1. 디버그 → **Alert critical 주입** → Alerts: 활성 1 · critical 표시
+2. 행 **✓ 확인** → 실 표시 · **무음 1시간** → 무음 탭으로 이동
+3. **메모** 인라인 저장 → 재실행 후 유지
+4. **Alert 해소 주입** → 해소 탭
+5. 기간·심각도·플랫폼 필터 · serial 그룹 접기/펴기
+6. **JSON / CSV** export 파일 열람
+7. 설정 → Alerts 기본 기간 변경 시 초기값 반영
 
 ---
 
