@@ -37,6 +37,8 @@ struct SettingsView: View {
     @AppStorage("relay.float.showGPU") private var showFloatGPU = false
     @AppStorage("relay.float.showMemory") private var showFloatMemory = false
     @AppStorage(FloatingGraphLogic.opacityKey) private var floatOpacity = FloatingGraphLogic.defaultOpacity
+    @AppStorage(LoginItemLogic.headlessKey) private var headless = LoginItemLogic.defaultHeadless()
+    @ObservedObject private var login = LoginItemController.shared
     @State private var selection: SettingsTab? = .general
 
     var body: some View {
@@ -93,6 +95,36 @@ struct SettingsView: View {
             Toggle(L10n.string("settings.menubarMetrics"), isOn: $menubarMetrics)
             Toggle(L10n.string("settings.briefing"), isOn: $store.briefingEnabled)
             floatSection
+            loginSection
+        }
+    }
+
+    // MARK: - 로그인 항목 + 헤드리스 (A8)
+
+    @ViewBuilder
+    private var loginSection: some View {
+        Section(L10n.string("settings.login.section")) {
+            Toggle(L10n.string("settings.login.launch"), isOn: Binding(
+                get: { login.launchAtLogin },
+                set: { login.setLaunchAtLogin($0) }
+            ))
+            .disabled(login.busy)
+            Toggle(L10n.string("settings.launch.headless"), isOn: $headless)
+            Text(L10n.string("settings.launch.headless.help"))
+                .font(OPFont.body(10))
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
+            if let key = login.messageKey {
+                Text(L10n.string(key))
+                    .font(OPFont.body(11))
+                    .foregroundStyle(OPColor.cta)
+                    .lineLimit(2)
+            } else {
+                Text(L10n.string(login.statusKey))
+                    .font(OPFont.body(11))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
         }
     }
 
@@ -315,7 +347,7 @@ struct SettingsView: View {
     @ViewBuilder
     private var aboutSection: some View {
         Section(L10n.string("settings.section.about")) {
-            LabeledContent(L10n.string("settings.version"), value: "1.8.0")
+            LabeledContent(L10n.string("settings.version"), value: "1.9.0")
             LabeledContent(L10n.string("settings.bundleId"), value: "com.borasarang.relayconsole")
         }
     }
