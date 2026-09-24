@@ -1,6 +1,6 @@
 # PLAN_v0.7_relayconsole.md — scrcpy 미러링(A) + 감시 마감 + 썸네일·로그뷰어
 
-> 생성일: 2026-09-24 | 상태: **구현 완료 (테스트·빌드 검증) — 실기 육안 대기**
+> 생성일: 2026-09-24 | 상태: **완료 (DoD · 실기 육안 ✓ 2026-09-24)**
 > 모체: `PLAN_v0.6_relayconsole.md` · `RESEARCH_droid_devicecare.md` · 사용자 `scrcpy_run.sh`
 > 앱: **Relay Console** | bundleId: **`com.borasarang.relayconsole`** | 목표 버전: **0.7.0** | 최소 OS: **macOS 26.0**
 
@@ -110,5 +110,5 @@ findScrcpy(): relay.scrcpy.path → /opt/homebrew/bin → /usr/local/bin → PAT
 - [x] scrcpy 창 포커스 — 런치 리트라이 + 실행 중 토글=포커스 (stopHint 제거)
 - [x] 후속조치 잔류 수정 — thermal clear ≤2 · TransitionGate clear 쿨다운 무시 · forget synthetic clear · battery/bsoh clear · 가이드 TTL 30분 · 테스트 101/101
 - [x] 헤더 썸네일 A안 — 미니 썸네일 제거 · `ScreenshotPreviewSheet`
-- [ ] 실기 육안 — scrcpy 설치→미러링 / Bsoh·RSRP 주입 / 복구 알림 / 썸네일 / 로그창 (사용자)
+- [x] 실기 육안 — scrcpy 설치→미러링 / Bsoh·RSRP 주입 / 복구 알림 / 썸네일 / 로그창 (사용자 확인 ✓)
 - [x] TODO · AGENTS.local · 세션로그 갱신
