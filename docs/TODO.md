@@ -2,10 +2,10 @@
 > 작업 추적 — bd 연동 (이슈 prefix: RelayConsole)
 
 ## 진행 중 (bd ready)
-- **S4 Incident Bundle** — 리서치 §8 P2-1 · 다음 PR
+- **A3 앱 미니 허브** — 리서치 §8 P2-2 · 다음 PR
 
 ## 다음 스프린트 (사용자 선택 대기 · 리서치 §8)
-- P2: A3 앱 미니 허브 · A8 로그인 항목
+- P2: A8 로그인 항목
 - P3: A10 로컬 MCP · S2 Health Score · A4 갤러리 · A6 캘린더
 - 보류: A9 Apple Phase 2 (기기 확보 시)
 
@@ -14,7 +14,8 @@
 - [ ] **Apple Phase 2** — Developer Mode·sysmon 등 — 위 기기 확보 후 착수
 
 ## 완료 (2026-09-24)
-- [x] **A2 Wi-Fi ADB 온보딩** — `WifiAdbLogic`·`WifiAdbController` · USB→Wi-Fi 원클릭(tcpip+IP+connect) · 수동 IP:PORT · disconnect · 헤더/빈 상태 시트 · i18n **461** · WifiAdbTests · **1.6.0** · `PLAN_wifi_onboarding` · bd `RelayConsole-z9i`
+- [x] **S4 Incident Bundle** — `IncidentBundleLogic`·`IncidentBundleStore` · ANR/crash/siteDown 자동 캡처(manifest·logcat·screenshot · fingerprint 5분 쿨다운) · Alerts 행 수동 캡처·폴더 열기 · `relay.incident.auto` · i18n **466** · IncidentBundleTests +11 · **1.7.0** · `PLAN_incident_bundle` · bd `RelayConsole-5cr`
+- [x] **A2 Wi-Fi ADB 온보딩** — `WifiAdbLogic`·`WifiAdbController` · USB→Wi-Fi 원클릭(tcpip+IP+connect) · 수동 IP:PORT · disconnect · 헤더/빈 상태 시트 · i18n **461** · WifiAdbTests · **1.6.0** · `PLAN_wifi_onboarding` · bd `RelayConsole-z9i` · **PR #31 머지 `dc26447`**
 - [x] **A5 Sites SSL 만료 + HTTP assertion** — `Site.sslExpiresAt`·`assertBody` · `SslAssertLogic` · `TrustExpiryBox` · `WatchKind.sslExpiring` · `relay.sites.sslWarnDays`(14) · SSL D-day 배지 · 폼 assertion · Settings Stepper · i18n **439** · 테스트 **59+158** · **1.5.0** · `PLAN_sites_ssl` · **PR #30 머지** · bd `RelayConsole-2tt` closed
 - [x] **네트워크 속도 단위 유동 전환** — `formatNetRate`/`formatNetRatePair` · ≥1 MB/s → MB/s, 미만 KB/s · 카드↑↓·cacheNetworkInfo · 테스트 +2 · **PR #29 머지 `da0d9e1`**
 - [x] **F1 기기 그래프 플로팅창 육안 마감** — 투명도·헤더 안정화·통합 테스트 **사용자 확인** · `RelayConsole-d2e` closed · **PR #25·#28** · 1.4.0

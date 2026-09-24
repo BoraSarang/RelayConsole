@@ -155,6 +155,11 @@ struct SettingsView: View {
             Section(L10n.string("settings.watch.group.fatal")) {
                 Toggle(L10n.string("settings.watch.anr"), isOn: $store.watchAnr)
                 Toggle(L10n.string("settings.watch.crash"), isOn: $store.watchCrash)
+                Toggle(L10n.string("settings.incident.auto"), isOn: $store.incidentAuto)
+                Text(L10n.string("settings.incident.auto.help"))
+                    .font(OPFont.body(10))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
             }
         }
     }
@@ -310,7 +315,7 @@ struct SettingsView: View {
     @ViewBuilder
     private var aboutSection: some View {
         Section(L10n.string("settings.section.about")) {
-            LabeledContent(L10n.string("settings.version"), value: "1.6.0")
+            LabeledContent(L10n.string("settings.version"), value: "1.7.0")
             LabeledContent(L10n.string("settings.bundleId"), value: "com.borasarang.relayconsole")
         }
     }
