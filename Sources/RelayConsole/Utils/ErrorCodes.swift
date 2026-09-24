@@ -16,6 +16,13 @@ enum ErrorCode: String, Error {
     case appleConnectFailed = "E-MAC-APL-0002"
     case appleParseFailed = "E-MAC-APL-0003"
     case appleInstallFailed = "E-MAC-APL-0004"
+    case netConnectFailed = "E-MAC-NET-0001"
+    case netTimeout = "E-MAC-NET-0002"
+    case netHttpError = "E-MAC-NET-0003"
+    case netTcpFailed = "E-MAC-NET-0004"
+    case netPingFailed = "E-MAC-NET-0005"
+    case jobBindFailed = "E-MAC-JOB-0001"
+    case jobUnknownToken = "E-MAC-JOB-0002"
 
     var koMessage: String {
         switch self {
@@ -34,6 +41,13 @@ enum ErrorCode: String, Error {
         case .appleConnectFailed: return "Apple 기기에 연결할 수 없습니다. 신뢰 여부를 확인해 주세요."
         case .appleParseFailed: return "Apple 기기 응답 파싱에 실패했습니다."
         case .appleInstallFailed: return "libimobiledevice 설치에 실패했습니다. brew install libimobiledevice 를 실행해 보세요."
+        case .netConnectFailed: return "사이트에 연결할 수 없습니다. DNS/네트워크를 확인해 주세요."
+        case .netTimeout: return "사이트 응답 시간이 초과되었습니다."
+        case .netHttpError: return "사이트가 오류 상태 응답을 반환했습니다."
+        case .netTcpFailed: return "TCP 연결에 실패했습니다. 호스트와 포트를 확인해 주세요."
+        case .netPingFailed: return "ping 체크에 실패했습니다. 대상 호스트를 확인해 주세요."
+        case .jobBindFailed: return "하트비트 서버를 시작할 수 없습니다. 포트가 사용 중인지 확인해 주세요."
+        case .jobUnknownToken: return "알 수 없는 하트비트 토큰입니다."
         }
     }
 }

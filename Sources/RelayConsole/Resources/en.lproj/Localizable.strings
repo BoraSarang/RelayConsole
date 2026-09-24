@@ -141,6 +141,8 @@
 "event.crash.enter" = "Crash detected";
 "event.deviceConnected" = "Device connected %@";
 "event.deviceDisconnected" = "Device disconnected %@";
+"event.job.overdue" = "Heartbeat overdue";
+"event.job.recovered" = "Heartbeat recovered";
 "event.load.clear" = "Load normalized";
 "event.load.enter" = "Load spike";
 "event.logcatHits" = "logcat keyword hits +%d";
@@ -155,6 +157,8 @@
 "event.settingsChanged" = "Settings changed %@ %@";
 "event.signal.clear" = "Signal recovered";
 "event.signal.drop" = "Signal dropped";
+"event.site.down" = "Site down";
+"event.site.up" = "Site recovered";
 "event.throttling.clear" = "Throttling cleared";
 "event.throttling.enter" = "Throttling started";
 "menubar.alert.thermal" = "Thermal Warning %@°C";

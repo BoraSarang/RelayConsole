@@ -22,6 +22,12 @@ final class ConsoleStore: ObservableObject {
     @Published var selectedAppleUdid: String?
     /// Apple 오류 배너 — E-MAC-APL 문구 (오프라인 육안용)
     @Published var appleLastError: String?
+    /// Sites·Jobs (PLAN_sites_jobs)
+    @Published private(set) var sites: [Site] = []
+    @Published private(set) var jobs: [Job] = []
+    /// 하트비트 서버 오류 (E-MAC-JOB-0001)
+    @Published var heartbeatLastError: String?
+    @Published private(set) var heartbeatPort: UInt16 = 8787
 
     private let selectedKey = "relay.selectedSerial"
     private let selectedAppleKey = "relay.selectedAppleUdid"
@@ -31,7 +37,12 @@ final class ConsoleStore: ObservableObject {
     private var lastNotifiedAt: [String: Date] = [:]
     private let notifyCooldown: TimeInterval = 300
     private var notificationsRequested = false
-    /// Phase1.5 감시 알림 토글 (relay.watch.*)
+    /// Sites 체크 루프 / Job overdue 추적
+    private var sitesCheckTask: Task<Void, Never>?
+    private var jobsSweepTask: Task<Void, Never>?
+    private var lastSiteUp: [UUID: Bool] = [:]
+    private var lastJobOverdue: [UUID: Bool] = [:]
+    /// 감시 알림 토글 (relay.watch.*)
     @AppStorage("relay.watch.throttling") var watchThrottling = true
     @AppStorage("relay.watch.charge") var watchCharge = true
     @AppStorage("relay.watch.protection") var watchProtection = true
@@ -66,6 +77,8 @@ final class ConsoleStore: ObservableObject {
         selectedAppleUdid = UserDefaults.standard.string(forKey: selectedAppleKey)
         // EventStore 1차 — 앱 시작 시 이력 복원 (JSON 영구화)
         recentWatchEvents = EventStore.shared.load()
+        sites = SitesJobsStore.shared.loadSites()
+        jobs = SitesJobsStore.shared.loadJobs()
     }
 
     func start() {
@@ -100,6 +113,270 @@ final class ConsoleStore: ObservableObject {
             await AppleDeviceMonitor.shared.attachEvent(appleEventHandler)
             await AppleDeviceMonitor.shared.start()
         }
+        startSitesJobs()
+    }
+
+    // MARK: - Sites · Jobs (PLAN_sites_jobs)
+
+    /// 체크 루프 + 하트비트 서버 시작
+    private func startSitesJobs() {
+        startSiteChecks()
+        startJobSweep()
+        let port = UserDefaults.standard.object(forKey: "relay.hb.port") as? UInt16 ?? 8787
+        heartbeatPort = port
+        HeartbeatServer.shared.start(
+            port: port,
+            onBeat: { [weak self] token in
+                Task { @MainActor in
+                    self?.handleHeartbeat(token: token)
+                }
+            },
+            onBindError: { [weak self] code in
+                Task { @MainActor in
+                    self?.heartbeatLastError = code
+                    DebugLogger.shared.error("HB", "[ERROR] \(code) 하트비트 서버 시작 실패")
+                }
+            }
+        )
+    }
+
+    /// 사이트 주기 체크 — enabled만, interval 과거 지났으면 1건씩
+    private func startSiteChecks() {
+        sitesCheckTask?.cancel()
+        sitesCheckTask = Task { [weak self] in
+            while !Task.isCancelled {
+                guard let self else { return }
+                let now = Date()
+                var due: [Site] = []
+                for site in self.sites where site.enabled {
+                    let last = site.history.last?.at ?? .distantPast
+                    if now.timeIntervalSince(last) >= Double(site.intervalSec) {
+                        due.append(site)
+                    }
+                }
+                for site in due.prefix(SiteChecker.maxConcurrent) {
+                    await self.runSiteCheck(site)
+                }
+                try? await Task.sleep(nanoseconds: 5_000_000_000)
+            }
+        }
+    }
+
+    /// Job overdue 주기 스윕 (30초)
+    private func startJobSweep() {
+        jobsSweepTask?.cancel()
+        jobsSweepTask = Task { [weak self] in
+            while !Task.isCancelled {
+                guard let self else { return }
+                self.sweepJobOverdue(now: .now)
+                try? await Task.sleep(nanoseconds: 30_000_000_000)
+            }
+        }
+    }
+
+    /// 단건 체크 (DEBUG/수동 즉시 실행용)
+    func runSiteCheck(_ site: Site) async {
+        guard let idx = sites.firstIndex(where: { $0.id == site.id }) else { return }
+        let check = await SiteChecker.shared.check(sites[idx])
+        sites[idx].appendCheck(check)
+        SitesJobsStore.shared.saveSites(sites)
+        emitSiteTransition(site: sites[idx], check: check)
+    }
+
+    /// down/up 전이 → WatchEvent
+    private func emitSiteTransition(site: Site, check: SiteCheck) {
+        let before = lastSiteUp[site.id]
+        lastSiteUp[site.id] = check.ok
+        guard let tr = SitesJobsLogic.siteTransition(before: before, after: check.ok) else { return }
+        let event: WatchEvent
+        switch tr {
+        case .down:
+            event = WatchEvent(
+                kind: .siteDown,
+                severity: .critical,
+                serial: site.serialKey,
+                title: site.name,
+                detail: check.detail ?? L10n.string("event.site.down"),
+                source: nil
+            )
+        case .up:
+            event = WatchEvent(
+                kind: .siteUp,
+                severity: .info,
+                serial: site.serialKey,
+                title: site.name,
+                detail: L10n.string("event.site.up"),
+                isClear: true,
+                source: nil
+            )
+        }
+        ingestWatch(event, forceNotify: tr == .down)
+    }
+
+    /// overdue 전이 → WatchEvent
+    private func sweepJobOverdue(now: Date) {
+        for i in jobs.indices {
+            guard jobs[i].enabled else { continue }
+            let after = jobs[i].isOverdue(now: now)
+            let before = lastJobOverdue[jobs[i].id]
+            if let after { lastJobOverdue[jobs[i].id] = after }
+            guard let tr = SitesJobsLogic.jobTransition(before: before, after: after) else { continue }
+            let job = jobs[i]
+            let event: WatchEvent
+            switch tr {
+            case .overdue:
+                event = WatchEvent(
+                    kind: .jobOverdue,
+                    severity: .warning,
+                    serial: job.serialKey,
+                    title: job.name,
+                    detail: L10n.string("event.job.overdue"),
+                    at: now,
+                    source: nil
+                )
+            case .recovered:
+                event = WatchEvent(
+                    kind: .jobRecovered,
+                    severity: .info,
+                    serial: job.serialKey,
+                    title: job.name,
+                    detail: L10n.string("event.job.recovered"),
+                    at: now,
+                    isClear: true,
+                    source: nil
+                )
+            }
+            ingestWatch(event, forceNotify: tr == .overdue)
+        }
+    }
+
+    /// 하트비트 토큰 매칭 → beat + overdue 해제
+    func handleHeartbeat(token: String, at: Date = .now) {
+        guard let idx = jobs.firstIndex(where: { $0.token.lowercased() == token.lowercased() }) else {
+            DebugLogger.shared.warn("HB", "[WARN] E-MAC-JOB-0002 알 수 없는 토큰")
+            return
+        }
+        guard jobs[idx].enabled else { return }
+        jobs[idx].beat(at: at, ok: true)
+        lastJobOverdue[jobs[idx].id] = false
+        SitesJobsStore.shared.saveJobs(jobs)
+        // overdue였다면 복구 clear
+        if let i = recentWatchEvents.first(where: { $0.serial == jobs[idx].serialKey && $0.kind == .jobOverdue && !$0.isClear }) {
+            _ = i
+            ingestWatch(
+                WatchEvent(
+                    kind: .jobRecovered,
+                    severity: .info,
+                    serial: jobs[idx].serialKey,
+                    title: jobs[idx].name,
+                    detail: L10n.string("event.job.recovered"),
+                    at: at,
+                    isClear: true,
+                    source: nil
+                ),
+                forceNotify: false
+            )
+        }
+        pushEvent("HB \(jobs[idx].name) @ \(at.formatted(date: .omitted, time: .shortened))")
+    }
+
+    // MARK: - Sites CRUD
+
+    func addSite(name: String, target: String, probe: SiteProbe, intervalSec: Int) {
+        let site = Site(
+            name: name,
+            target: SitesJobsLogic.sanitizeTarget(target, probe: probe),
+            probe: probe,
+            intervalSec: intervalSec
+        )
+        sites.append(site)
+        SitesJobsStore.shared.saveSites(sites)
+        DebugLogger.shared.info("Sites", "[INFO] [FEATURE] 사이트 추가 \(site.name)")
+        Task { await runSiteCheck(site) }
+    }
+
+    func removeSite(id: UUID) {
+        sites.removeAll { $0.id == id }
+        lastSiteUp[id] = nil
+        SitesJobsStore.shared.saveSites(sites)
+    }
+
+    func toggleSite(id: UUID, enabled: Bool) {
+        guard let i = sites.firstIndex(where: { $0.id == id }) else { return }
+        sites[i].enabled = enabled
+        SitesJobsStore.shared.saveSites(sites)
+    }
+
+    func clearSiteHistory(id: UUID) {
+        guard let i = sites.firstIndex(where: { $0.id == id }) else { return }
+        sites[i].history.removeAll()
+        lastSiteUp[id] = nil
+        SitesJobsStore.shared.saveSites(sites)
+    }
+
+    // MARK: - Jobs CRUD
+
+    @discardableResult
+    func addJob(name: String, expectEverySec: Int) -> Job {
+        let job = Job(name: name, expectEverySec: expectEverySec)
+        jobs.append(job)
+        SitesJobsStore.shared.saveJobs(jobs)
+        DebugLogger.shared.info("Jobs", "[INFO] [FEATURE] 작업 추가 \(job.name) token=\(job.token)")
+        return job
+    }
+
+    func removeJob(id: UUID) {
+        jobs.removeAll { $0.id == id }
+        lastJobOverdue[id] = nil
+        SitesJobsStore.shared.saveJobs(jobs)
+    }
+
+    func toggleJob(id: UUID, enabled: Bool) {
+        guard let i = jobs.firstIndex(where: { $0.id == id }) else { return }
+        jobs[i].enabled = enabled
+        SitesJobsStore.shared.saveJobs(jobs)
+    }
+
+    /// 하트비트 포트 재설정 (설정에서)
+    func restartHeartbeat(port: UInt16) {
+        heartbeatPort = port
+        UserDefaults.standard.set(port, forKey: "relay.hb.port")
+        heartbeatLastError = nil
+        HeartbeatServer.shared.start(
+            port: port,
+            onBeat: { [weak self] token in
+                Task { @MainActor in
+                    self?.handleHeartbeat(token: token)
+                }
+            },
+            onBindError: { [weak self] code in
+                Task { @MainActor in
+                    self?.heartbeatLastError = code
+                }
+            }
+        )
+    }
+
+    /// DEBUG: 사이트 체크 결과 주입 (실제 네트워크 없이)
+    func debugInjectSiteCheck(id: UUID, ok: Bool, detail: String? = nil) {
+        guard let i = sites.firstIndex(where: { $0.id == id }) else { return }
+        let check = SiteCheck(ok: ok, latencyMs: ok ? Int.random(in: 12...180) : nil, detail: detail)
+        sites[i].appendCheck(check)
+        SitesJobsStore.shared.saveSites(sites)
+        emitSiteTransition(site: sites[i], check: check)
+    }
+
+    /// DEBUG: 하트비트 주입
+    func debugInjectBeat(id: UUID) {
+        guard let i = jobs.firstIndex(where: { $0.id == id }) else { return }
+        handleHeartbeat(token: jobs[i].token)
+    }
+
+    /// stop 스레드 (앱 종료 시)
+    func stopSitesJobs() {
+        sitesCheckTask?.cancel()
+        jobsSweepTask?.cancel()
+        HeartbeatServer.shared.stop()
     }
 
     /// Apple 스냅샷 반영 — 목록 갱신 + 온라인 자동 선택
@@ -262,6 +539,7 @@ final class ConsoleStore: ObservableObject {
         case .anr: return watchAnr
         case .crash: return watchCrash
         case .appleConnected, .appleDisconnected: return watchNotifications
+        case .siteDown, .siteUp, .jobOverdue, .jobRecovered: return watchNotifications
         }
     }
 

@@ -18,6 +18,14 @@ enum WatchKind: String, Sendable, Equatable, CaseIterable, Codable {
     case appleConnected
     /// Apple 기기 해제
     case appleDisconnected
+    /// 사이트 다운 (PLAN_sites_jobs)
+    case siteDown
+    /// 사이트 복구
+    case siteUp
+    /// 작업 하트비트 overdue
+    case jobOverdue
+    /// 작업 하트비트 복구
+    case jobRecovered
 }
 
 /// 심각도 — 시스템 알림 interruptionLevel 매핑

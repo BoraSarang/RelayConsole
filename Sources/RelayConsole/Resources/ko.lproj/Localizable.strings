@@ -141,6 +141,8 @@
 "event.crash.enter" = "크래시 감지";
 "event.deviceConnected" = "기기 연결 %@";
 "event.deviceDisconnected" = "기기 연결 끊김 %@";
+"event.job.overdue" = "하트비트 overdue";
+"event.job.recovered" = "하트비트 복구";
 "event.load.clear" = "load 정상화";
 "event.load.enter" = "load 급증";
 "event.logcatHits" = "logcat 키워드 적중 +%d";
@@ -155,6 +157,8 @@
 "event.settingsChanged" = "설정 변경 %@ %@";
 "event.signal.clear" = "신호 회복";
 "event.signal.drop" = "신호 급락";
+"event.site.down" = "사이트 다운";
+"event.site.up" = "사이트 복구";
 "event.throttling.clear" = "스로틀링 해제";
 "event.throttling.enter" = "스로틀링 진입";
 "menubar.alert.thermal" = "발열 주의 %@°C";

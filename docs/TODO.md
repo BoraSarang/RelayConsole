@@ -2,8 +2,9 @@
 > 작업 추적 — bd 연동 (이슈 prefix: RelayConsole)
 
 ## 진행 중 (bd ready)
-- [ ] **Alerts 육안 (PLAN_alerts · 0.9.1)** — 3탭·필터·그룹·ack/mute/메모·export 구현 ✓ · **사용자 육안 대기**
-- [ ] **사이드바 Sites/Jobs** — Alerts 육안 후 placeholder → 실제 화면
+- [ ] **Alerts 육안 (PLAN_alerts · 0.9.1)** — 3탭·필터·그룹·ack/mute/메모·export 구현 ✓ · 탭 전영역 클릭 ✓ · **잔여 육안 대기**
+- [ ] **Sites (PLAN_sites_jobs · 1.0.0)** — PR-A 모델·SiteChecker·스토리지 → PR-B SitesView 상태바/스파크라인
+- [ ] **Jobs (PLAN_sites_jobs · 1.0.0)** — PR-A HeartbeatServer·overdue → PR-B JobsView · 하트비트 연동
 
 ## 보류 (기기 확보 시)
 - [ ] **Apple 실기 Trust 육안** — iPad USB 데이터 불량(안드로이드 동일 케이블 OK·복구도 미인식). 기기 확보 후 `brew install libimobiledevice` → 배터리/스토리지 카드
