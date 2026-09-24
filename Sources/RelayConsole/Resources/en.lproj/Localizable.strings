@@ -83,6 +83,7 @@
 "droid.card.gpu.freq" = "%@ MHz";
 "droid.card.gpu.title" = "GPU";
 "droid.card.gpu.util" = "Util %@%";
+"droid.card.health.title" = "HEALTH";
 "droid.card.memory.pressure" = "Pressure %@";
 "droid.card.memory.title" = "MEMORY";
 "droid.card.network.down" = "Down";
@@ -99,6 +100,7 @@
 "droid.empty.noDeviceHint" = "Network device: adb connect IP:PORT";
 "droid.footer.logcatHits" = "logcat Hits (%d)";
 "droid.footer.settingsChanged" = "Settings Changed (%d)";
+"droid.header.health" = "Health";
 "droid.header.picker" = "Select device";
 "droid.header.title" = "Relay Console · External Console";
 "droid.logs.button" = "▤ Logs";
@@ -322,9 +324,14 @@
 "settings.apple.toolsOk" = "Installed";
 "settings.briefing" = "Show morning briefing line";
 "settings.bundleId" = "Bundle ID";
+"health.band.fair" = "Fair";
+"health.band.good" = "Good";
+"health.band.poor" = "Poor";
+"health.throttle" = "Throttle";
 "settings.cards.battery" = "Battery";
 "settings.cards.cpu" = "CPU";
 "settings.cards.gpu" = "GPU";
+"settings.cards.health" = "Health score";
 "settings.cards.memory" = "Memory";
 "settings.cards.network" = "Network";
 "settings.cards.sensors" = "Sensors";

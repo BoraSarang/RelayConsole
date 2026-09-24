@@ -1707,6 +1707,23 @@
         }
       }
     },
+    "droid.card.health.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "HEALTH"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "HEALTH"
+          }
+        }
+      }
+    },
     "droid.card.memory.pressure": {
       "localizations": {
         "en": {
@@ -1959,6 +1976,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "설정 변경 탐지 (%d)"
+          }
+        }
+      }
+    },
+    "droid.header.health": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Health"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "건강"
           }
         }
       }
@@ -3157,6 +3191,74 @@
           "value": "Show device graphs in a floating window"
         }
       ]
+    },
+    "health.band.fair": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fair"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "보통"
+          }
+        }
+      }
+    },
+    "health.band.good": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Good"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "양호"
+          }
+        }
+      }
+    },
+    "health.band.poor": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Poor"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "나쁨"
+          }
+        }
+      }
+    },
+    "health.throttle": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Throttle"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "스로틀"
+          }
+        }
+      }
     },
     "incident.capture": {
       "extractionState": "manual",
@@ -5074,6 +5176,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "GPU"
+          }
+        }
+      }
+    },
+    "settings.cards.health": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Health score"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "건강 점수"
           }
         }
       }

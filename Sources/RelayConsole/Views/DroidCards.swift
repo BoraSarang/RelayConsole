@@ -446,6 +446,65 @@ enum DroidCards {
         }
     }
 
+    // MARK: - Health
+
+    static func health(device: DeviceSnapshot?) -> some View {
+        shell(L10n.string("droid.card.health.title"), accent: OPColor.cta) {
+            if let s = HealthScoreLogic.score(from: device ?? DeviceSnapshot()) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text("\(s.total)")
+                        .font(OPFont.number(28))
+                        .foregroundStyle(bandColor(s.bandKey))
+                        .contentTransition(.numericText())
+                    Text(L10n.string(s.bandKey))
+                        .font(OPFont.body(12))
+                        .foregroundStyle(bandColor(s.bandKey))
+                    Spacer()
+                }
+                ProgressView(value: Double(s.total), total: 100)
+                    .progressViewStyle(.linear)
+                    .tint(bandColor(s.bandKey))
+                    .frame(height: 4)
+                healthRow(label: L10n.string("settings.cards.battery"), value: s.battery)
+                healthRow(label: L10n.string("settings.cards.thermal"), value: s.thermal)
+                healthRow(label: L10n.string("health.throttle"), value: s.throttle)
+            } else {
+                Text(L10n.na)
+                    .font(OPFont.number(16))
+                    .foregroundStyle(OPColor.inkDim)
+            }
+        }
+    }
+
+    private static func healthRow(label: String, value: Int) -> some View {
+        HStack(spacing: 8) {
+            Text(label)
+                .font(OPFont.body(10))
+                .foregroundStyle(OPColor.inkDim)
+                .frame(width: 48, alignment: .leading)
+            ProgressView(value: Double(value), total: 100)
+                .progressViewStyle(.linear)
+                .tint(bandColor(HealthScoreLogic.bandKey(total: value)))
+            Text("\(value)")
+                .font(OPFont.number(10))
+                .foregroundStyle(OPColor.inkDim)
+                .frame(width: 24, alignment: .trailing)
+        }
+    }
+
+    static func bandColor(_ bandKey: String) -> Color {
+        switch bandKey {
+        case "health.band.good": return OPColor.ok
+        case "health.band.fair": return OPColor.warn
+        default: return OPColor.bad
+        }
+    }
+
+    static func healthChip(_ snapshot: DeviceSnapshot?) -> (String, Color)? {
+        guard let s = HealthScoreLogic.score(from: snapshot ?? DeviceSnapshot()) else { return nil }
+        return ("\(L10n.string("droid.header.health")) \(s.total)", bandColor(s.bandKey))
+    }
+
     // MARK: - Values
 
     static func cpuValue(_ device: DeviceSnapshot?) -> String {

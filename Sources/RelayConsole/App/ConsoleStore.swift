@@ -87,6 +87,8 @@ final class ConsoleStore: ObservableObject {
     @AppStorage("relay.cards.network") var cardNetwork = true
     @AppStorage("relay.cards.thermal") var cardThermal = true
     @AppStorage("relay.cards.storage") var cardStorage = true
+    /// S2 Device Health Score 카드
+    @AppStorage("relay.cards.health") var cardHealth = true
     /// 아침 브리핑 한 줄 (PLAN_briefing · S1)
     @AppStorage("relay.briefing.enabled") var briefingEnabled = true
     /// S4 Incident Bundle 자동 캡처
