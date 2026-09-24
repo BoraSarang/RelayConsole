@@ -1,7 +1,7 @@
 import Foundation
 
 /// 감시 이벤트 종류 — kind는 소수 유지, 중복은 fingerprint로
-enum WatchKind: String, Sendable, Equatable, CaseIterable {
+enum WatchKind: String, Sendable, Equatable, CaseIterable, Codable {
     case throttling
     case chargeChanged
     case protectionChanged
@@ -12,10 +12,12 @@ enum WatchKind: String, Sendable, Equatable, CaseIterable {
     case memoryLow
     case bsohDrop
     case signalDrop
+    case anr
+    case crash
 }
 
 /// 심각도 — 시스템 알림 interruptionLevel 매핑
-enum WatchSeverity: String, Sendable, Equatable, Comparable {
+enum WatchSeverity: String, Sendable, Equatable, Comparable, Codable {
     case info
     case warning
     case critical
@@ -29,8 +31,8 @@ enum WatchSeverity: String, Sendable, Equatable, Comparable {
     }
 }
 
-/// 구조화 감시 이벤트 — ConsoleStore 파이프 진입점
-struct WatchEvent: Identifiable, Sendable, Equatable {
+/// 구조화 감시 이벤트 — ConsoleStore 파이프 진입점 (EventStore JSON 직렬화용)
+struct WatchEvent: Identifiable, Sendable, Equatable, Codable {
     let id: UUID
     let kind: WatchKind
     let severity: WatchSeverity

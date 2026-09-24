@@ -40,11 +40,25 @@ final class ConsoleStore: ObservableObject {
     @AppStorage("relay.watch.rsrp") var watchRsrp = true
     @AppStorage("relay.watch.recovery") var watchRecovery = true
     @AppStorage("relay.watch.notifications") var watchNotifications = true
+    /// Phase v0.8 — ANR / 크래시 logcat
+    @AppStorage("relay.watch.anr") var watchAnr = true
+    @AppStorage("relay.watch.crash") var watchCrash = true
     /// 알림형 상단 배너 (메뉴 팝오버 아님) — 기본 ON
     @AppStorage("relay.watch.banner") var watchBanner = true
+    /// Phase v0.9 — 카드 On/Off (대시보드·팝오버 공통, 기본 전체 ON)
+    @AppStorage("relay.cards.cpu") var cardCpu = true
+    @AppStorage("relay.cards.gpu") var cardGpu = true
+    @AppStorage("relay.cards.memory") var cardMemory = true
+    @AppStorage("relay.cards.sensors") var cardSensors = true
+    @AppStorage("relay.cards.battery") var cardBattery = true
+    @AppStorage("relay.cards.network") var cardNetwork = true
+    @AppStorage("relay.cards.thermal") var cardThermal = true
+    @AppStorage("relay.cards.storage") var cardStorage = true
 
     private init() {
         selectedSerial = UserDefaults.standard.string(forKey: selectedKey)
+        // EventStore 1차 — 앱 시작 시 이력 복원 (JSON 영구화)
+        recentWatchEvents = EventStore.shared.load()
     }
 
     func start() {
@@ -152,8 +166,9 @@ final class ConsoleStore: ObservableObject {
     /// WatchEngine emit 수신 → 이력 + fingerprint 쿨다운 + 시스템 알림
     func ingestWatch(_ event: WatchEvent, forceNotify: Bool = false) {
         recentWatchEvents.insert(event, at: 0)
-        if recentWatchEvents.count > 50 { recentWatchEvents.removeLast() }
+        if recentWatchEvents.count > 500 { recentWatchEvents.removeLast() }
         pushEvent(event.summary)
+        EventStore.shared.save(recentWatchEvents)
 
         if !forceNotify {
             guard watchEnabled(for: event.kind), watchNotifications else { return }
@@ -193,6 +208,8 @@ final class ConsoleStore: ObservableObject {
         case .memoryLow: return watchMemory
         case .bsohDrop: return watchBsoh
         case .signalDrop: return watchRsrp
+        case .anr: return watchAnr
+        case .crash: return watchCrash
         }
     }
 

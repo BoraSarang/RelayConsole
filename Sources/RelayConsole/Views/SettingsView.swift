@@ -20,7 +20,7 @@ struct SettingsView: View {
                     }
                     // 메뉴바는 아이콘만 — 이 토글은 팝오버 헤더 n/m 표시
                     Toggle(L10n.string("settings.menubarMetrics"), isOn: $menubarMetrics)
-                    LabeledContent(L10n.string("settings.version"), value: "0.7.0")
+                    LabeledContent(L10n.string("settings.version"), value: "0.9.0")
                     LabeledContent(L10n.string("settings.bundleId"), value: "com.borasarang.relayconsole")
                 }
                 Section(L10n.string("settings.section.watch")) {
@@ -36,7 +36,19 @@ struct SettingsView: View {
                     Toggle(L10n.string("settings.watch.memory"), isOn: $store.watchMemory)
                     Toggle(L10n.string("settings.watch.bsoh"), isOn: $store.watchBsoh)
                     Toggle(L10n.string("settings.watch.rsrp"), isOn: $store.watchRsrp)
+                    Toggle(L10n.string("settings.watch.anr"), isOn: $store.watchAnr)
+                    Toggle(L10n.string("settings.watch.crash"), isOn: $store.watchCrash)
                     Toggle(L10n.string("settings.watch.recovery"), isOn: $store.watchRecovery)
+                }
+                Section(L10n.string("settings.section.cards")) {
+                    Toggle(L10n.string("settings.cards.cpu"), isOn: $store.cardCpu)
+                    Toggle(L10n.string("settings.cards.gpu"), isOn: $store.cardGpu)
+                    Toggle(L10n.string("settings.cards.memory"), isOn: $store.cardMemory)
+                    Toggle(L10n.string("settings.cards.sensors"), isOn: $store.cardSensors)
+                    Toggle(L10n.string("settings.cards.battery"), isOn: $store.cardBattery)
+                    Toggle(L10n.string("settings.cards.network"), isOn: $store.cardNetwork)
+                    Toggle(L10n.string("settings.cards.thermal"), isOn: $store.cardThermal)
+                    Toggle(L10n.string("settings.cards.storage"), isOn: $store.cardStorage)
                 }
                 Section(L10n.string("settings.section.scrcpy")) {
                     ScrcpySettingsSection()

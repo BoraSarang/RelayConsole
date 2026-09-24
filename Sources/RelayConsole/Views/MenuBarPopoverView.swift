@@ -121,7 +121,7 @@ struct MenuBarPopoverView: View {
                         .font(OPFont.number(11))
                         .foregroundStyle(OPColor.inkDim)
                 }
-                Text("0.7.0")
+                Text("0.9.0")
                     .font(OPFont.number(10))
                     .foregroundStyle(OPColor.inkDim)
             }
@@ -435,6 +435,8 @@ struct MenuBarPopoverView: View {
         case .memoryLow: return L10n.string("remediation.memory")
         case .bsohDrop: return L10n.string("remediation.bsoh")
         case .signalDrop: return L10n.string("remediation.signal")
+        case .anr: return L10n.string("remediation.anr")
+        case .crash: return L10n.string("remediation.crash")
         default: return L10n.string("remediation.title")
         }
     }
@@ -490,6 +492,18 @@ struct MenuBarPopoverView: View {
                 L10n.string("remediation.signal.1"),
                 L10n.string("remediation.signal.2")
             ]
+        case .anr:
+            return [
+                L10n.string("remediation.anr.1"),
+                L10n.string("remediation.anr.2"),
+                L10n.string("remediation.anr.3")
+            ]
+        case .crash:
+            return [
+                L10n.string("remediation.crash.1"),
+                L10n.string("remediation.crash.2"),
+                L10n.string("remediation.crash.3")
+            ]
         default:
             return []
         }
@@ -531,16 +545,40 @@ struct MenuBarPopoverView: View {
 
     private var cards: some View {
         VStack(spacing: 12) {
-            DroidCards.cpu(device: device, metrics: metrics)
-            DroidCards.gpu(device: device, metrics: metrics)
-            DroidCards.memory(device: device, metrics: metrics) {
-                openProcesses()
+            if store.cardCpu {
+                DroidCards.cpu(device: device, metrics: metrics)
             }
-            DroidCards.sensors(device: device, metrics: metrics)
-            DroidCards.battery(device: device, metrics: metrics)
-            DroidCards.network(device: device, metrics: metrics)
-            DroidCards.thermal(device: device, metrics: metrics)
-            DroidCards.storage(device: device, metrics: metrics)
+            if store.cardGpu {
+                DroidCards.gpu(device: device, metrics: metrics)
+            }
+            if store.cardMemory {
+                DroidCards.memory(device: device, metrics: metrics) {
+                    openProcesses()
+                }
+            }
+            if store.cardSensors {
+                DroidCards.sensors(device: device, metrics: metrics)
+            }
+            if store.cardBattery {
+                DroidCards.battery(device: device, metrics: metrics)
+            }
+            if store.cardNetwork {
+                DroidCards.network(device: device, metrics: metrics)
+            }
+            if store.cardThermal {
+                DroidCards.thermal(device: device, metrics: metrics)
+            }
+            if store.cardStorage {
+                DroidCards.storage(device: device, metrics: metrics)
+            }
+            if !store.cardCpu && !store.cardGpu && !store.cardMemory && !store.cardSensors
+                && !store.cardBattery && !store.cardNetwork && !store.cardThermal && !store.cardStorage {
+                Text(L10n.string("cards.empty"))
+                    .font(OPFont.body(12))
+                    .foregroundStyle(OPColor.inkDim)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+            }
         }
     }
 
