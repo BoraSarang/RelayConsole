@@ -1,6 +1,6 @@
 # PLAN_notify_channels_relayconsole.md — 외부 알림 채널 ntfy·Slack (A1)
 
-> 생성일: 2026-09-24 | 상태: **구현 완료 — 육안 대기**
+> 생성일: 2026-09-24 | 상태: **완료** (육안 ✓ · PR #21 머지 `44e2cd6` · `avf` closed)
 > 모체: `RESEARCH_competitive_v1.md` §4 A1 · `RESEARCH_watch_events.md` §3 [E]
 > 앱: **Relay Console** | 목표 버전: **1.2.0** | 최소 OS: **macOS 26.0**
 > bd: `RelayConsole-avf`

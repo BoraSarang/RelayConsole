@@ -2,21 +2,22 @@
 > 작업 추적 — bd 연동 (이슈 prefix: RelayConsole)
 
 ## 진행 중 (bd ready)
-- (육안 대기) **S1 아침 브리핑 한 줄** — 구현·테스트·빌드 1.3.0 · **PR #22 머지 `c57d546`** · 팝오버 헤더 + 설정 토글 육안 후 close `RelayConsole-psh`
-- (육안 대기) **외부 알림 채널 A1** — **PR #21 머지 `44e2cd6`** · 설정→연동 ntfy/Slack 테스트 전송 후 `RelayConsole-avf` close
+- (없음 — 육안 2건 close 완료)
+
+## 다음 스프린트 (사용자 선택 대기 · 리서치 §8)
+- **P1-2 (권장)** A5 Sites SSL·도메인 만료 + assertion → 선택 후 `PLAN_sites_ssl` 작성·승인
+- **P1-3** A2 Wi-Fi ADB 온보딩 → 선택 후 PLAN
+- P2: S4 Incident Bundle · A3 앱 미니 허브 · A8 로그인 항목
+- P3: A10 로컬 MCP · S2 Health Score · A4 갤러리 · A6 캘린더
+- 보류: A9 Apple Phase 2
 
 ## 보류 (기기 확보 시)
 - [ ] **Apple 실기 Trust 육안** — iPad USB 데이터 불량(안드로이드 동일 케이블 OK·복구도 미인식). 기기 확보 후 `brew install libimobiledevice` → 배터리/스토리지 카드
 - [ ] **Apple Phase 2** — Developer Mode·sysmon 등 — 위 기기 확보 후 착수
 
-## 다음 스프린트 후보 (리서치 §8 · 선택 후 PLAN)
-- **P1-2** A5 Sites SSL·도메인 만료 + assertion
-- **P1-3** A2 Wi-Fi ADB 온보딩
-- P2: S4 Incident Bundle · A3 앱 미니 허브 · A8 로그인 항목
-- P3: A10 로컬 MCP · S2 Health Score · A4 갤러리 · A6 캘린더
-- 보류: A9 Apple Phase 2
-
 ## 완료 (2026-09-24)
+- [x] **S1 아침 브리핑 육안 마감** — 팝오버 헤더 한 줄 + 설정 토글 **사용자 확인** · `RelayConsole-psh` closed
+- [x] **알림 채널 A1 육안 마감** — 설정→연동 ntfy/Slack 테스트 전송 **사용자 확인** · `RelayConsole-avf` closed
 - [x] **S1 아침 브리핑 구현** — `Briefing`·`BriefingLogic` · `relay.briefing.enabled` · 팝오버 헤더 한 줄 · i18n **411** · XCTest Briefing 7 + swift-testing 156 · **1.3.0** · `PLAN_briefing` · **PR #22 머지 `c57d546`**
 - [x] **리서치 재검토** — `RelayConsole-p1w` · `RESEARCH_competitive_v1` §8 갱신 · P1 3건 도출
 - [x] **외부 알림 채널 A1 구현** — `NotifyChannel` · `relay.notify.*` · 설정 연동 · i18n 409 · 테스트 156 · **1.2.0** · `PLAN_notify_channels` · **PR #21 머지 `44e2cd6`**
