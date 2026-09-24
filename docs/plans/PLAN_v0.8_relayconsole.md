@@ -1,6 +1,6 @@
 # PLAN_v0.8_relayconsole.md — ANR / 크래시 logcat 감시
 
-> 생성일: 2026-09-24 | 상태: **구현 (검증 진행)**
+> 생성일: 2026-09-24 | 상태: **완료 (검증 ✓ · 실기기 육안 ✓ 2026-09-24)**
 > 모체: `PLAN_v0.7_relayconsole.md` · `RESEARCH_watch_events.md` Phase3
 > 앱: **Relay Console** | 목표 버전: **0.9.0 통합** (v0.8+v0.9 동시) | 최소 OS: **macOS 26.0**
 
@@ -35,8 +35,9 @@
 
 ## 4. 검증
 
-- [ ] feedAnr/feedCrash 쿨다운·독립 테스트
-- [ ] logcat 키워드 분류 테스트
-- [ ] activeRemediation TTL 테스트
-- [ ] WatchEvent Codable 직렬화
-- [ ] i18n 227키 3곳 · swift test · debug 빌드 0.9.0
+- [x] feedAnr/feedCrash 쿨다운·독립 테스트
+- [x] logcat 키워드 분류 테스트
+- [x] activeRemediation TTL 테스트
+- [x] WatchEvent Codable 직렬화
+- [x] i18n 227키 3곳 · swift test · debug 빌드 0.9.0
+- [x] 실기기 육안 (사용자 확인 ✓ 2026-09-24)

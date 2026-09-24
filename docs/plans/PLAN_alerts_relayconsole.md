@@ -1,6 +1,6 @@
 # PLAN_alerts_relayconsole.md — Alerts 사이드바 v0.9.1
 
-> 생성일: 2026-09-24 | 상태: **구현 (육안 대기)**
+> 생성일: 2026-09-24 | 상태: **완료** (육안 ✓ 2026-09-24)
 > 벤치마크: Zabbix · Grafana · Intune · Kandji · ManageEngine · iStat Menus
 > 앱: **Relay Console** | 버전: **0.9.1** (Sites·Jobs 포함 시 1.0.0) | macOS 26.0
 > PR **#10** (A) + PR-B (화면·액션·export)
@@ -128,8 +128,8 @@ ConsoleStore:
 - [x] 기존 JSON (신규 필드 없음) 로드 OK — Optional defaults
 - [x] debug 0 error · i18n **315/315/315** missing 0
 - [x] 금지 grep 0 · 버전 **0.9.1**
-- [ ] 3탭 · 필터 · 그룹 · ack/mute/메모 재시작 유지 — **육안**
-- [ ] Apple 연결/해소 Alerts 반영 · export 파일 — **육안**
+- [x] 3탭 · 필터 · 그룹 · ack/mute/메모 재시작 유지 — **육안** (2026-09-24)
+- [x] Apple 연결/해소 Alerts 반영 · export 파일 — **육안** (2026-09-24)
 
 ### 육안 순서
 

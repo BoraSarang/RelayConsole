@@ -1,6 +1,6 @@
 # PLAN_v0.6_relayconsole.md — Phase2 감시: PSI · load · MemAvailable
 
-> 생성일: 2026-09-24 | 상태: **구현 완료 (테스트·빌드 검증)**
+> 생성일: 2026-09-24 | 상태: **완료 (DoD · 실기기 육안 ✓ 2026-09-24)**
 > 모체: `docs/plans/PLAN_v0.5_relayconsole.md` A5 · `docs/research/RESEARCH_watch_events.md` §2 Phase2
 > 앱: **Relay Console** | bundleId: **`com.borasarang.relayconsole`** | 목표 버전: **0.6.0** | 최소 OS: **macOS 26.0**
 
@@ -50,7 +50,7 @@
 - [x] `./build_and_run.sh debug macos` — 0 error · 번들 **0.6.0**
 - [x] 금지 grep — Outpost/iStat/Scrcpy/gfxinfo 0 · Views/App print 0
 - [x] i18n 3곳 키 수 일치 — **151/151/151**
-- [ ] 실기기 육안 — 주입(PSI/load/mem) → 알림/배너/배지/권장 조치 (사용자 확인 대기)
+- [x] 실기기 육안 — 주입(PSI/load/mem) → 알림/배너/배지/권장 조치 (사용자 확인 ✓)
 
 ## 5. 실행 순서
 
@@ -60,4 +60,4 @@
 | B2 | DeviceMonitor 연결 (coreCount·PSI·mem) | ✓ |
 | B3 | 설정 토글 + remediation + DEBUG 주입 | ✓ |
 | B4 | i18n 22키 + 테스트 4 + 버전 0.6.0 | ✓ |
-| B5 | 검증 + 문서 + PR | 진행 |
+| B5 | 검증 + 문서 + PR | ✓ 완료 |

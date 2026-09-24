@@ -1,6 +1,6 @@
 # PLAN_sites_jobs_relayconsole.md — Sites·Jobs 사이드바 v1.0.0
 
-> 생성일: 2026-09-24 | 상태: **구현 (육안 대기)**
+> 생성일: 2026-09-24 | 상태: **완료** (육안 ✓ 2026-09-24 · Sites UI는 v1.1로 계승)
 > 벤치마크: Uptime Kuma · Cronitor · Dead Man's Switch
 > 앱: **Relay Console** | 버전: **1.0.0** | macOS 26.0
 > 근거: `PLAN_v0.2_macos`(아카이브) · `docs/DESIGN.md` 상태바/스파크라인 토큰 · BrandKit "Sites & Jobs"
@@ -136,12 +136,11 @@ Job.isOverdue(now:) → lastBeatAt == nil || now - lastBeatAt > expectEverySec *
 - [x] `error_message_ko.json` 갱신 (E-MAC-NET/JOB)
 - [x] 하트비트 바인드 127.0.0.1 고정
 - [x] 육안 피드백 수정 — Sites 에딧·대상 검증 · Jobs curl 붙여넣기 토큰 import · `jobs.token`/`jobs.lastBeat` `%s`→`%@` 크래시 수정 · SitesJobsTests **25종** · i18n **365**
-- [x] 육안 피드백 수정 — Sites 에딧·대상 검증 · Jobs curl 붙여넣기 토큰 import · `jobs.token`/`jobs.lastBeat` `%s`→`%@` 크래시 수정 · SitesJobsTests **25종** · i18n **365**
-- [ ] Sites: HTTP localhost 성공/실패 주입 · 상태 바 갱신 — **육안**
-- [ ] Sites: 잘못된 URL 거부 + 수정(에딧) 저장 — **육안**
-- [ ] Jobs: curl 하트비트 → lastBeat · overdue 표시 — **육안**
-- [ ] Jobs: 추가 시트 curl 붙여넣기 → 토큰 import — **육안** (기존: 토큰 카드 `%s` 크래시 → `%@` 수정)
-- [ ] site down → Alerts 반영 — **육안**
+- [x] Sites: HTTP localhost 성공/실패 주입 · 상태 바 갱신 — **육안** (2026-09-24)
+- [x] Sites: 잘못된 URL 거부 + 수정(에딧) 저장 — **육안** (2026-09-24)
+- [x] Jobs: curl 하트비트 → lastBeat · overdue 표시 — **육안** (2026-09-24)
+- [x] Jobs: 추가 시트 curl 붙여넣기 → 토큰 import — **육안** (2026-09-24)
+- [x] site down → Alerts 반영 — **육안** (2026-09-24)
 
 ### 육안 순서
 

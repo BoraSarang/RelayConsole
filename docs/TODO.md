@@ -2,15 +2,16 @@
 > 작업 추적 — bd 연동 (이슈 prefix: RelayConsole)
 
 ## 진행 중 (bd ready)
-- [ ] **Alerts 육안 (PLAN_alerts · 0.9.1)** — 3탭·필터·그룹·ack/mute/메모·export · 탭 전영역 클릭 ✓ · **잔여 육안 대기**
-- [ ] **Sites/Jobs 육안 (PLAN_sites_jobs · 1.0.0)** — 구현 PR-A+B ✓ · 육안 피드백 수정 완료 · **사용자 육안 대기**
-- [ ] **Sites v1.1 (PLAN_sites_v1_1 · UptimeRobot+Google식)** — C1 임계값·가동률·dayBars · C2 Sites 행 UI · C3 메뉴바 폭오버 구현 ✓ · i18n 382 · 테스트 ✓ · build 1.1.0 ✓ · **육안 대기**
+- (없음)
 
 ## 보류 (기기 확보 시)
 - [ ] **Apple 실기 Trust 육안** — iPad USB 데이터 불량(안드로이드 동일 케이블 OK·복구도 미인식). 기기 확보 후 `brew install libimobiledevice` → 배터리/스토리지 카드
 - [ ] **Apple Phase 2** — Developer Mode·sysmon 등 — 위 기기 확보 후 착수
 
 ## 완료 (2026-09-24)
+- [x] **Alerts 잔여 육안 마감 (PLAN_alerts · 0.9.1)** — 3탭·필터·그룹·ack/mute/메모 재시작 유지 · Apple 연결/해소 · export JSON/CSV · **사용자 육안 완료**
+- [x] **Sites/Jobs 잔여 육안 마감 (PLAN_sites_jobs · 1.0.0)** — HTTP 주입/상태 바 · 잘못된 URL 거부+에딧 · curl 하트비트/overdue · curl 붙여넣기 토큰 · site down→Alerts · **사용자 육안 완료**
+- [x] **Sites v1.1 육안 마감 (PLAN_sites_v1_1 · 1.1.0)** — UptimeRobot·Google식 타임라인 · failThreshold·effectiveUp·dayBars·가동률%·범례/패딩 · 메뉴바 Sites 섹션 · i18n 382 · 테스트 35+139 · **PR #17 머지 `c383887`** · 사용자 육안 완료
 - [x] **Sites/Jobs 육안 피드백 수정** — `jobs.token`/`jobs.lastBeat` `%s`→`%@` (작업 추가 직후 카드 렌더 크래시 · IPS `L10n.format`) · Sites 연필 수정 + `updateSite` · 대상 검증 `validateTarget`(http/tcp/ping) · Jobs 추가 curl 붙여넣기→토큰 import · 카드 curl 선택/복사 · i18n **365** · SitesJobsTests **25**
 - [x] **Sites/Jobs 구현 (PR-A+B · 1.0.0)** — Site HTTP/TCP/ping · 90일 상태바·스파크라인 · Job 하트비트 127.0.0.1·overdue grace · Alerts siteDown/siteUp/jobOverdue/jobRecovered · SitesView·JobsView · 설정 포트 · i18n **353** · 테스트 신규 20 · **1.0.0** · `PLAN_sites_jobs` · PR **#14** + PR-B
 - [x] **Alerts 탭 전영역 클릭** — `contentShape(Rectangle())` · PR **#13** 머지

@@ -1,6 +1,6 @@
 # PLAN_sites_v1_1.md — Sites 업타임 재정의 (로컬 UptimeRobot + Google식 타임라인)
 
-> 생성일: 2026-09-24 | 상태: **구현 (육안 대기)**
+> 생성일: 2026-09-24 | 상태: **완료** (육안 ✓ · PR #17 머지 `c383887`)
 > 벤치마크: **UptimeRobot** (모니터·임계값·상태 유지시간) · **Google Apps Status Dashboard** (행×기간 바·범례·incident)
 > 앱: **Relay Console** | 버전 목표: **1.1.0** | 선행: `PLAN_sites_jobs` 1.0.0 (체크 엔진·Alerts 연동)
 > 승인: 사용자 — 타임라인 메뉴바 7d/콘솔 7·30d 토글 · Jobs 유지(폭오버 합침 표시) · down=연속 2회
@@ -122,11 +122,11 @@ DEBUG down 주입: `failThreshold`만큼 연속 실패 append → 전이 발생.
 - [x] i18n 3곳 **382** 키 일치 · missing 0
 - [x] 금지 grep Sources 기존 허용만 · 버전 **1.1.0**
 - [x] `./scripts/build-macos.sh debug` 완료 (1.1.0 재설치)
-- [ ] 육안:
-  - [ ] 연속 1회 실패는 up 유지, 2회째에만 down 알림
-  - [ ] Sites 콘솔: 행×날짜 바 · 7d/30d 토글 · 가동률%
-  - [ ] 메뉴바 폭오버에 Sites 요약 · down 시 빨강
-  - [ ] Jobs 탭·하트비트 기존 유지
+- [x] 육안 (사용자 확인 2026-09-24):
+  - [x] 연속 1회 실패는 up 유지, 2회째에만 down 알림
+  - [x] Sites 콘솔: 행×날짜 바 · 7d/30d 토글 · 가동률% · 범례/패딩 정렬
+  - [x] 메뉴바 폭오버에 Sites 요약 · down 시 빨강
+  - [x] Jobs 탭·하트비트 기존 유지
 
 ---
 
