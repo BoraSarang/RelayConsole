@@ -2744,6 +2744,36 @@
         }
       ]
     },
+    "float.opacity": {
+      "extractionState": "manual",
+      "stringUnits": [
+        {
+          "language": "ko",
+          "state": "translated",
+          "value": "투명도"
+        },
+        {
+          "language": "en",
+          "state": "translated",
+          "value": "Opacity"
+        }
+      ]
+    },
+    "float.opacity.help": {
+      "extractionState": "manual",
+      "stringUnits": [
+        {
+          "language": "ko",
+          "state": "translated",
+          "value": "창 투명도 조절"
+        },
+        {
+          "language": "en",
+          "state": "translated",
+          "value": "Adjust window opacity"
+        }
+      ]
+    },
     "float.toggle": {
       "extractionState": "manual",
       "stringUnits": [
@@ -4810,6 +4840,21 @@
           "language": "en",
           "state": "translated",
           "value": "Network (always)"
+        }
+      ]
+    },
+    "settings.float.opacity": {
+      "extractionState": "manual",
+      "stringUnits": [
+        {
+          "language": "ko",
+          "state": "translated",
+          "value": "창 투명도"
+        },
+        {
+          "language": "en",
+          "state": "translated",
+          "value": "Window opacity"
         }
       ]
     },

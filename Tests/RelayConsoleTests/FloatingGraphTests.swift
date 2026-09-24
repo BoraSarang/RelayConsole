@@ -49,4 +49,32 @@ final class FloatingGraphTests: XCTestCase {
         XCTAssertEqual(back?.x, 10)
         XCTAssertEqual(back?.y, 20)
     }
+
+    func testClampOpacityValid() {
+        XCTAssertEqual(FloatingGraphLogic.clampOpacity(1.0), 1.0)
+        XCTAssertEqual(FloatingGraphLogic.clampOpacity(0.5), 0.5)
+        XCTAssertEqual(FloatingGraphLogic.clampOpacity(FloatingGraphLogic.minOpacity), FloatingGraphLogic.minOpacity)
+    }
+
+    func testClampOpacityOutOfRange() {
+        XCTAssertEqual(FloatingGraphLogic.clampOpacity(0.1), FloatingGraphLogic.minOpacity)
+        XCTAssertEqual(FloatingGraphLogic.clampOpacity(1.5), FloatingGraphLogic.maxOpacity)
+        XCTAssertEqual(FloatingGraphLogic.clampOpacity(-1), FloatingGraphLogic.minOpacity)
+    }
+
+    func testClampOpacityNonFinite() {
+        XCTAssertEqual(FloatingGraphLogic.clampOpacity(.nan), FloatingGraphLogic.defaultOpacity)
+        XCTAssertEqual(FloatingGraphLogic.clampOpacity(.infinity), FloatingGraphLogic.defaultOpacity)
+        XCTAssertEqual(FloatingGraphLogic.clampOpacity(-.infinity), FloatingGraphLogic.defaultOpacity)
+    }
+
+    func testStoredOpacityDefault() {
+        let d = UserDefaults(suiteName: "FloatingGraphTests.\(UUID().uuidString)")!
+        defer { d.removePersistentDomain(forName: d.description) }
+        XCTAssertEqual(FloatingGraphLogic.storedOpacity(d), FloatingGraphLogic.defaultOpacity)
+        d.set(0.6, forKey: FloatingGraphLogic.opacityKey)
+        XCTAssertEqual(FloatingGraphLogic.storedOpacity(d), 0.6, accuracy: 0.0001)
+        d.set(9.9, forKey: FloatingGraphLogic.opacityKey)
+        XCTAssertEqual(FloatingGraphLogic.storedOpacity(d), FloatingGraphLogic.maxOpacity)
+    }
 }

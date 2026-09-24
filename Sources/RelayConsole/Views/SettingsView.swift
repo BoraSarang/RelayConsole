@@ -36,6 +36,7 @@ struct SettingsView: View {
     @AppStorage("relay.float.showCPU") private var showFloatCPU = true
     @AppStorage("relay.float.showGPU") private var showFloatGPU = false
     @AppStorage("relay.float.showMemory") private var showFloatMemory = false
+    @AppStorage(FloatingGraphLogic.opacityKey) private var floatOpacity = FloatingGraphLogic.defaultOpacity
     @State private var selection: SettingsTab? = .general
 
     var body: some View {
@@ -107,6 +108,20 @@ struct SettingsView: View {
             Toggle(L10n.string("settings.float.cpu"), isOn: $showFloatCPU)
             Toggle(L10n.string("settings.float.gpu"), isOn: $showFloatGPU)
             Toggle(L10n.string("settings.float.memory"), isOn: $showFloatMemory)
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    Text(L10n.string("settings.float.opacity"))
+                    Spacer()
+                    Text("\(Int(FloatingGraphLogic.clampOpacity(floatOpacity) * 100))%")
+                        .font(OPFont.number(11))
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                }
+                Slider(value: $floatOpacity, in: FloatingGraphLogic.minOpacity...FloatingGraphLogic.maxOpacity)
+                    .onChange(of: floatOpacity) { _, new in
+                        FloatingGraphController.shared.setOpacity(new)
+                    }
+            }
             Text(L10n.string("settings.float.hint"))
                 .font(OPFont.body(10))
                 .foregroundStyle(.secondary)

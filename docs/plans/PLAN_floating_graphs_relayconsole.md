@@ -1,6 +1,6 @@
 # PLAN_floating_graphs_relayconsole.md — 기기 그래프 플로팅창 (A7/F1)
 
-> 생성일: 2026-09-24 | 상태: **구현 완료 — 육안 대기**
+> 생성일: 2026-09-24 | 상태: **구현 완료 — 사용자 통합 테스트 대기** (투명도·헤더 안정화 포함)
 > 모체: 사용자 요청 · 벤치마크 **TetherLens** `FloatingWindowController` + `FloatingWindowView`
 > 앱: **Relay Console** | 목표 버전: **1.4.0** | 최소 OS: **macOS 26.0**
 > bd: `RelayConsole-d2e`
@@ -34,8 +34,9 @@
 | 기본 **Network + CPU** · GPU/Memory 토글 | Apple 기기 (메트릭 히스토리 없음 — Android 전용) |
 | 기존 `OPSparkline` + 카드 축소 재사용 (SwiftUI Charts 미도입) | 축·툴팁·zoom 인터랙티브 차트 |
 | `relay.float.*` 설정 · Settings 섹션 · 팝오버 진입 | 네트워크 up/down 분리 히스토리 개편 (별 이슈) |
-| 위치·표시 카드 UserDefaults 유지 | 투명도 슬라이더 (MVP 생략 · 후속) |
-| i18n 3처 · 금지 grep · `swift test` · `build-macos.sh debug` **1.4.0** | 실시간 네트워크 샘플링 주기 변경 |
+| 위치·표시 카드·**투명도** UserDefaults 유지 | (투명도는 사용자 요청으로 IN 전환 — `relay.float.opacity`) |
+| 헤더 고정 슬롯 (hover opacity-only) · `menuIndicator` 숨김 — 출렁임 방지 | 실시간 네트워크 샘플링 주기 변경 |
+| i18n 3처 · 금지 grep · `swift test` · `build-macos.sh debug` **1.4.0** | 카드별 개별 창 detach (아키텍처 OUT 유지) |
 
 ### 아키텍처 (TetherLens 이식)
 
@@ -65,6 +66,7 @@ FloatingGraphController.shared  (NSPanel · 신규)
 | `relay.float.showGPU` | Bool | false | GPU 카드 |
 | `relay.float.showMemory` | Bool | false | Memory 카드 |
 | `relay.float.origin` | String | nil | `"x,y"` 위치 유지 |
+| `relay.float.opacity` | Double | 1.0 | 패널 alpha (0.35…1.0 clamp) |
 
 **최소 1개 카드 보장:** 전부 off면 Network를 강제로 표시 (TetherLens network always-on).
 
@@ -90,7 +92,9 @@ FloatingGraphController.shared  (NSPanel · 신규)
 - 폭 **300**pt · 높이 = 콘텐츠 auto-fit (TetherLens `fitToContent` 이식)
 - 위치: `relay.float.origin` 유지 · 화면 밖 clamp
 - 닫기: 호버 × → `hide()` (`orderOut`, `isReleasedWhenClosed = false`)
-- [⋯]: 카드 토글 Menu (Network 고정 + CPU/GPU/Memory)
+- [⋯]: 투명도 Slider + 카드 토글 Menu (menuIndicator 숨김)
+- 반투명 아이콘: popover 슬라이더 (0.35…1.0)
+- 헤더 우측 **고정 74pt 슬롯** — insert/remove 없이 opacity/hitTesting만 (출렁임 방지)
 
 ### 4.2 진입점
 
@@ -119,11 +123,11 @@ FloatingGraphController.shared  (NSPanel · 신규)
 | `Sources/RelayConsole/App/WindowFocus.swift` | 플로팅 그래프 ID 제외 (dismiss에서 보호) |
 | `Sources/RelayConsole/App/RelayConsoleApp.swift` | 명령/진입 wiring (필요 시) |
 | `Sources/RelayConsole/Views/MenuBarPopoverView.swift` | 카드 영역 상단 플로팅 토글 버튼 · `openFloat` 클로저 |
-| `Sources/RelayConsole/Views/SettingsView.swift` | 플로팅 섹션 (enabled + 카드 4) · about **1.4.0** |
+| `Sources/RelayConsole/Views/SettingsView.swift` | 플로팅 섹션 (enabled + 카드 4 + **투명도 슬라이더**) · about **1.4.0** |
 | `Sources/RelayConsole/Views/DroidCards.swift` | shell에 옵션 핀/Float 액션 (선택 — MVP는 카드 상단 버튼만) |
 | `Resources/Localizable.xcstrings` + ko/en `.strings` | `float.*` 신규 키 (3처 parity) |
 | `Resources/Info.plist` 등 버전 7처 | **1.4.0** |
-| `Tests/RelayConsoleTests/FloatingGraphTests.swift` | **신규** — 카드 선택 로직(최소 1개 보장)·origin 파싱 순수 함수 |
+| `Tests/RelayConsoleTests/FloatingGraphTests.swift` | **신규** — 카드 선택 · origin 파싱 · **clampOpacity/storedOpacity** |
 | `docs/TODO.md` · `AGENTS.local.md` · `README.md` | 기능·버전 기록 |
 
 ---
@@ -135,10 +139,12 @@ FloatingGraphController.shared  (NSPanel · 신규)
 - [x] 카드 전부 off 방지 (Network 강제 유지)
 - [x] 팝오버 → 플로팅 진입 · Settings 토글 동기화
 - [x] `WindowFocus.dismissMenuBarPanels`가 플로팅 창을 닫지 않음
-- [x] i18n 3처 동치 (427) · `%s` 없음
+- [x] 헤더 고정 슬롯 · 메뉴 오픈 시 레이아웃 출렁임 없음
+- [x] 투명도 (`relay.float.opacity`) — 플로팅 popover + Settings 슬라이더 · panel alpha 동기화
+- [x] i18n 3처 동치 (430) · `%s` 없음
 - [x] 금지 grep 0 · `print(` DebugLogger만
-- [x] `swift test` 통과 (XCTest 49 + swift-testing 156) · `./scripts/build-macos.sh debug` **1.4.0**
-- [ ] 사용자 육안 (팝오버 핀 → 플로팅 · 카드 토글 · 드래그 · 닫기)
+- [x] `swift test` 통과 · `./scripts/build-macos.sh debug` **1.4.0**
+- [ ] **사용자 통합 테스트** (팝오버 핀 · 카드 토글 · 드래그 · 닫기 · 투명도 · 헤더 안정 · Settings 동기화)
 
 ---
 

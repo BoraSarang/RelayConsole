@@ -36,6 +36,21 @@ enum FloatingGraphLogic {
     static func formatOrigin(_ p: NSPoint) -> String {
         "\(p.x),\(p.y)"
     }
+
+    static let opacityKey = "relay.float.opacity"
+    static let minOpacity = 0.35
+    static let maxOpacity = 1.0
+    static let defaultOpacity = 1.0
+
+    /// 패널 투명도 clamp — 비정상 값은 기본(1.0)
+    static func clampOpacity(_ raw: Double) -> Double {
+        guard raw.isFinite else { return defaultOpacity }
+        return min(max(raw, minOpacity), maxOpacity)
+    }
+
+    static func storedOpacity(_ defaults: UserDefaults = .standard) -> Double {
+        clampOpacity(defaults.object(forKey: opacityKey) as? Double ?? defaultOpacity)
+    }
 }
 
 /// 기기 그래프 플로팅 창 — TetherLens FloatingWindowController 패턴
@@ -49,6 +64,7 @@ final class FloatingGraphController {
 
     private var panel: NSPanel?
     private var moveObserver: NSObjectProtocol?
+    private var opacityObserver: NSObjectProtocol?
     private var dragMonitor: Any?
     private var dragPressScreen: NSPoint?
     private var dragOriginAtPress: NSPoint?
@@ -67,6 +83,14 @@ final class FloatingGraphController {
             .sink { [weak self] _ in
                 self?.fitToContent()
             }
+        // 투명도(Settings/AppStorage) 변경 → 패널 alpha 즉시 반영
+        opacityObserver = NotificationCenter.default.addObserver(
+            forName: UserDefaults.didChangeNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.applyStoredOpacity()
+            }
+        }
     }
 
     func toggle() {
@@ -84,6 +108,7 @@ final class FloatingGraphController {
             createPanel()
         }
         panel?.orderFront(nil)
+        applyStoredOpacity()
         fitToContent()
         DebugLogger.shared.action("FloatGraph", "플로팅 창 표시")
     }
@@ -125,9 +150,21 @@ final class FloatingGraphController {
         win.identifier = NSUserInterfaceItemIdentifier(Self.windowID)
         win.contentViewController = hosting
         panel = win
+        applyStoredOpacity()
         observeMove(win)
         installDragMonitor(for: win)
         DebugLogger.shared.action("FloatGraph", "창 생성 위치=\(origin)")
+    }
+
+    /// Settings 슬라이더 / AppStorage → 패널 alpha
+    func setOpacity(_ raw: Double) {
+        let v = FloatingGraphLogic.clampOpacity(raw)
+        UserDefaults.standard.set(v, forKey: FloatingGraphLogic.opacityKey)
+        applyStoredOpacity()
+    }
+
+    private func applyStoredOpacity() {
+        panel?.alphaValue = FloatingGraphLogic.storedOpacity()
     }
 
     func fitToContent() {
