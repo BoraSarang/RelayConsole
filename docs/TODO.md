@@ -2,15 +2,16 @@
 > 작업 추적 — bd 연동 (이슈 prefix: RelayConsole)
 
 ## 진행 중 (bd ready)
-- [ ] **Alerts 육안 (PLAN_alerts · 0.9.1)** — 3탭·필터·그룹·ack/mute/메모·export 구현 ✓ · 탭 전영역 클릭 ✓ · **잔여 육안 대기**
-- [ ] **Sites (PLAN_sites_jobs · 1.0.0)** — PR-A 모델·SiteChecker·스토리지 → PR-B SitesView 상태바/스파크라인
-- [ ] **Jobs (PLAN_sites_jobs · 1.0.0)** — PR-A HeartbeatServer·overdue → PR-B JobsView · 하트비트 연동
+- [ ] **Alerts 육안 (PLAN_alerts · 0.9.1)** — 3탭·필터·그룹·ack/mute/메모·export · 탭 전영역 클릭 ✓ · **잔여 육안 대기**
+- [ ] **Sites/Jobs 육안 (PLAN_sites_jobs · 1.0.0)** — 구현 PR-A+B ✓ · **사용자 육안 대기**
 
 ## 보류 (기기 확보 시)
 - [ ] **Apple 실기 Trust 육안** — iPad USB 데이터 불량(안드로이드 동일 케이블 OK·복구도 미인식). 기기 확보 후 `brew install libimobiledevice` → 배터리/스토리지 카드
 - [ ] **Apple Phase 2** — Developer Mode·sysmon 등 — 위 기기 확보 후 착수
 
 ## 완료 (2026-09-24)
+- [x] **Sites/Jobs 구현 (PR-A+B · 1.0.0)** — Site HTTP/TCP/ping · 90일 상태바·스파크라인 · Job 하트비트 127.0.0.1·overdue grace · Alerts siteDown/siteUp/jobOverdue/jobRecovered · SitesView·JobsView · 설정 포트 · i18n **353** · 테스트 신규 20 · **1.0.0** · `PLAN_sites_jobs` · PR **#14** + PR-B
+- [x] **Alerts 탭 전영역 클릭** — `contentShape(Rectangle())` · PR **#13** 머지
 - [x] **Alerts 구현 (PR-A+B)** — `WatchEvent` source/ack/note/mutedUntil · `WatchEventAlerts` 필터·그룹·export · Apple WatchEvent 편입 · `AlertsView` 3탭·심각도/기간/플랫폼 필터·serial 그룹·ack/mute 1h·24h/메모·JSON/CSV export · ConsoleView 연결 · 설정 기간 · i18n **315** · 테스트 **139/139** · **0.9.1** · `PLAN_alerts` · PR **#10**·**#11** 머지
 - [x] **Apple 오프라인 UI 육안 (USB 불필요)** — DEBUG 주입 온/오프/오류/도구오류·해제 · 오프라인 배너 · E-MAC-APL 배너 · 카드 OFF `cards.empty` **사용자 확인 완료** · PR **#8** 머지
 - [x] **Apple 감시 1차 (방향 A Phase 1)** — Trust-only `IdeviceClient` 파서·`AppleDeviceMonitor` 60s 폴링 · `AppleDashboardView`+4카드(`OPColor.apple`) · brew 확인 1회 안내 · `relay.selectedAppleUdid` · E-MAC-APL-0001..4 · i18n **264** · 테스트 **120/120** · debug **0.9.0** · `PLAN_apple_phase1` · PR **#7** 머지

@@ -1,10 +1,11 @@
 # PLAN_sites_jobs_relayconsole.md — Sites·Jobs 사이드바 v1.0.0
 
-> 생성일: 2026-09-24 | 상태: **계획 확정 → 구현**
+> 생성일: 2026-09-24 | 상태: **구현 (육안 대기)**
 > 벤치마크: Uptime Kuma · Cronitor · Dead Man's Switch
-> 앱: **Relay Console** | 목표 버전: **1.0.0** | macOS 26.0
+> 앱: **Relay Console** | 버전: **1.0.0** | macOS 26.0
 > 근거: `PLAN_v0.2_macos`(아카이브) · `docs/DESIGN.md` 상태바/스파크라인 토큰 · BrandKit "Sites & Jobs"
 > 승인: 사용자 — 업타임+하트비트 · 1.0.0 · PR A/B 분할
+> PR **#14** (A) + PR-B (화면)
 
 ---
 
@@ -121,22 +122,32 @@ Job.isOverdue(now:) → lastBeatAt == nil || now - lastBeatAt > expectEverySec *
 
 | PR | 내용 |
 |----|------|
-| **A** | 모델·스토리지 · SiteChecker · HeartbeatServer · Alerts kind · 테스트 · HEARTBEAT.md · error_code |
+| **A #14** | 모델·스토리지 · SiteChecker · HeartbeatServer · Alerts kind · 테스트 · HEARTBEAT.md · error_code |
 | **B** | SitesView·JobsView · ConsoleView 연결 · 90일 상태바·스파크라인 · DEBUG 주입 · 설정 · i18n · **1.0.0** · 육안 |
 
 ---
 
 ## 7. 검증 (DoD)
 
-- [ ] `swift test` 통과 (기존 + 신규 overdue/파서/마스킹)
-- [ ] 기존 EventStore JSON 하위호환
-- [ ] debug 0 error · i18n 3곳 일치 · missing 0
-- [ ] Sites: HTTP localhost 성공/실패 주입 · 상태 바 갱신
-- [ ] Jobs: curl 하트비트 1건 → lastBeat 갱신 · overdue 표시
-- [ ] site down → Alerts 반영
-- [ ] 하트비트 바인드 127.0.0.1 고정 (외부 노출 없음)
-- [ ] 금지 grep 0 · 버전 **1.0.0**
-- [ ] `error_message_ko.json` 갱신
+- [x] `swift test` 통과 (SitesJobsTests 20종 포함)
+- [x] 기존 EventStore JSON 하위호환 (Sites/Jobs 별도 파일)
+- [x] debug 0 error · i18n **353/353/353** missing 0
+- [x] 금지 grep 0 · 버전 **1.0.0**
+- [x] `error_message_ko.json` 갱신 (E-MAC-NET/JOB)
+- [x] 하트비트 바인드 127.0.0.1 고정
+- [ ] Sites: HTTP localhost 성공/실패 주입 · 상태 바 갱신 — **육안**
+- [ ] Jobs: curl 하트비트 → lastBeat · overdue 표시 — **육안**
+- [ ] site down → Alerts 반영 — **육안**
+
+### 육안 순서
+
+1. 디버그 → **Site down 주입** → Sites: 빨강 상태바 · Alerts에 siteDown
+2. **Site up 주입** → 초록 복구 · Alerts 해소
+3. 사이트 추가 (https://example.com, HTTP) → 즉시 체크 · ms 표시
+4. 작업 추가 → **curl 복사** → 터미널 실행 → lastBeat 갱신
+5. **Job beat 주입** → OK 배지
+6. 설정 → 하트비트 포트 변경 → 재시작 · Jobs 배너 갱신
+7. 앱 재시작 → Sites/Jobs 유지
 
 ---
 

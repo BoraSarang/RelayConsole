@@ -214,6 +214,18 @@ struct DebugPanelView: View {
                                 resetCooldown: false
                             )
                         }
+                        injectButton(L10n.string("ui.debug.inject.siteOk")) {
+                            ensureDebugSite(ok: true)
+                        }
+                        injectButton(L10n.string("ui.debug.inject.siteDown")) {
+                            ensureDebugSite(ok: false)
+                        }
+                        injectButton(L10n.string("ui.debug.inject.jobBeat")) {
+                            ensureDebugJob()
+                        }
+                        injectButton(L10n.string("ui.debug.inject.siteEmpty")) {
+                            store.clearSitesJobsDebug()
+                        }
                     }
                     Text(L10n.string("ui.debug.inject.hint"))
                         .font(OPFont.body(10))
@@ -255,5 +267,25 @@ struct DebugPanelView: View {
                 .overlay(RoundedRectangle(cornerRadius: 8).stroke(OPColor.border, lineWidth: 1))
         }
         .buttonStyle(.plain)
+    }
+
+    private func ensureDebugSite(ok: Bool) {
+        if let site = store.sites.first {
+            store.debugInjectSiteCheck(id: site.id, ok: ok, detail: ok ? nil : "HTTP 503")
+        } else {
+            store.addSite(name: "DEBUG", target: "https://example.com", probe: .http, intervalSec: 60)
+            if let id = store.sites.first?.id {
+                store.debugInjectSiteCheck(id: id, ok: ok, detail: ok ? nil : "HTTP 503")
+            }
+        }
+    }
+
+    private func ensureDebugJob() {
+        if store.jobs.isEmpty {
+            store.addJob(name: "DEBUG", expectEverySec: 3600)
+        }
+        if let id = store.jobs.first?.id {
+            store.debugInjectBeat(id: id)
+        }
     }
 }

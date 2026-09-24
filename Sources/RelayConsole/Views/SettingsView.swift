@@ -21,7 +21,7 @@ struct SettingsView: View {
                     }
                     // 메뉴바는 아이콘만 — 이 토글은 팝오버 헤더 n/m 표시
                     Toggle(L10n.string("settings.menubarMetrics"), isOn: $menubarMetrics)
-                    LabeledContent(L10n.string("settings.version"), value: "0.9.1")
+                    LabeledContent(L10n.string("settings.version"), value: "1.0.0")
                     LabeledContent(L10n.string("settings.bundleId"), value: "com.borasarang.relayconsole")
                 }
                 Section(L10n.string("settings.section.watch")) {
@@ -57,6 +57,32 @@ struct SettingsView: View {
                         Text(L10n.string("alerts.period.24h")).tag("24h")
                         Text(L10n.string("alerts.period.7d")).tag("7d")
                         Text(L10n.string("alerts.period.all")).tag("all")
+                    }
+                }
+                Section(L10n.string("settings.section.jobs")) {
+                    HStack {
+                        Text(L10n.string("settings.hb.port"))
+                            .font(OPFont.body(12))
+                            .foregroundStyle(OPColor.ink)
+                        Spacer()
+                        TextField("", value: Binding(
+                            get: { Int(store.heartbeatPort) },
+                            set: { v in
+                                let p = UInt16(clamping: max(1, min(65535, v)))
+                                store.restartHeartbeat(port: p)
+                            }
+                        ), format: .number)
+                        .textFieldStyle(.plain)
+                        .font(OPFont.number(12))
+                        .foregroundStyle(OPColor.ink)
+                        .frame(width: 70)
+                        .multilineTextAlignment(.trailing)
+                        Button(L10n.string("settings.hb.restart")) {
+                            store.restartHeartbeat(port: store.heartbeatPort)
+                        }
+                        .buttonStyle(.plain)
+                        .font(OPFont.body(11))
+                        .foregroundStyle(OPColor.jobs)
                     }
                 }
                 Section(L10n.string("settings.section.apple")) {
