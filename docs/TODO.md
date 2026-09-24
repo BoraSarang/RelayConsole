@@ -5,6 +5,7 @@
 - [ ] **실기기 육안 (v0.7~v0.9)** — scrcpy 설치→미러링 + 스샷 시트 + **ANR/크래시 DEBUG 주입** + **카드 On/Off** + 재시작 후 **이력 복원** (사용자)
 
 ## 완료 (2026-09-24)
+- [x] **사이드바 B안 라벨** — Droid/Apple/Sites/Jobs/Notify → **기기(Devices)**·사이트·작업·알림(Alerts) · Devices 하위 Android/Apple 세그먼트 · placeholder `sidebar.soon` · i18n **232**
 - [x] **v0.9 카드 On/Off + EventStore 1차** — `relay.cards.*` 8카드 `@AppStorage` · 대시보드·팝오버 공통 필터 · 전체 OFF `cards.empty` · 설정 섹션 · `WatchEvent: Codable` · `EventStore` JSON(Application Support, 500건, ISO8601) · 시작 로드/ingest 저장 · i18n **227** · 버전 **0.9.0**
 - [x] **v0.8 ANR/크래시 logcat** — `WatchKind.{anr,crash}` · `DeviceMonitor.{anr,crash}Keywords` · `feedAnr`/`feedCrash` 5분 쿨다운·kind 독립 · clear 자동 없음(TTL) · `relay.watch.{anr,crash}` · remediation steps · DEBUG 주입 · i18n · 테스트 +7
 - [x] **v0.7 PR #4 머지** — `feat/v07-scrcpy-watch` → main `39c4115` · scrcpy A안 + 감시 마감 + 스샷·로그뷰어
