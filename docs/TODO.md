@@ -2,7 +2,7 @@
 > 작업 추적 — bd 연동 (이슈 prefix: RelayConsole)
 
 ## 진행 중 (bd ready)
-- (육안 대기) **외부 알림 채널 A1** — `RelayConsole-avf` 구현·테스트·빌드 완료 · 설정→연동에서 ntfy/Slack 테스트 전송 확인 후 close
+- (육안 대기) **외부 알림 채널 A1** — 구현·테스트·빌드·**PR #21 머지 `44e2cd6`** · 설정→연동 ntfy/Slack 테스트 전송 확인 후 `RelayConsole-avf` close
 
 ## 보류 (기기 확보 시)
 - [ ] **Apple 실기 Trust 육안** — iPad USB 데이터 불량(안드로이드 동일 케이블 OK·복구도 미인식). 기기 확보 후 `brew install libimobiledevice` → 배터리/스토리지 카드
@@ -12,6 +12,7 @@
 - [ ] **리서치 재검토** — `RelayConsole-p1w` · `RESEARCH_competitive_v1` 재읽고 개선 항목 도출
 
 ## 완료 (2026-09-24)
+- [x] **외부 알림 채널 A1 구현** — `NotifyChannel` · `relay.notify.*` · 설정 연동 · i18n 409 · 테스트 156 · **1.2.0** · `PLAN_notify_channels` · **PR #21 머지 `44e2cd6`**
 - [x] **README 공개용** — `README.md` · 포지셔닝·기능·설치·ntfy/Slack 설정
 - [x] **경쟁 리서치·방향 확정** — `RESEARCH_competitive_v1` · 사용자 승인: 알림 채널 1순위 · 로컬 전용 · Apple 보류 · README · 완료 후 재검토
 - [x] **종료 버튼+확인 (PR A)** — `menubar.button.quit`+`shutdown()` · `applicationWillTerminate` · **PR #19 머지 `4d72f52`**
