@@ -2,7 +2,7 @@
 > 작업 추적 — bd 연동 (이슈 prefix: RelayConsole)
 
 ## 진행 중 (bd ready)
-- **A6 Sites 90일 캘린더 + 태그** — 검증 통과 · 커밋/PR 대기 · `RelayConsole-9vi` · branch `feat/sites-calendar` · **1.13.0**
+- (없음 — 리서치 §8 백로그 P1~P3 전수 완료)
 
 ## 다음 스프린트 (사용자 선택 대기 · 리서치 §8)
 - 보류: A9 Apple Phase 2 (기기 확보 시)
@@ -13,6 +13,7 @@
 - [ ] **Apple Phase 2** — Developer Mode·sysmon 등 — 위 기기 확보 후 착수
 
 ## 완료 (2026-09-24)
+- [x] **A6 Sites 90일 캘린더 + 태그** — `Site.tags`·`SitesCalendarLogic` · 태그 폼·필터 칩(AND) · 리스트/캘린더 · 90일 주 격자 · i18n **536** · SitesCalendarTests +13 · **1.13.0** · `PLAN_sites_calendar` · **PR #38 머지 `6e4b40e`** · bd `RelayConsole-9vi` closed
 - [x] **A4 파일/스샷 갤러리** — `GalleryLogic`·`GalleryStore`·`GalleryController` · `GallerySheet`(로컬/기기) · 헤더 갤러리 버튼 · i18n **529** · GalleryTests +7 · **1.12.0** · `PLAN_gallery` · **PR #37 머지 `17d0cc0`** · bd `RelayConsole-40v` closed
 - [x] **S2 Device Health Score** — `HealthScoreLogic`(배터리40·발열40·스로틀20 가중 0–100) · HEALTH 카드 + 헤더 칩 · `relay.cards.health` · i18n **506** · HealthScoreTests +10 · **1.11.0** · `PLAN_health_score` · **PR #36 머지 `9bf0eb5`** · bd `RelayConsole-czg` closed
 - [x] **A10 로컬 MCP 서버** — `RelayMcpCore`·`relay-mcp` stdio · 읽기 전용 5도구(devices/sites/jobs/events/summary) · `AdbDevicesParser` · Settings MCP help · i18n **499** · McpProtocolTests +10 · **1.10.0** · `PLAN_local_mcp` · **PR #35 머지 `7fbe8e9`** · bd `RelayConsole-yzw` closed
