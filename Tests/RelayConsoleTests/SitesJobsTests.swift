@@ -315,4 +315,72 @@ final class SitesJobsTests: XCTestCase {
         let back = try JSONDecoder().decode(WatchEvent.self, from: data)
         XCTAssertEqual(back.kind, .siteDown)
     }
+
+    // MARK: - SSL · assertion (A5)
+
+    func testSiteJSONBackCompatWithoutSslKeys() throws {
+        let json = """
+        {"id":"6BA7B810-9DAD-11D1-80B4-00C04FD430C9","name":"api","target":"https://example.com","probe":"http","intervalSec":60,"enabled":true,"failThreshold":2,"history":[],"createdAt":"2026-09-24T00:00:00Z"}
+        """
+        let dec = JSONDecoder()
+        dec.dateDecodingStrategy = .iso8601
+        let site = try dec.decode(Site.self, from: Data(json.utf8))
+        XCTAssertNil(site.sslExpiresAt)
+        XCTAssertNil(site.assertBody)
+        XCTAssertEqual(site.failThreshold, 2)
+    }
+
+    func testSiteJSONRoundTripWithSslAndAssert() throws {
+        let exp = Date(timeIntervalSince1970: 1_800_000_000)
+        var site = Site(
+            name: "api",
+            target: "https://example.com",
+            probe: .http,
+            failThreshold: 3,
+            sslExpiresAt: exp,
+            assertBody: "ok"
+        )
+        site.appendCheck(SiteCheck(ok: true, sslExpiresAt: exp), now: .now)
+        let enc = JSONEncoder()
+        enc.dateEncodingStrategy = .iso8601
+        let data = try enc.encode(site)
+        let dec = JSONDecoder()
+        dec.dateDecodingStrategy = .iso8601
+        let back = try dec.decode(Site.self, from: data)
+        XCTAssertEqual(back.sslExpiresAt?.timeIntervalSince1970 ?? 0, exp.timeIntervalSince1970, accuracy: 1)
+        XCTAssertEqual(back.assertBody, "ok")
+        XCTAssertEqual(back.history.last?.sslExpiresAt?.timeIntervalSince1970 ?? 0, exp.timeIntervalSince1970, accuracy: 1)
+    }
+
+    func testSslDaysRemainingAndWarn() {
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        let in10 = now.addingTimeInterval(10 * 86400)
+        let in30 = now.addingTimeInterval(30 * 86400)
+        let past = now.addingTimeInterval(-86400)
+        XCTAssertEqual(SslAssertLogic.daysRemaining(expiresAt: in10, now: now), 10)
+        XCTAssertTrue(SslAssertLogic.sslShouldWarn(expiresAt: in10, now: now, warnDays: 14))
+        XCTAssertFalse(SslAssertLogic.sslShouldWarn(expiresAt: in30, now: now, warnDays: 14))
+        XCTAssertTrue(SslAssertLogic.sslShouldWarn(expiresAt: past, now: now, warnDays: 14))
+        XCTAssertFalse(SslAssertLogic.sslShouldWarn(expiresAt: nil, now: now, warnDays: 14))
+    }
+
+    func testAssertBody() {
+        XCTAssertTrue(SslAssertLogic.assertBody("hello ok world", expected: "ok"))
+        XCTAssertFalse(SslAssertLogic.assertBody("hello", expected: "ok"))
+        XCTAssertTrue(SslAssertLogic.assertBody("anything", expected: nil))
+        XCTAssertTrue(SslAssertLogic.assertBody("anything", expected: ""))
+    }
+
+    func testSslBadge() {
+        XCTAssertEqual(SslAssertLogic.sslBadge(days: nil), nil)
+        XCTAssertEqual(SslAssertLogic.sslBadge(days: 12), "SSL D-12")
+        XCTAssertEqual(SslAssertLogic.sslBadge(days: -1), "SSL ✕")
+    }
+
+    func testSslExpiringWatchKindCodable() throws {
+        let e = WatchEvent(kind: .sslExpiring, severity: .warning, serial: "site:X", title: "API", detail: "SSL 14")
+        let data = try JSONEncoder().encode(e)
+        let back = try JSONDecoder().decode(WatchEvent.self, from: data)
+        XCTAssertEqual(back.kind, .sslExpiring)
+    }
 }

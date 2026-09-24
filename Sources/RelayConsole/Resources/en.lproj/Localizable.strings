@@ -157,6 +157,9 @@
 "event.signal.clear" = "Signal recovered";
 "event.signal.drop" = "Signal dropped";
 "event.site.down" = "Site down";
+"event.site.sslClear" = "SSL expiry warning cleared";
+"event.site.sslExpired" = "SSL certificate expired";
+"event.site.sslExpiring" = "SSL certificate expires in %d days";
 "event.site.up" = "Site recovered";
 "event.throttling.clear" = "Throttling cleared";
 "event.throttling.enter" = "Throttling started";
@@ -330,7 +333,10 @@
 "settings.section.integrations" = "Integrations";
 "settings.section.jobs" = "Heartbeat";
 "settings.section.scrcpy" = "scrcpy mirroring";
+"settings.section.sites" = "Sites";
 "settings.section.watch" = "Watch alerts";
+"settings.sites.sslWarnDays" = "SSL warn D-day";
+"settings.sites.sslWarnDays.help" = "Alert sslExpiring when cert expires within N days";
 "settings.theme" = "Theme";
 "settings.theme.dark" = "Dark";
 "settings.theme.light" = "Light";
@@ -374,6 +380,9 @@
 "sites.error.target.http" = "Must be an http(s):// URL";
 "sites.error.target.ping" = "Invalid host";
 "sites.error.target.tcp" = "Must be host or host:port";
+"sites.field.assert" = "Body must contain";
+"sites.field.assert.help" = "Record as down if response body lacks this text";
+"sites.field.assert.placeholder" = "e.g. ok (empty = skip)";
 "sites.field.hint" = "HTTP: https://host/health · TCP: host:5432 · PING: host";
 "sites.field.interval" = "Interval";
 "sites.field.name" = "Name";

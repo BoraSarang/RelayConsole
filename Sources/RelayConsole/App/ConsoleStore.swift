@@ -42,6 +42,8 @@ final class ConsoleStore: ObservableObject {
     private var jobsSweepTask: Task<Void, Never>?
     private var lastSiteUp: [UUID: Bool] = [:]
     private var lastJobOverdue: [UUID: Bool] = [:]
+    /// SSL 만료 경고 전이 (A5) — true면 경고 중
+    private var lastSslWarn: [UUID: Bool] = [:]
     /// 감시 알림 토글 (relay.watch.*)
     @AppStorage("relay.watch.throttling") var watchThrottling = true
     @AppStorage("relay.watch.charge") var watchCharge = true
@@ -57,6 +59,8 @@ final class ConsoleStore: ObservableObject {
     @AppStorage("relay.watch.rsrp") var watchRsrp = true
     @AppStorage("relay.watch.recovery") var watchRecovery = true
     @AppStorage("relay.watch.notifications") var watchNotifications = true
+    /// Sites SSL 경고 D-day (A5)
+    @AppStorage("relay.sites.sslWarnDays") var sslWarnDays = 14
     /// Phase v0.8 — ANR / 크래시 logcat
     @AppStorage("relay.watch.anr") var watchAnr = true
     @AppStorage("relay.watch.crash") var watchCrash = true
@@ -191,8 +195,12 @@ final class ConsoleStore: ObservableObject {
         guard let idx = sites.firstIndex(where: { $0.id == site.id }) else { return }
         let check = await SiteChecker.shared.check(sites[idx])
         sites[idx].appendCheck(check)
+        if let exp = check.sslExpiresAt {
+            sites[idx].sslExpiresAt = exp
+        }
         SitesJobsStore.shared.saveSites(sites)
         emitSiteTransition(site: sites[idx], check: check)
+        emitSslTransition(site: sites[idx])
     }
 
     /// down/up 전이 → WatchEvent — effectiveUp (연속 failThreshold) 기준
@@ -224,6 +232,55 @@ final class ConsoleStore: ObservableObject {
             )
         }
         ingestWatch(event, forceNotify: tr == .down)
+    }
+
+    /// SSL 만료 임박 전이 → WatchEvent.sslExpiring (A5)
+    private func emitSslTransition(site: Site) {
+        guard site.enabled, site.probe == .http, site.target.lowercased().hasPrefix("https") else {
+            lastSslWarn[site.id] = false
+            return
+        }
+        let should = SslAssertLogic.sslShouldWarn(
+            expiresAt: site.sslExpiresAt,
+            warnDays: sslWarnDays
+        )
+        let before = lastSslWarn[site.id]
+        lastSslWarn[site.id] = should
+        if let before {
+            guard before != should else { return }
+            emitSslEvent(site: site, entering: should)
+        } else if should {
+            emitSslEvent(site: site, entering: true)
+        }
+    }
+
+    private func emitSslEvent(site: Site, entering: Bool) {
+        if entering {
+            let days = SslAssertLogic.daysRemaining(expiresAt: site.sslExpiresAt) ?? sslWarnDays
+            let detail = days < 0
+                ? L10n.string("event.site.sslExpired")
+                : L10n.format("event.site.sslExpiring", max(0, days))
+            let event = WatchEvent(
+                kind: .sslExpiring,
+                severity: days < 0 ? .critical : .warning,
+                serial: site.serialKey,
+                title: site.name,
+                detail: detail,
+                source: nil
+            )
+            ingestWatch(event, forceNotify: true)
+        } else {
+            let event = WatchEvent(
+                kind: .sslExpiring,
+                severity: .info,
+                serial: site.serialKey,
+                title: site.name,
+                detail: L10n.string("event.site.sslClear"),
+                isClear: true,
+                source: nil
+            )
+            ingestWatch(event, forceNotify: false)
+        }
     }
 
     /// overdue 전이 → WatchEvent
@@ -295,13 +352,21 @@ final class ConsoleStore: ObservableObject {
 
     // MARK: - Sites CRUD
 
-    func addSite(name: String, target: String, probe: SiteProbe, intervalSec: Int, failThreshold: Int = 2) {
+    func addSite(
+        name: String,
+        target: String,
+        probe: SiteProbe,
+        intervalSec: Int,
+        failThreshold: Int = 2,
+        assertBody: String? = nil
+    ) {
         let site = Site(
             name: name,
             target: SitesJobsLogic.sanitizeTarget(target, probe: probe),
             probe: probe,
             intervalSec: intervalSec,
-            failThreshold: failThreshold
+            failThreshold: failThreshold,
+            assertBody: assertBody?.isEmpty == true ? nil : assertBody
         )
         sites.append(site)
         SitesJobsStore.shared.saveSites(sites)
@@ -321,8 +386,16 @@ final class ConsoleStore: ObservableObject {
         SitesJobsStore.shared.saveSites(sites)
     }
 
-    /// 사이트 수정 (이름·대상·probe·주기·임계값) — 대상 변경 시 즉시 재체크
-    func updateSite(id: UUID, name: String, target: String, probe: SiteProbe, intervalSec: Int, failThreshold: Int = 2) {
+    /// 사이트 수정 (이름·대상·probe·주기·임계값·assertion) — 대상 변경 시 즉시 재체크
+    func updateSite(
+        id: UUID,
+        name: String,
+        target: String,
+        probe: SiteProbe,
+        intervalSec: Int,
+        failThreshold: Int = 2,
+        assertBody: String? = nil
+    ) {
         guard let i = sites.firstIndex(where: { $0.id == id }) else { return }
         let clean = SitesJobsLogic.sanitizeTarget(target, probe: probe)
         let targetChanged = sites[i].target != clean || sites[i].probe != probe
@@ -331,6 +404,7 @@ final class ConsoleStore: ObservableObject {
         sites[i].probe = probe
         sites[i].intervalSec = max(10, intervalSec)
         sites[i].failThreshold = min(5, max(1, failThreshold))
+        sites[i].assertBody = assertBody?.isEmpty == true ? nil : assertBody
         SitesJobsStore.shared.saveSites(sites)
         DebugLogger.shared.info("Sites", "[INFO] [FEATURE] 사이트 수정 \(name)")
         if targetChanged {
@@ -684,6 +758,7 @@ final class ConsoleStore: ObservableObject {
         case .crash: return watchCrash
         case .appleConnected, .appleDisconnected: return watchNotifications
         case .siteDown, .siteUp, .jobOverdue, .jobRecovered: return watchNotifications
+        case .sslExpiring: return watchNotifications
         }
     }
 

@@ -9,6 +9,7 @@ struct SitesView: View {
     @State private var probe: SiteProbe = .http
     @State private var interval = 60
     @State private var failThreshold = 2
+    @State private var assertBody = ""
     @State private var formError: String?
     @State private var rangeDays = 7
 
@@ -180,6 +181,18 @@ struct SitesView: View {
                     .padding(.horizontal, 5)
                     .padding(.vertical, 2)
                     .background(OPColor.sites.opacity(0.15), in: RoundedRectangle(cornerRadius: 4))
+                if let sslDays = SslAssertLogic.daysRemaining(expiresAt: site.sslExpiresAt),
+                   let badge = SslAssertLogic.sslBadge(days: sslDays) {
+                    Text(badge)
+                        .font(OPFont.number(9))
+                        .foregroundStyle(sslDays < 0 ? OPColor.bad : sslDays <= store.sslWarnDays ? OPColor.warn : OPColor.inkDim)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 2)
+                        .background(
+                            (sslDays < 0 ? OPColor.bad : OPColor.warn).opacity(0.12),
+                            in: RoundedRectangle(cornerRadius: 4)
+                        )
+                }
                 Spacer(minLength: 8)
                 // 우측 메트릭 — 잘림 방지 고정 폭
                 if site.enabled, let up {
@@ -333,6 +346,7 @@ struct SitesView: View {
         probe = site.probe
         interval = site.intervalSec
         failThreshold = site.failThreshold
+        assertBody = site.assertBody ?? ""
         formError = nil
         sheetMode = .edit(site)
     }
@@ -413,6 +427,24 @@ struct SitesView: View {
                 .foregroundStyle(OPColor.ink)
                 .help(L10n.string("sites.field.threshold.help"))
 
+                if probe == .http {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(L10n.string("sites.field.assert"))
+                            .font(OPFont.body(11))
+                            .foregroundStyle(OPColor.inkDim)
+                        TextField("", text: $assertBody, prompt: Text(L10n.string("sites.field.assert.placeholder")))
+                            .textFieldStyle(.plain)
+                            .font(OPFont.body(13))
+                            .foregroundStyle(OPColor.ink)
+                            .padding(8)
+                            .background(OPColor.popBG, in: RoundedRectangle(cornerRadius: 8))
+                            .overlay(RoundedRectangle(cornerRadius: 8).stroke(OPColor.border, lineWidth: 1))
+                        Text(L10n.string("sites.field.assert.help"))
+                            .font(OPFont.body(9))
+                            .foregroundStyle(OPColor.inkDim.opacity(0.7))
+                    }
+                }
+
                 if let formError {
                     Text(formError)
                         .font(OPFont.body(11))
@@ -449,14 +481,31 @@ struct SitesView: View {
             return
         }
         formError = nil
+        let assertion = probe == .http ? assertBody.trimmingCharacters(in: .whitespaces) : ""
         switch mode {
         case .add:
-            store.addSite(name: n, target: t, probe: probe, intervalSec: interval, failThreshold: failThreshold)
+            store.addSite(
+                name: n,
+                target: t,
+                probe: probe,
+                intervalSec: interval,
+                failThreshold: failThreshold,
+                assertBody: assertion
+            )
         case .edit(let site):
-            store.updateSite(id: site.id, name: n, target: t, probe: probe, intervalSec: interval, failThreshold: failThreshold)
+            store.updateSite(
+                id: site.id,
+                name: n,
+                target: t,
+                probe: probe,
+                intervalSec: interval,
+                failThreshold: failThreshold,
+                assertBody: assertion
+            )
         }
         sheetMode = nil
         name = ""
         target = ""
+        assertBody = ""
     }
 }

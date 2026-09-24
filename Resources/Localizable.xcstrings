@@ -2590,6 +2590,54 @@
         }
       }
     },
+    "event.site.sslClear": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SSL expiry warning cleared"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SSL 만료 경고 해소"
+          }
+        }
+      }
+    },
+    "event.site.sslExpired": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SSL certificate expired"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SSL 인증서 만료됨"
+          }
+        }
+      }
+    },
+    "event.site.sslExpiring": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SSL certificate expires in %d days"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SSL 인증서 %d일 남음"
+          }
+        }
+      }
+    },
     "event.site.up": {
       "extractionState": "manual",
       "localizations": {
@@ -5373,6 +5421,22 @@
         }
       }
     },
+    "settings.section.sites": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sites"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "사이트"
+          }
+        }
+      }
+    },
     "settings.section.watch": {
       "localizations": {
         "en": {
@@ -5385,6 +5449,38 @@
           "stringUnit": {
             "state": "translated",
             "value": "감시 알림"
+          }
+        }
+      }
+    },
+    "settings.sites.sslWarnDays": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SSL warn D-day"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SSL 경고 D-day"
+          }
+        }
+      }
+    },
+    "settings.sites.sslWarnDays.help": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alert sslExpiring when cert expires within N days"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "인증서 만료까지 N일 이하면 sslExpiring 알림"
           }
         }
       }
@@ -6085,6 +6181,54 @@
           "stringUnit": {
             "state": "translated",
             "value": "host 또는 host:port 형식이 아닙니다"
+          }
+        }
+      }
+    },
+    "sites.field.assert": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Body must contain"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "본문 포함 문자열"
+          }
+        }
+      }
+    },
+    "sites.field.assert.help": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Record as down if response body lacks this text"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "HTTP 응답에 이 문자열이 없으면 장애로 기록"
+          }
+        }
+      }
+    },
+    "sites.field.assert.placeholder": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "e.g. ok (empty = skip)"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "예: ok (비워두면 검사 안 함)"
           }
         }
       }
