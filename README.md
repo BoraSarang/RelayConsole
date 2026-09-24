@@ -5,7 +5,7 @@
 
 - **플랫폼**: macOS 26.0+ (SwiftUI `MenuBarExtra`)
 - **번들 ID**: `com.borasarang.relayconsole`
-- **버전**: 1.2.0
+- **버전**: 1.3.0
 - **언어**: 한국어 · English
 
 ---
@@ -29,8 +29,9 @@
 
 ### 메뉴바 · 팝오버
 - 기기 수·배터리·critical 주황 배지
-- 팝오버: 사이트 요약, Jobs overdue, 발열 배너, 권장 후속 조치 체크리스트
+- 팝오버: **아침 브리핑 한 줄**(사이트·지연 작업·폰·critical), 사이트 요약, Jobs overdue, 발열 배너, 권장 후속 조치 체크리스트
 - 종료 버튼 + 확인 알림
+- 설정 → 일반에서 브리핑 표시 on/off
 
 ### 기기 관제 (Android · Apple Phase1)
 - 8카드: CPU / GPU / MEM / SENSORS / BATTERY / NETWORK / THERMAL / STORAGE
@@ -47,11 +48,12 @@
 - `127.0.0.1` 하트비트 수서버 · overdue/grace · curl 토큰 등록
 - overdue → Alerts
 
-### 알림 · 연동 (1.2.0)
+### 알림 · 연동 (1.3.0)
 - Alerts 3탭(활성/무음/해소) · 필터 · JSON/CSV export
 - **외부 채널**: **ntfy**(서버·토픽·Bearer) · **Slack Incoming Webhook**
 - 최소 심각도(warning/critical) · 복구 이벤트 토글 · 테스트 전송
 - 설정 → **연동** 탭에서 구성 · 토큰/웹훅은 기기에만 저장
+- 팝오버 헤더 **아침 브리핑 한 줄** (S1)
 
 ---
 

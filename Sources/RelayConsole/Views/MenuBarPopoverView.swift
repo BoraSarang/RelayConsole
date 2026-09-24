@@ -15,6 +15,7 @@ struct MenuBarPopoverView: View {
     /// 상단 감시 배너 TTL — 해제/충전 등 일회성 이벤트는 5분 후 자동 제거
     @State private var now = Date()
     @AppStorage("relay.menubarMetrics") private var menubarMetrics = true
+    @AppStorage("relay.briefing.enabled") private var briefingEnabled = true
 
     /// 상단 배너 유지 시간 (초)
     private let topBannerTTL: TimeInterval = 300
@@ -123,7 +124,7 @@ struct MenuBarPopoverView: View {
                         .font(OPFont.number(11))
                         .foregroundStyle(OPColor.inkDim)
                 }
-                Text("1.2.0")
+                Text("1.3.0")
                     .font(OPFont.number(10))
                     .foregroundStyle(OPColor.inkDim)
             }
@@ -164,8 +165,53 @@ struct MenuBarPopoverView: View {
                         : L10n.string("menubar.device.detail"))
                 }
             }
+
+            if briefingEnabled {
+                briefingLine
+            }
         }
         .fixedSize(horizontal: false, vertical: true)
+    }
+
+    /// 아침 브리핑 한 줄 — sites·jobs·폰·critical (PLAN_briefing · S1)
+    private var briefingLine: some View {
+        let snap = store.makeBriefing(now: now)
+        let color: Color = {
+            switch snap.tone {
+            case .bad: return OPColor.bad
+            case .warn: return OPColor.warn
+            case .ok: return OPColor.ok
+            }
+        }()
+        return HStack(spacing: 6) {
+            Circle()
+                .fill(color)
+                .frame(width: 5, height: 5)
+            Text(L10n.format(
+                "briefing.line",
+                snap.upSites,
+                snap.totalSites,
+                snap.overdueJobs,
+                snap.onlinePhones,
+                snap.totalPhones,
+                snap.activeCriticals
+            ))
+            .font(OPFont.number(10))
+            .foregroundStyle(color)
+            .lineLimit(1)
+            .truncationMode(.tail)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, 3)
+        .padding(.horizontal, 6)
+        .background(
+            RoundedRectangle(cornerRadius: 6)
+                .fill(color.opacity(0.12))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 6)
+                .stroke(color.opacity(0.28), lineWidth: 1)
+        )
     }
 
     private func connectionBadge(_ d: DeviceSnapshot) -> some View {

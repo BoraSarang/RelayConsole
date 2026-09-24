@@ -66,6 +66,7 @@
 "apple.tools.missing" = "libimobiledevice tools not found";
 "apple.tools.policy" = "No auto-download · install runs once after confirmation.";
 "apple.tools.title" = "libimobiledevice required";
+"briefing.line" = "%d/%d sites · %d late jobs · %d/%d phones · %d critical";
 "cards.empty" = "No cards visible — enable cards in Settings";
 "common.na" = "—";
 "droid.battery.current" = "Current";
@@ -267,6 +268,7 @@
 "settings.apple.tools" = "libimobiledevice tools";
 "settings.apple.toolsMissing" = "Not installed";
 "settings.apple.toolsOk" = "Installed";
+"settings.briefing" = "Show morning briefing line";
 "settings.bundleId" = "Bundle ID";
 "settings.cards.battery" = "Battery";
 "settings.cards.cpu" = "CPU";
