@@ -80,7 +80,14 @@ actor AppleDeviceMonitor {
             off.at = .now
             cache[udid] = off
             emit(off)
-            await notify(L10n.format("apple.event.disconnected", IdeviceClient.shortUdid(udid)))
+            let short = IdeviceClient.shortUdid(udid)
+            await notify(L10n.format("apple.event.disconnected", short))
+            await emitWatch(
+                kind: .appleDisconnected,
+                serial: udid,
+                title: L10n.string("event.appleDisconnected"),
+                detail: short
+            )
         }
 
         for udid in found {
@@ -103,6 +110,12 @@ actor AppleDeviceMonitor {
             emit(snap)
             if isNew || wasOffline {
                 await notify(L10n.format("apple.event.connected", snap.displayName))
+                await emitWatch(
+                    kind: .appleConnected,
+                    serial: udid,
+                    title: L10n.string("event.appleConnected"),
+                    detail: "\(snap.displayName) · \(IdeviceClient.shortUdid(udid))"
+                )
             }
         }
     }
@@ -115,6 +128,21 @@ actor AppleDeviceMonitor {
     private func notify(_ text: String) async {
         guard let eventHandler else { return }
         eventHandler(text)
+    }
+
+    /// WatchEvent 발행 → ConsoleStore.ingestWatch (EventStore 영구화 포함)
+    private func emitWatch(kind: WatchKind, serial: String, title: String, detail: String) async {
+        let event = WatchEvent(
+            kind: kind,
+            severity: .info,
+            serial: serial,
+            title: title,
+            detail: detail,
+            source: .apple
+        )
+        await MainActor.run {
+            ConsoleStore.shared.ingestWatch(event)
+        }
     }
 
     private func publishError(_ message: String?) async {

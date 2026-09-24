@@ -564,16 +564,16 @@
     },
     "droid.battery.temp": {
       "localizations": {
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "온도"
-          }
-        },
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Temp"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "온도"
           }
         }
       }
@@ -676,13 +676,13 @@
     },
     "droid.card.gpu.es": {
       "localizations": {
-        "ko": {
+        "en": {
           "stringUnit": {
             "state": "translated",
             "value": "OpenGL ES %@"
           }
         },
-        "en": {
+        "ko": {
           "stringUnit": {
             "state": "translated",
             "value": "OpenGL ES %@"
@@ -692,13 +692,13 @@
     },
     "droid.card.gpu.freq": {
       "localizations": {
-        "ko": {
+        "en": {
           "stringUnit": {
             "state": "translated",
             "value": "%@ MHz"
           }
         },
-        "en": {
+        "ko": {
           "stringUnit": {
             "state": "translated",
             "value": "%@ MHz"
@@ -708,13 +708,13 @@
     },
     "droid.card.gpu.title": {
       "localizations": {
-        "ko": {
+        "en": {
           "stringUnit": {
             "state": "translated",
             "value": "GPU"
           }
         },
-        "en": {
+        "ko": {
           "stringUnit": {
             "state": "translated",
             "value": "GPU"
@@ -724,16 +724,16 @@
     },
     "droid.card.gpu.util": {
       "localizations": {
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "이용률 %@%"
-          }
-        },
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Util %@%"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이용률 %@%"
           }
         }
       }
@@ -836,45 +836,45 @@
     },
     "droid.card.sensors.count": {
       "localizations": {
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ / %@ 활성"
-          }
-        },
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "%@ / %@ active"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ / %@ 활성"
           }
         }
       }
     },
     "droid.card.sensors.none": {
       "localizations": {
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "활성 센서 없음"
-          }
-        },
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "No active sensors"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "활성 센서 없음"
           }
         }
       }
     },
     "droid.card.sensors.title": {
       "localizations": {
-        "ko": {
+        "en": {
           "stringUnit": {
             "state": "translated",
             "value": "SENSORS"
           }
         },
-        "en": {
+        "ko": {
           "stringUnit": {
             "state": "translated",
             "value": "SENSORS"
@@ -1380,16 +1380,16 @@
     },
     "droid.storage.read": {
       "localizations": {
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "읽기"
-          }
-        },
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Read"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "읽기"
           }
         }
       }
@@ -1412,16 +1412,16 @@
     },
     "droid.storage.write": {
       "localizations": {
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "쓰기"
-          }
-        },
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Write"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "쓰기"
           }
         }
       }
@@ -1454,6 +1454,40 @@
           "stringUnit": {
             "state": "translated",
             "value": "ANR 감지"
+          }
+        }
+      }
+    },
+    "event.appleConnected": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apple device connected"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apple 기기 연결"
+          }
+        }
+      }
+    },
+    "event.appleDisconnected": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apple device disconnected"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apple 기기 연결 끊김"
           }
         }
       }

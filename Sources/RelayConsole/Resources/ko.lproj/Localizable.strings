@@ -97,6 +97,8 @@
 "event.bsoh.drop" = "배터리 건강 급락";
 "event.charge.start" = "충전 시작";
 "event.charge.stop" = "충전 중단";
+"event.appleConnected" = "Apple 기기 연결";
+"event.appleDisconnected" = "Apple 기기 연결 끊김";
 "event.crash.detail" = "크래시 적중 %d건";
 "event.crash.enter" = "크래시 감지";
 "event.deviceConnected" = "기기 연결 %@";

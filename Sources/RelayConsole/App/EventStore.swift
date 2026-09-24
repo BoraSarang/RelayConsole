@@ -19,7 +19,7 @@ final class EventStore {
         url = dir.appendingPathComponent("watch-events.json")
     }
 
-    /// 저장된 이력 로드 — 실패/없으면 빈 배열
+    /// 저장된 이력 로드 — 실패/없으면 빈 배열 (신규 필드 없는 기존 JSON도 OK)
     func load() -> [WatchEvent] {
         guard let data = try? Data(contentsOf: url) else { return [] }
         let decoder = JSONDecoder()
@@ -38,5 +38,14 @@ final class EventStore {
         queue.async {
             try? data.write(to: target, options: .atomic)
         }
+    }
+
+    /// 필터 조회 — 인자 배열 기준 (ConsoleStore.recentWatchEvents 권장)
+    func filtered(
+        from events: [WatchEvent],
+        by filter: AlertsFilter,
+        now: Date = .now
+    ) -> [WatchEvent] {
+        WatchEventAlerts.filter(events, by: filter, now: now)
     }
 }

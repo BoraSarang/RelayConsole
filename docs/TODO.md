@@ -2,7 +2,11 @@
 > 작업 추적 — bd 연동 (이슈 prefix: RelayConsole)
 
 ## 진행 중 (bd ready)
-- [ ] **사이드바 Sites/Jobs/Alerts 실뷰** — placeholder `sidebar.soon` → 실제 화면 (범위·i18n 선정 후)
+- [ ] **Alerts 사이드바 (PLAN_alerts · 0.9.1)** — PR-A 스키마·필터·Apple 편입 → PR-B AlertsView → PR-C 액션·export
+  - [ ] PR-A 스키마·EventStore 필터/export · Apple WatchEvent · 테스트
+  - [ ] PR-B AlertsView 3탭·필터·그룹 · ConsoleView · i18n
+  - [ ] PR-C ack/mute/메모 · export UI · DEBUG 주입 · 육안
+- [ ] **사이드바 Sites/Jobs** — Alerts 이후 placeholder → 실제 화면
 
 ## 보류 (기기 확보 시)
 - [ ] **Apple 실기 Trust 육안** — iPad USB 데이터 불량(안드로이드 동일 케이블 OK·복구도 미인식). 기기 확보 후 `brew install libimobiledevice` → 배터리/스토리지 카드

@@ -261,7 +261,68 @@ final class ConsoleStore: ObservableObject {
         case .signalDrop: return watchRsrp
         case .anr: return watchAnr
         case .crash: return watchCrash
+        case .appleConnected, .appleDisconnected: return watchNotifications
         }
+    }
+
+    // MARK: - Alerts (PLAN_alerts)
+
+    /// Alerts 탭 필터 조회 (메모리 기준 · now 주입 가능)
+    func filteredWatchEvents(_ filter: AlertsFilter, now: Date = .now) -> [WatchEvent] {
+        WatchEventAlerts.filter(recentWatchEvents, by: filter, now: now)
+    }
+
+    /// 탭 카운트 — base 필터(severity/기간 등)에서 state만 무시
+    func alertsStateCounts(base: AlertsFilter, now: Date = .now) -> [AlertsState: Int] {
+        WatchEventAlerts.counts(recentWatchEvents, filteredBy: base, now: now)
+    }
+
+    /// ack / note / mute 갱신 → EventStore 저장
+    /// set* 플래그 false면 해당 필드 유지 (nil 전달 시 해제)
+    @discardableResult
+    func updateWatchEvent(
+        id: UUID,
+        ackAt: Date? = nil,
+        setAck: Bool = false,
+        note: String? = nil,
+        setNote: Bool = false,
+        mutedUntil: Date? = nil,
+        setMute: Bool = false
+    ) -> Bool {
+        guard let idx = recentWatchEvents.firstIndex(where: { $0.id == id }) else { return false }
+        recentWatchEvents[idx] = recentWatchEvents[idx].updating(
+            ackAt: ackAt,
+            setAck: setAck,
+            note: note,
+            setNote: setNote,
+            mutedUntil: mutedUntil,
+            setMute: setMute
+        )
+        EventStore.shared.save(recentWatchEvents)
+        return true
+    }
+
+    /// 확인 처리
+    func ackWatchEvent(id: UUID, at: Date = .now) {
+        updateWatchEvent(id: id, ackAt: at, setAck: true)
+    }
+
+    /// 메모 저장 (nil = 해제)
+    func setWatchNote(id: UUID, note: String?) {
+        updateWatchEvent(id: id, note: note?.isEmpty == true ? nil : note, setNote: true)
+    }
+
+    /// 무음 (nil = 해제) · 만료 후 Alerts 상태는 자동 active
+    func muteWatchEvent(id: UUID, until: Date?) {
+        updateWatchEvent(id: id, mutedUntil: until, setMute: true)
+    }
+
+    func exportWatchEventsJSON(_ events: [WatchEvent]? = nil) -> Data? {
+        WatchEventAlerts.exportJSON(events ?? recentWatchEvents)
+    }
+
+    func exportWatchEventsCSV(_ events: [WatchEvent]? = nil) -> String {
+        WatchEventAlerts.exportCSV(events ?? recentWatchEvents)
     }
 
     /// 스로틀링 등 미해결 진입 이벤트 — 후속 조치 가이드용
@@ -364,6 +425,14 @@ final class ConsoleStore: ObservableObject {
         )
         // 디버그 주입은 토글/심각도/쿨다운 무시 — 육안·알림 즉시 확인용
         ingestWatch(event, forceNotify: true)
+    }
+
+    /// 알림·배너 없이 이력만 주입 — 단위 테스트(UN 미사용 환경)용
+    func debugIngestWatchQuietly(_ event: WatchEvent) {
+        recentWatchEvents.insert(event, at: 0)
+        if recentWatchEvents.count > 500 { recentWatchEvents.removeLast() }
+        pushEvent(event.summary)
+        EventStore.shared.save(recentWatchEvents)
     }
 
     /// critical 배지 해제용 (최신 critical clear로 덮어쓰기)
