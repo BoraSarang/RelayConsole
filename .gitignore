@@ -10,5 +10,6 @@ env
 .env.*
 !env-expiry-check.sh
 .beads/local*
+.agent/
 *.log
 RelayConsole_src_clean.zip
