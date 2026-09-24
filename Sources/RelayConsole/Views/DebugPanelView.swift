@@ -184,6 +184,36 @@ struct DebugPanelView: View {
                         injectButton(L10n.string("ui.debug.inject.appleClear")) {
                             store.debugClearApple()
                         }
+                        injectButton(L10n.string("ui.debug.inject.alertCritical")) {
+                            store.debugInjectSynthetic(
+                                kind: .loadSpike,
+                                severity: .critical,
+                                title: L10n.string("event.load.enter"),
+                                detail: "DEBUG · Alerts active"
+                            )
+                        }
+                        injectButton(L10n.string("ui.debug.inject.alertMute")) {
+                            let serial = store.selectedSerial ?? "DEBUG-SERIAL"
+                            let event = WatchEvent(
+                                kind: .psiPressure,
+                                severity: .warning,
+                                serial: serial,
+                                title: L10n.string("event.psi.enter"),
+                                detail: "DEBUG · will mute"
+                            )
+                            store.debugIngestWatchQuietly(event)
+                            store.muteWatchEvent(id: event.id, until: .now.addingTimeInterval(3600))
+                        }
+                        injectButton(L10n.string("ui.debug.inject.alertClear")) {
+                            store.debugInjectSynthetic(
+                                kind: .loadSpike,
+                                severity: .info,
+                                title: L10n.string("event.load.clear"),
+                                detail: "DEBUG · Alerts cleared",
+                                isClear: true,
+                                resetCooldown: false
+                            )
+                        }
                     }
                     Text(L10n.string("ui.debug.inject.hint"))
                         .font(OPFont.body(10))

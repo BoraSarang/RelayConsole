@@ -21,7 +21,7 @@ enum WatchKind: String, Sendable, Equatable, CaseIterable, Codable {
 }
 
 /// 심각도 — 시스템 알림 interruptionLevel 매핑
-enum WatchSeverity: String, Sendable, Equatable, Comparable, Codable {
+enum WatchSeverity: String, Sendable, Equatable, Comparable, Codable, CaseIterable {
     case info
     case warning
     case critical

@@ -60,7 +60,7 @@ struct ConsoleView: View {
                 case .jobs:
                     placeholder(ConsoleSection.jobs.label, systemImage: ConsoleSection.jobs.icon)
                 case .alerts:
-                    placeholder(ConsoleSection.alerts.label, systemImage: ConsoleSection.alerts.icon)
+                    AlertsView(store: store)
                 }
             }
             .navigationTitle(L10n.string("droid.header.title"))

@@ -4,6 +4,7 @@ struct SettingsView: View {
     @ObservedObject var store: ConsoleStore
     @ObservedObject private var theme = ThemeManager.shared
     @AppStorage("relay.menubarMetrics") private var menubarMetrics = true
+    @AppStorage("relay.alerts.defaultPeriod") private var alertsPeriod = "24h"
 
     var body: some View {
         ZStack {
@@ -20,7 +21,7 @@ struct SettingsView: View {
                     }
                     // 메뉴바는 아이콘만 — 이 토글은 팝오버 헤더 n/m 표시
                     Toggle(L10n.string("settings.menubarMetrics"), isOn: $menubarMetrics)
-                    LabeledContent(L10n.string("settings.version"), value: "0.9.0")
+                    LabeledContent(L10n.string("settings.version"), value: "0.9.1")
                     LabeledContent(L10n.string("settings.bundleId"), value: "com.borasarang.relayconsole")
                 }
                 Section(L10n.string("settings.section.watch")) {
@@ -49,6 +50,14 @@ struct SettingsView: View {
                     Toggle(L10n.string("settings.cards.network"), isOn: $store.cardNetwork)
                     Toggle(L10n.string("settings.cards.thermal"), isOn: $store.cardThermal)
                     Toggle(L10n.string("settings.cards.storage"), isOn: $store.cardStorage)
+                }
+                Section(L10n.string("settings.section.alerts")) {
+                    Picker(L10n.string("alerts.filter.period"), selection: $alertsPeriod) {
+                        Text(L10n.string("alerts.period.1h")).tag("1h")
+                        Text(L10n.string("alerts.period.24h")).tag("24h")
+                        Text(L10n.string("alerts.period.7d")).tag("7d")
+                        Text(L10n.string("alerts.period.all")).tag("all")
+                    }
                 }
                 Section(L10n.string("settings.section.apple")) {
                     LabeledContent(L10n.string("settings.apple.tools"), value: IdeviceClient.toolsAvailable
