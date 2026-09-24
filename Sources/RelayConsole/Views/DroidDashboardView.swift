@@ -6,6 +6,7 @@ struct DroidDashboardView: View {
     @State private var showLogs = false
     @State private var showScreenshot = false
     @State private var showWifiOnboarding = false
+    @State private var showAppHub = false
     @ObservedObject private var shots = ScreenshotService.shared
     @ObservedObject private var scrcpy = ScrcpyController.shared
 
@@ -85,6 +86,11 @@ struct DroidDashboardView: View {
                 ScreenshotPreviewSheet(serial: d.serial)
             }
         }
+        .sheet(isPresented: $showAppHub) {
+            if let d = device, !d.serial.isEmpty {
+                AppHubSheet(serial: d.serial)
+            }
+        }
     }
 
     private var header: some View {
@@ -124,6 +130,27 @@ struct DroidDashboardView: View {
             if let d = device, !d.serial.isEmpty {
                 ScrcpyHeaderButton(serial: d.serial)
                 WifiOnboardingHeaderButton(serial: d.serial, connectionKind: d.connectionKind)
+                Button {
+                    showAppHub = true
+                } label: {
+                    HStack(spacing: 3) {
+                        Image(systemName: "square.grid.2x2")
+                            .font(.system(size: 10, weight: .semibold))
+                        Text(L10n.string("apphub.button"))
+                            .font(OPFont.number(10))
+                    }
+                    .foregroundStyle(OPColor.cta)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 4)
+                    .background(OPColor.cta.opacity(0.12), in: RoundedRectangle(cornerRadius: 6))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 6)
+                            .stroke(OPColor.cta.opacity(0.35), lineWidth: 1)
+                    )
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help(L10n.string("apphub.button.help"))
                 Button {
                     showScreenshot = true
                 } label: {
