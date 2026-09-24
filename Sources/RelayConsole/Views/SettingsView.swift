@@ -207,6 +207,7 @@ struct SettingsView: View {
             Toggle(L10n.string("settings.cards.network"), isOn: $store.cardNetwork)
             Toggle(L10n.string("settings.cards.thermal"), isOn: $store.cardThermal)
             Toggle(L10n.string("settings.cards.storage"), isOn: $store.cardStorage)
+            Toggle(L10n.string("settings.cards.health"), isOn: $store.cardHealth)
         }
     }
 
@@ -347,7 +348,7 @@ struct SettingsView: View {
     @ViewBuilder
     private var aboutSection: some View {
         Section(L10n.string("settings.section.about")) {
-            LabeledContent(L10n.string("settings.version"), value: "1.10.0")
+            LabeledContent(L10n.string("settings.version"), value: "1.11.0")
             LabeledContent(L10n.string("settings.bundleId"), value: "com.borasarang.relayconsole")
         }
         Section(L10n.string("settings.mcp.section")) {

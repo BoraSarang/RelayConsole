@@ -83,6 +83,7 @@
 "droid.card.gpu.freq" = "%@ MHz";
 "droid.card.gpu.title" = "GPU";
 "droid.card.gpu.util" = "이용률 %@%";
+"droid.card.health.title" = "HEALTH";
 "droid.card.memory.pressure" = "압박 %@";
 "droid.card.memory.title" = "MEMORY";
 "droid.card.network.down" = "다운";
@@ -99,6 +100,7 @@
 "droid.empty.noDeviceHint" = "네트워크 기기: adb connect IP:PORT";
 "droid.footer.logcatHits" = "logcat 적중 (%d)";
 "droid.footer.settingsChanged" = "설정 변경 탐지 (%d)";
+"droid.header.health" = "건강";
 "droid.header.picker" = "기기 선택";
 "droid.header.title" = "Relay Console · 외부 관제 콘솔";
 "droid.logs.button" = "▤ 로그";
@@ -322,9 +324,14 @@
 "settings.apple.toolsOk" = "설치됨";
 "settings.briefing" = "아침 브리핑 한 줄 표시";
 "settings.bundleId" = "번들 ID";
+"health.band.fair" = "보통";
+"health.band.good" = "양호";
+"health.band.poor" = "나쁨";
+"health.throttle" = "스로틀";
 "settings.cards.battery" = "배터리";
 "settings.cards.cpu" = "CPU";
 "settings.cards.gpu" = "GPU";
+"settings.cards.health" = "건강 점수";
 "settings.cards.memory" = "메모리";
 "settings.cards.network" = "네트워크";
 "settings.cards.sensors" = "센서";

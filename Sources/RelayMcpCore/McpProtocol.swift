@@ -114,7 +114,7 @@ public enum McpToolName: String, CaseIterable, Sendable {
 public enum McpRouter {
     public static let protocolVersion = "2024-11-05"
     public static let serverName = "relay-console"
-    public static let serverVersion = "1.10.0"
+    public static let serverVersion = "1.11.0"
 
     /// tools/list 페이로드
     public static func toolsList() -> [[String: Any]] {

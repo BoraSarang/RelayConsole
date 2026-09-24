@@ -65,6 +65,9 @@ struct DroidDashboardView: View {
                             if store.cardStorage {
                                 DroidCards.storage(device: device, metrics: metrics)
                             }
+                            if store.cardHealth {
+                                DroidCards.health(device: device)
+                            }
                         }
                         footer
                     }
@@ -117,6 +120,11 @@ struct DroidDashboardView: View {
                 Text(String(format: "%.1f°C", temp))
                     .font(OPFont.number(12))
                     .foregroundStyle(OPColor.thermal)
+            }
+            if let chip = DroidCards.healthChip(device) {
+                Text(chip.0)
+                    .font(OPFont.number(12))
+                    .foregroundStyle(chip.1)
             }
             if let online = device?.isOnline {
                 Text(online

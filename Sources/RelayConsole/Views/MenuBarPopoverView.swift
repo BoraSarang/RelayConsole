@@ -124,7 +124,12 @@ struct MenuBarPopoverView: View {
                         .font(OPFont.number(11))
                         .foregroundStyle(OPColor.inkDim)
                 }
-                Text("1.10.0")
+                if let d = device, let chip = DroidCards.healthChip(d) {
+                    Text(chip.0)
+                        .font(OPFont.number(11))
+                        .foregroundStyle(chip.1)
+                }
+                Text("1.11.0")
                     .font(OPFont.number(10))
                     .foregroundStyle(OPColor.inkDim)
             }
@@ -642,8 +647,12 @@ struct MenuBarPopoverView: View {
             if store.cardStorage {
                 DroidCards.storage(device: device, metrics: metrics)
             }
+            if store.cardHealth {
+                DroidCards.health(device: device)
+            }
             if !store.cardCpu && !store.cardGpu && !store.cardMemory && !store.cardSensors
-                && !store.cardBattery && !store.cardNetwork && !store.cardThermal && !store.cardStorage {
+                && !store.cardBattery && !store.cardNetwork && !store.cardThermal && !store.cardStorage
+                && !store.cardHealth {
                 Text(L10n.string("cards.empty"))
                     .font(OPFont.body(12))
                     .foregroundStyle(OPColor.inkDim)
