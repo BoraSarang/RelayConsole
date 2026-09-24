@@ -10,7 +10,7 @@
 - [ ] **Apple Phase 2** — Developer Mode·sysmon 등 — 위 기기 확보 후 착수
 
 ## 완료 (2026-09-24)
-- [x] **Alerts 구현 (PR-A + B)** — `WatchEvent` source/ack/note/mutedUntil · `WatchEventAlerts` 필터·그룹·export · Apple WatchEvent 편입 · `AlertsView` 3탭·심각도/기간/플랫폼 필터·serial 그룹·ack/mute1h·24h/메모·JSON/CSV export · ConsoleView 연결 · 설정 기간 · i18n **312** · 테스트 **139/139** · **0.9.1** · `PLAN_alerts` · PR **#10** + PR-B
+- [x] **Alerts 구현 (PR-A+B)** — `WatchEvent` source/ack/note/mutedUntil · `WatchEventAlerts` 필터·그룹·export · Apple WatchEvent 편입 · `AlertsView` 3탭·심각도/기간/플랫폼 필터·serial 그룹·ack/mute 1h·24h/메모·JSON/CSV export · ConsoleView 연결 · 설정 기간 · i18n **315** · 테스트 **139/139** · **0.9.1** · `PLAN_alerts` · PR **#10**·**#11** 머지
 - [x] **Apple 오프라인 UI 육안 (USB 불필요)** — DEBUG 주입 온/오프/오류/도구오류·해제 · 오프라인 배너 · E-MAC-APL 배너 · 카드 OFF `cards.empty` **사용자 확인 완료** · PR **#8** 머지
 - [x] **Apple 감시 1차 (방향 A Phase 1)** — Trust-only `IdeviceClient` 파서·`AppleDeviceMonitor` 60s 폴링 · `AppleDashboardView`+4카드(`OPColor.apple`) · brew 확인 1회 안내 · `relay.selectedAppleUdid` · E-MAC-APL-0001..4 · i18n **264** · 테스트 **120/120** · debug **0.9.0** · `PLAN_apple_phase1` · PR **#7** 머지
 - [x] **실기기 육안 (v0.7~v0.9·사이드바)** — scrcpy·스샷·로그·ANR/크래시 주입·카드 On/Off·이력 복원·사이드바 B안 **전부 확인 완료**
