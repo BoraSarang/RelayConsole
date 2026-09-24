@@ -16,9 +16,11 @@
 "apple.device.picker" = "기기 선택";
 "apple.empty.noDevice" = "연결된 Apple 기기 없음";
 "apple.empty.noDeviceBody" = "USB 케이블로 연결하고 화면에서 신뢰를 눌러 주세요.";
+"apple.error.title" = "Apple 기기 오류";
 "apple.event.connected" = "Apple 기기 연결: %@";
 "apple.event.disconnected" = "Apple 기기 연결 끊김: %@";
 "apple.footer.poll" = "60초 폴링 · Trust USB";
+"apple.offline.banner" = "기기 연결 끊김 — 마지막 스냅샷 표시 중. 케이블·허용·신뢰를 확인하세요.";
 "apple.thermal.critical" = "위험";
 "apple.thermal.fair" = "양호";
 "apple.thermal.nominal" = "정상";
@@ -245,6 +247,11 @@
 "sidebar.soon" = "곧 제공됩니다";
 "ui.debug.clear" = "지우기";
 "ui.debug.inject.anr" = "ANR 주입";
+"ui.debug.inject.appleClear" = "Apple 주입해제";
+"ui.debug.inject.appleErr" = "Apple 오류";
+"ui.debug.inject.appleOff" = "Apple 끄기";
+"ui.debug.inject.appleOn" = "Apple 온";
+"ui.debug.inject.appleTools" = "Apple 도구오류";
 "ui.debug.inject.badgeOff" = "배지 해제";
 "ui.debug.inject.battery20" = "배터리 20%";
 "ui.debug.inject.bsoh" = "Bsoh 급락";

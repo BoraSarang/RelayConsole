@@ -46,7 +46,9 @@ actor AppleDeviceMonitor {
 
     private func pollOnce() async {
         guard IdeviceClient.toolsAvailable else {
-            await logLast(L10n.string("apple.tools.missing"))
+            let msg = "[\(ErrorCode.appleBinaryMissing.rawValue)] \(ErrorCode.appleBinaryMissing.koMessage)"
+            await logLast(msg)
+            await publishError(msg)
             // 도구 없음 → 오프라인으로 정리
             for (udid, prev) in cache where prev.isOnline {
                 var off = prev
@@ -58,11 +60,17 @@ actor AppleDeviceMonitor {
             return
         }
         lastErrorLogged = nil
+        await publishError(nil)
 
         guard let idPath = IdeviceClient.locateIdeviceId(),
               let infoPath = IdeviceClient.locateIdeviceInfo() else { return }
 
         let idOut = run(idPath, ["-l"])
+        if idOut == nil {
+            let msg = "[\(ErrorCode.appleConnectFailed.rawValue)] \(ErrorCode.appleConnectFailed.koMessage)"
+            await logLast(msg)
+            await publishError(msg)
+        }
         let found = Set(IdeviceClient.parseDeviceIds(idOut ?? ""))
 
         // 이전 → 오프라인
@@ -107,6 +115,12 @@ actor AppleDeviceMonitor {
     private func notify(_ text: String) async {
         guard let eventHandler else { return }
         eventHandler(text)
+    }
+
+    private func publishError(_ message: String?) async {
+        await MainActor.run {
+            ConsoleStore.shared.setAppleError(message)
+        }
     }
 
     private func run(_ path: String, _ args: [String]) -> String? {

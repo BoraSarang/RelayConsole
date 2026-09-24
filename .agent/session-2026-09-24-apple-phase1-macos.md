@@ -18,5 +18,8 @@
 - `PLAN_apple_phase1` · i18n +30 → 264
 
 ## 4. 미해결
-- 실기기 육안 (USB Trust · brew 안내 버튼 · 카드 수치)
+- 실기기 USB Trust 육안 **보류** — iPad 데이터 불량 (안드로이드 동일 케이블 OK · 복구 모드도 맥 ioreg 미인식)
 - THERMAL/건강·사이클: lockdown 미제공 기기에서는 — 표시
+
+## 5. 후속 (USB 없이)
+- Apple DEBUG 주입 온/오프/오류 · 오프라인 배너 · E-MAC-APL 문구 · 카드 OFF 육안

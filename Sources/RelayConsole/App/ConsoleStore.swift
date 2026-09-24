@@ -20,6 +20,8 @@ final class ConsoleStore: ObservableObject {
     /// Apple Phase1 — Trust-only 기기 목록·선택
     @Published private(set) var appleDevices: [AppleSnapshot] = []
     @Published var selectedAppleUdid: String?
+    /// Apple 오류 배너 — E-MAC-APL 문구 (오프라인 육안용)
+    @Published var appleLastError: String?
 
     private let selectedKey = "relay.selectedSerial"
     private let selectedAppleKey = "relay.selectedAppleUdid"
@@ -120,6 +122,15 @@ final class ConsoleStore: ObservableObject {
     var selectedAppleDevice: AppleSnapshot? {
         guard let udid = selectedAppleUdid else { return nil }
         return appleDevices.first(where: { $0.udid == udid }) ?? appleDevices.first
+    }
+
+    /// 도구/연결 오류 반영 — 배너 표시 (성공 시 clear)
+    func setAppleError(_ message: String?) {
+        appleLastError = message
+    }
+
+    func clearAppleError() {
+        appleLastError = nil
     }
 
     private func ingest(_ snapshot: DeviceSnapshot) {
@@ -370,6 +381,77 @@ final class ConsoleStore: ObservableObject {
             isClear: true
         )
         recentWatchEvents[idx] = cleared
+    }
+
+    // MARK: - Apple 오프라인 UI 주입 (USB 불필요 육안)
+
+    /// 합성 iPad 온라인 — 카드 그리드·헤더 초록 점 확인용
+    func debugInjectAppleOnline() {
+        let snap = AppleSnapshot(
+            udid: "DEBUG-APPLE-ONLINE-0001",
+            isOnline: true,
+            deviceName: "iPad Pro (DEBUG)",
+            productType: "iPad14,3",
+            productVersion: "18.1",
+            batteryLevel: 72,
+            isCharging: true,
+            batteryHealthPct: 94,
+            cycleCount: 186,
+            storageUsedGB: 148.2,
+            storageTotalGB: 256.0,
+            thermalState: "fair",
+            at: .now
+        )
+        ingestApple(snap)
+        appleLastError = nil
+        DebugLogger.shared.info("Apple", "[DEBUG] Apple 온라인 스냅샷 주입 \(snap.displayName)")
+    }
+
+    /// 합성 오프라인 — 빨강 점·연결 끊김 문구 확인용
+    func debugInjectAppleOffline() {
+        var snap = debugAppleBase(online: false)
+        snap.batteryLevel = 41
+        snap.isCharging = false
+        snap.thermalState = nil
+        snap.storageUsedGB = nil
+        snap.storageTotalGB = nil
+        ingestApple(snap)
+        appleLastError = nil
+        DebugLogger.shared.info("Apple", "[DEBUG] Apple 오프라인 스냅샷 주입")
+    }
+
+    /// E-MAC-APL 오류 배너 — 코드+문구 육안 확인용
+    func debugInjectAppleError(_ code: ErrorCode) {
+        appleLastError = "[\(code.rawValue)] \(code.koMessage)"
+        DebugLogger.shared.warn("Apple", "[DEBUG] \(appleLastError ?? "")")
+    }
+
+    /// 주입 기기 제거 — 빈 상태 복귀
+    func debugClearApple() {
+        appleDevices.removeAll { $0.udid.hasPrefix("DEBUG-APPLE") }
+        if selectedAppleUdid?.hasPrefix("DEBUG-APPLE") == true {
+            selectedAppleUdid = nil
+            UserDefaults.standard.removeObject(forKey: selectedAppleKey)
+            if let next = appleDevices.first {
+                selectedAppleUdid = next.udid
+                UserDefaults.standard.set(next.udid, forKey: selectedAppleKey)
+            }
+        }
+        appleLastError = nil
+        DebugLogger.shared.info("Apple", "[DEBUG] Apple 주입 스냅샷 제거")
+    }
+
+    private func debugAppleBase(online: Bool) -> AppleSnapshot {
+        AppleSnapshot(
+            udid: "DEBUG-APPLE-OFFLINE-0001",
+            isOnline: online,
+            deviceName: "iPad Air (DEBUG)",
+            productType: "iPad13,16",
+            productVersion: "17.6",
+            batteryLevel: 41,
+            isCharging: false,
+            at: .now
+        )
     }
 #endif
 
