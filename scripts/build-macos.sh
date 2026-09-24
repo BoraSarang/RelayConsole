@@ -1,5 +1,5 @@
 #!/bin/bash
-# macOS 빌드 — Relay Console 1.12.0
+# macOS 빌드 — Relay Console 1.13.0
 set -eo pipefail
 
 APP_NAME="RelayConsole"
@@ -29,7 +29,7 @@ mkdir -p "$DEST_DIR"
 CONFIG_FLAG=""
 [ "$MODE" = "release" ] && CONFIG_FLAG="-c release"
 
-log "빌드 시작 (mode: $MODE, version: 1.12.0)"
+log "빌드 시작 (mode: $MODE, version: 1.13.0)"
 swift build $CONFIG_FLAG
 
 BUILD_MODE_DIR="debug"
@@ -108,5 +108,5 @@ else
   exit 1
 fi
 
-log "완료: $APP_BUNDLE ($BUNDLE_ID, 1.12.0)"
+log "완료: $APP_BUNDLE ($BUNDLE_ID, 1.13.0)"
 open "$APP_BUNDLE" 2>/dev/null || true

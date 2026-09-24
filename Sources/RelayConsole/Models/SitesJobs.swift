@@ -68,6 +68,8 @@ struct Site: Codable, Equatable, Sendable, Identifiable {
     var assertBody: String?
     /// 최근 체크 (최신 last) — 90일 / 300건 cap
     var history: [SiteCheck]
+    /// 그룹/태그 (A6) — 공백·쉼표 없이 소문자 키로 정규화하지 않고 원문 유지
+    var tags: [String]
     var createdAt: Date
 
     init(
@@ -81,6 +83,7 @@ struct Site: Codable, Equatable, Sendable, Identifiable {
         sslExpiresAt: Date? = nil,
         assertBody: String? = nil,
         history: [SiteCheck] = [],
+        tags: [String] = [],
         createdAt: Date = .now
     ) {
         self.id = id
@@ -93,12 +96,13 @@ struct Site: Codable, Equatable, Sendable, Identifiable {
         self.sslExpiresAt = sslExpiresAt
         self.assertBody = assertBody
         self.history = history
+        self.tags = tags
         self.createdAt = createdAt
     }
 
-    /// 하위호환: failThreshold·sslExpiresAt·assertBody 키 없던 기존 JSON → 기본
+    /// 하위호환: failThreshold·sslExpiresAt·assertBody·tags 키 없던 기존 JSON → 기본
     private enum CodingKeys: String, CodingKey {
-        case id, name, target, probe, intervalSec, enabled, failThreshold, sslExpiresAt, assertBody, history, createdAt
+        case id, name, target, probe, intervalSec, enabled, failThreshold, sslExpiresAt, assertBody, history, tags, createdAt
     }
 
     init(from decoder: Decoder) throws {
@@ -113,6 +117,7 @@ struct Site: Codable, Equatable, Sendable, Identifiable {
         sslExpiresAt = try c.decodeIfPresent(Date.self, forKey: .sslExpiresAt)
         assertBody = try c.decodeIfPresent(String.self, forKey: .assertBody)
         history = try c.decode([SiteCheck].self, forKey: .history)
+        tags = try c.decodeIfPresent([String].self, forKey: .tags) ?? []
         createdAt = try c.decode(Date.self, forKey: .createdAt)
     }
 
@@ -412,6 +417,103 @@ enum DayBarStatus: Equatable, Sendable {
 enum JobTransition: Equatable, Sendable {
     case overdue
     case recovered
+}
+
+// MARK: - 태그 · 캘린더 (A6)
+
+enum SitesCalendarLogic {
+    static let calendarDays = 90
+
+    /// `"api, prod, API"` → `["api", "prod"]` (소문자·중복 제거·빈 토큰 제외)
+    static func parseTags(_ raw: String) -> [String] {
+        var seen = Set<String>()
+        var out: [String] = []
+        for part in raw.split(whereSeparator: { $0 == "," || $0 == " " || $0 == "\n" || $0 == "\t" }) {
+            let t = part.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            guard !t.isEmpty, !seen.contains(t) else { continue }
+            seen.insert(t)
+            out.append(t)
+        }
+        return out
+    }
+
+    static func formatTags(_ tags: [String]) -> String {
+        tags.joined(separator: ", ")
+    }
+
+    /// 전체 사이트 태그 유니온 — 알파벳 정렬
+    static func allTags(_ sites: [Site]) -> [String] {
+        var seen = Set<String>()
+        for s in sites {
+            for t in s.tags { seen.insert(t) }
+        }
+        return seen.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+    }
+
+    /// 선택 태그 AND 필터 — 빈 집합 = 전체
+    static func filter(_ sites: [Site], selectedTags: Set<String>) -> [Site] {
+        guard !selectedTags.isEmpty else { return sites }
+        return sites.filter { site in
+            let have = Set(site.tags)
+            return selectedTags.isSubset(of: have)
+        }
+    }
+
+    /// 90일 주 단위 격자용 날짜 (과거→오늘, startOfDay)
+    static func calendarDays(
+        days: Int = SitesCalendarLogic.calendarDays,
+        now: Date = .now,
+        calendar: Calendar = .current
+    ) -> [Date] {
+        let startOfToday = calendar.startOfDay(for: now)
+        var out: [Date] = []
+        out.reserveCapacity(days)
+        for offset in stride(from: days - 1, through: 0, by: -1) {
+            if let d = calendar.date(byAdding: .day, value: -offset, to: startOfToday) {
+                out.append(d)
+            }
+        }
+        return out
+    }
+
+    /// 주 첫날 보정 패딩 (선행 빈 셀 수) — Locale startOfWeek
+    static func leadingPad(now: Date = .now, calendar: Calendar = .current) -> Int {
+        let startOfToday = calendar.startOfDay(for: now)
+        let weekday = calendar.component(.weekday, from: startOfToday)
+        let first = calendar.firstWeekday
+        return (weekday - first + 7) % 7
+    }
+
+    /// 헤더 요일 7글자 (Locale)
+    static func weekdayHeaders(calendar: Calendar = .current) -> [String] {
+        let symbols = calendar.veryShortWeekdaySymbols
+        let first = calendar.firstWeekday - 1
+        guard (0..<7).contains(first) else { return symbols }
+        return Array(symbols[first...] + symbols[..<first])
+    }
+
+    /// 사이트 dayBars → 단일 날짜 상태 합산 (하나라도 down → down)
+    static func combinedStatus(site: Site, day: Date, calendar: Calendar = .current) -> DayBarStatus {
+        guard let dayEnd = calendar.date(byAdding: .day, value: 1, to: day) else { return .unknown }
+        let checks = site.history.filter { $0.at >= day && $0.at < dayEnd }
+        guard !checks.isEmpty else { return .unknown }
+        let okCount = checks.filter(\.ok).count
+        if okCount == checks.count { return .up }
+        if okCount == 0 { return .down }
+        return .partial
+    }
+
+    /// 여러 사이트 셀 합산 — down > partial > up > unknown
+    static func aggregate(_ statuses: [DayBarStatus]) -> DayBarStatus {
+        if statuses.isEmpty { return .unknown }
+        if statuses.contains(.down) { return .down }
+        if statuses.contains(.partial) { return .partial }
+        if statuses.allSatisfy({ $0 == .up }) { return .up }
+        if statuses.contains(.up) {
+            return statuses.contains(.unknown) ? .partial : .up
+        }
+        return .unknown
+    }
 }
 
 // MARK: - SSL · assertion (A5)

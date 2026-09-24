@@ -364,7 +364,8 @@ final class ConsoleStore: ObservableObject {
         probe: SiteProbe,
         intervalSec: Int,
         failThreshold: Int = 2,
-        assertBody: String? = nil
+        assertBody: String? = nil,
+        tags: [String] = []
     ) {
         let site = Site(
             name: name,
@@ -372,7 +373,8 @@ final class ConsoleStore: ObservableObject {
             probe: probe,
             intervalSec: intervalSec,
             failThreshold: failThreshold,
-            assertBody: assertBody?.isEmpty == true ? nil : assertBody
+            assertBody: assertBody?.isEmpty == true ? nil : assertBody,
+            tags: tags
         )
         sites.append(site)
         SitesJobsStore.shared.saveSites(sites)
@@ -399,8 +401,9 @@ final class ConsoleStore: ObservableObject {
         target: String,
         probe: SiteProbe,
         intervalSec: Int,
-        failThreshold: Int = 2,
-        assertBody: String? = nil
+        failThreshold: Int,
+        assertBody: String?,
+        tags: [String]? = nil
     ) {
         guard let i = sites.firstIndex(where: { $0.id == id }) else { return }
         let clean = SitesJobsLogic.sanitizeTarget(target, probe: probe)
@@ -411,6 +414,9 @@ final class ConsoleStore: ObservableObject {
         sites[i].intervalSec = max(10, intervalSec)
         sites[i].failThreshold = min(5, max(1, failThreshold))
         sites[i].assertBody = assertBody?.isEmpty == true ? nil : assertBody
+        if let tags {
+            sites[i].tags = tags
+        }
         SitesJobsStore.shared.saveSites(sites)
         DebugLogger.shared.info("Sites", "[INFO] [FEATURE] 사이트 수정 \(name)")
         if targetChanged {

@@ -438,6 +438,9 @@
 "sidebar.soon" = "Coming soon";
 "sites.add" = "Add site";
 "sites.add.title" = "Add site";
+"sites.cal.calendar" = "Calendar";
+"sites.cal.help" = "Toggle 90-day calendar";
+"sites.cal.list" = "List";
 "sites.check.now" = "Check now";
 "sites.count" = "%d sites";
 "sites.edit" = "Edit";
@@ -455,6 +458,9 @@
 "sites.field.interval" = "Interval";
 "sites.field.name" = "Name";
 "sites.field.probe" = "Probe";
+"sites.field.tags" = "Tags";
+"sites.field.tags.help" = "Comma-separated for filter chips";
+"sites.field.tags.placeholder" = "api, prod";
 "sites.field.target" = "Target (URL·host:port·host)";
 "sites.field.threshold" = "Fail threshold";
 "sites.field.threshold.help" = "Alert only after N consecutive failures";
@@ -472,6 +478,7 @@
 "sites.state.down.for" = "Down %@";
 "sites.state.up" = "Up";
 "sites.state.up.for" = "Up %@";
+"sites.tag.all" = "All";
 "ui.debug.clear" = "Clear";
 "ui.debug.inject.alertClear" = "Alert cleared inject";
 "ui.debug.inject.alertCritical" = "Alert critical";

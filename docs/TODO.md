@@ -2,17 +2,18 @@
 > 작업 추적 — bd 연동 (이슈 prefix: RelayConsole)
 
 ## 진행 중 (bd ready)
-- **A4 파일/스샷 갤러리** — 구현 중 · `RelayConsole-40v`
+- **A6 Sites 90일 캘린더 + 태그** — 검증 통과 · 커밋/PR 대기 · `RelayConsole-9vi` · branch `feat/sites-calendar` · **1.13.0**
 
 ## 다음 스프린트 (사용자 선택 대기 · 리서치 §8)
-- P3: A6 캘린더
 - 보류: A9 Apple Phase 2 (기기 확보 시)
+- **사용자 일괄 검토**: A5·A2·S4·A3·A8·A10·S2·A4·A6
 
 ## 보류 (기기 확보 시)
 - [ ] **Apple 실기 Trust 육안** — iPad USB 데이터 불량(안드로이드 동일 케이블 OK·복구도 미인식). 기기 확보 후 `brew install libimobiledevice` → 배터리/스토리지 카드
 - [ ] **Apple Phase 2** — Developer Mode·sysmon 등 — 위 기기 확보 후 착수
 
 ## 완료 (2026-09-24)
+- [x] **A4 파일/스샷 갤러리** — `GalleryLogic`·`GalleryStore`·`GalleryController` · `GallerySheet`(로컬/기기) · 헤더 갤러리 버튼 · i18n **529** · GalleryTests +7 · **1.12.0** · `PLAN_gallery` · **PR #37 머지 `17d0cc0`** · bd `RelayConsole-40v` closed
 - [x] **S2 Device Health Score** — `HealthScoreLogic`(배터리40·발열40·스로틀20 가중 0–100) · HEALTH 카드 + 헤더 칩 · `relay.cards.health` · i18n **506** · HealthScoreTests +10 · **1.11.0** · `PLAN_health_score` · **PR #36 머지 `9bf0eb5`** · bd `RelayConsole-czg` closed
 - [x] **A10 로컬 MCP 서버** — `RelayMcpCore`·`relay-mcp` stdio · 읽기 전용 5도구(devices/sites/jobs/events/summary) · `AdbDevicesParser` · Settings MCP help · i18n **499** · McpProtocolTests +10 · **1.10.0** · `PLAN_local_mcp` · **PR #35 머지 `7fbe8e9`** · bd `RelayConsole-yzw` closed
 - [x] **A8 로그인 항목 + 헤드리스** — `LoginItemLogic`·`LoginItemController`(SMAppService) · `HeadlessLaunch` accessory · 설정 일반 토글 2종 · `relay.login.launchAtLogin`·`relay.launch.headless`(기본 ON) · i18n **496** · LoginItemTests +8 · **1.9.0** · `PLAN_login_item` · **PR #34 머지 `be12b61`** · bd `RelayConsole-njd` closed
