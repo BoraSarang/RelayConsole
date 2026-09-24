@@ -52,6 +52,9 @@
 "settings.watch.protection" = "보호모드 전이";
 "settings.watch.lowPower" = "저전력 모드 전이";
 "settings.watch.battery" = "배터리 임계 (20/10/5%)";
+"settings.watch.psi" = "메모리 압박 (PSI)";
+"settings.watch.load" = "load 급증";
+"settings.watch.memory" = "메모리 부족 (Available)";
 "settings.theme" = "테마";
 "settings.theme.dark" = "다크";
 "settings.theme.light" = "라이트";
@@ -67,6 +70,10 @@
 "ui.debug.inject.protectionOff" = "보호모드 해제";
 "ui.debug.inject.lowPowerOn" = "저전력 켜짐";
 "ui.debug.inject.battery20" = "배터리 20%";
+"ui.debug.inject.psi" = "PSI 압박";
+"ui.debug.inject.psiClear" = "PSI 해제";
+"ui.debug.inject.load" = "load 급증";
+"ui.debug.inject.mem" = "메모리 부족";
 "ui.debug.inject.badgeOff" = "배지 해제";
 "ui.debug.inject.hint" = "알림·팝오버·메뉴바 배지 육안 확인용. 해제 버튼은 critical 배지만 초기화합니다.";
 "settings.menubarMetrics" = "메뉴바 기기 수 표시";
@@ -109,6 +116,12 @@
 "event.lowPower.on" = "저전력 모드 켜짐";
 "event.lowPower.off" = "저전력 모드 꺼짐";
 "event.battery.low" = "배터리 %@%";
+"event.psi.enter" = "메모리 압박";
+"event.psi.clear" = "메모리 압박 해제";
+"event.load.enter" = "load 급증";
+"event.load.clear" = "load 정상화";
+"event.memory.enter" = "메모리 부족";
+"event.memory.clear" = "메모리 여유 확보";
 "alert.banner.notify" = "알림: %@";
 "alert.banner.cleared" = "해제: %@";
 "remediation.title" = "권장 후속 조치";
@@ -128,3 +141,12 @@
 "remediation.battery.3" = "긴급 시 저전력 모드 켜기";
 "remediation.lowPower.1" = "성능 제한으로 스로틀링 완화될 수 있음";
 "remediation.lowPower.2" = "불필요하면 설정에서 다시 OFF";
+"remediation.psi" = "메모리 압박 해소";
+"remediation.psi.1" = "프로세스 목록에서 RSS 상위 앱 정리";
+"remediation.psi.2" = "백그라운드 동기화·백업 일시 중지";
+"remediation.load" = "부하 낮추기";
+"remediation.load.1" = "상단 CPU 프로세스 확인 — 고부하 앱 일시 중지";
+"remediation.load.2" = "build·인코딩 등 일시 작업 종료 대기";
+"remediation.memory" = "메모리 확보";
+"remediation.memory.1" = "불필요한 백그라운드 앱 종료";
+"remediation.memory.2" = "MEM 카드에서 MemAvailable·스왑 확인";

@@ -52,6 +52,9 @@
 "settings.watch.protection" = "Protection transitions";
 "settings.watch.lowPower" = "Low power transitions";
 "settings.watch.battery" = "Battery thresholds (20/10/5%)";
+"settings.watch.psi" = "Memory pressure (PSI)";
+"settings.watch.load" = "Load spike";
+"settings.watch.memory" = "Low memory (Available)";
 "settings.theme" = "Theme";
 "settings.theme.dark" = "Dark";
 "settings.theme.light" = "Light";
@@ -67,6 +70,10 @@
 "ui.debug.inject.protectionOff" = "Protection off";
 "ui.debug.inject.lowPowerOn" = "Low power on";
 "ui.debug.inject.battery20" = "Battery 20%";
+"ui.debug.inject.psi" = "PSI pressure";
+"ui.debug.inject.psiClear" = "PSI clear";
+"ui.debug.inject.load" = "Load spike";
+"ui.debug.inject.mem" = "Low memory";
 "ui.debug.inject.badgeOff" = "Clear badge";
 "ui.debug.inject.hint" = "Visual check for alert, popover, menubar badge. Clear badge resets critical only.";
 "settings.menubarMetrics" = "Show device count";
@@ -109,6 +116,12 @@
 "event.lowPower.on" = "Low power mode on";
 "event.lowPower.off" = "Low power mode off";
 "event.battery.low" = "Battery %@%";
+"event.psi.enter" = "Memory pressure";
+"event.psi.clear" = "Memory pressure cleared";
+"event.load.enter" = "Load spike";
+"event.load.clear" = "Load normalized";
+"event.memory.enter" = "Low memory";
+"event.memory.clear" = "Memory available again";
 "alert.banner.notify" = "Alert: %@";
 "alert.banner.cleared" = "Cleared: %@";
 "remediation.title" = "Recommended follow-up";
@@ -128,3 +141,12 @@
 "remediation.battery.3" = "Enable low power mode if urgent";
 "remediation.lowPower.1" = "Performance cap may reduce throttling";
 "remediation.lowPower.2" = "Turn off in Settings if not needed";
+"remediation.psi" = "Relieve memory pressure";
+"remediation.psi.1" = "Close top-RSS apps from the process list";
+"remediation.psi.2" = "Pause background sync/backup briefly";
+"remediation.load" = "Lower system load";
+"remediation.load.1" = "Check top CPU processes — pause heavy apps";
+"remediation.load.2" = "Wait for builds/encodes to finish";
+"remediation.memory" = "Free memory";
+"remediation.memory.1" = "Close unnecessary background apps";
+"remediation.memory.2" = "Check MemAvailable/swap on the MEM card";

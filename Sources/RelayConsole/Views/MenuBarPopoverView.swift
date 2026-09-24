@@ -120,7 +120,7 @@ struct MenuBarPopoverView: View {
                         .font(OPFont.number(11))
                         .foregroundStyle(OPColor.inkDim)
                 }
-                Text("0.5.0")
+                Text("0.6.0")
                     .font(OPFont.number(10))
                     .foregroundStyle(OPColor.inkDim)
             }
@@ -428,6 +428,9 @@ struct MenuBarPopoverView: View {
         case .protectionChanged: return L10n.string("remediation.protection")
         case .batteryThreshold: return L10n.string("remediation.battery")
         case .lowPowerChanged: return L10n.string("remediation.lowPower")
+        case .psiPressure: return L10n.string("remediation.psi")
+        case .loadSpike: return L10n.string("remediation.load")
+        case .memoryLow: return L10n.string("remediation.memory")
         default: return L10n.string("remediation.title")
         }
     }
@@ -457,6 +460,21 @@ struct MenuBarPopoverView: View {
             return [
                 L10n.string("remediation.lowPower.1"),
                 L10n.string("remediation.lowPower.2")
+            ]
+        case .psiPressure:
+            return [
+                L10n.string("remediation.psi.1"),
+                L10n.string("remediation.psi.2")
+            ]
+        case .loadSpike:
+            return [
+                L10n.string("remediation.load.1"),
+                L10n.string("remediation.load.2")
+            ]
+        case .memoryLow:
+            return [
+                L10n.string("remediation.memory.1"),
+                L10n.string("remediation.memory.2")
             ]
         default:
             return []

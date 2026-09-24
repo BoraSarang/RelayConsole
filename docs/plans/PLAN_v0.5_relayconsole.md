@@ -167,7 +167,7 @@ WatchEvent
 - [x] 충전 전이 육안 — 켜기/끄기 이벤트 ✓
 - [x] 팝오버 Latest에 심각 이벤트 상단 노출 (육안 ✓)
 - [x] 메뉴바 주황 배지 (critical 미해결 시) 육안 ✓
-- [ ] Phase2 A5: PSI 파서 + load/mem 임계 — **보류(후속)**
+- [x] Phase2 A5: PSI 파서 + load/mem 임계 — **→ PLAN_v0.6 (v0.6.0 구현)**
 
 ---
 

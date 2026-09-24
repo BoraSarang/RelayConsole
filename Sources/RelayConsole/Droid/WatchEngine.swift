@@ -15,7 +15,7 @@ final class WatchEngine {
     private var batteryArmed: [String: Set<Int>] = [:]
     private let batteryThresholds = [20, 10, 5]
 
-    /// Phase2 (수집 연결 전까지 미사용 — Gate만 선 구성)
+    /// Phase2 A5 — PSI / load / MemAvailable
     private var psiGates: [String: ThresholdGate] = [:]
     private var loadGates: [String: ThresholdGate] = [:]
     private var memGates: [String: ThresholdGate] = [:]
@@ -156,6 +156,95 @@ final class WatchEngine {
             title: L10n.format("event.battery.low", "\(threshold)"),
             detail: "\(short) · \(level)%",
             at: now
+        )
+    }
+
+    /// PSI memory some avg10 — enter ≥5.0, clear ≤3.0, 120s
+    func feedPsi(serial: String, avg10: Double, now: Date = .now) -> WatchEvent? {
+        var gate = psiGates[serial] ?? ThresholdGate(enter: 5.0, clear: 3.0, cooldown: 120)
+        let action = gate.evaluate(value: avg10, now: now)
+        psiGates[serial] = gate
+        guard action != .none else { return nil }
+
+        let short = AdbClient.shortId(serial)
+        if action == .enter {
+            return WatchEvent(
+                kind: .psiPressure,
+                severity: .warning,
+                serial: serial,
+                title: L10n.string("event.psi.enter"),
+                detail: String(format: "%@ · avg10=%.1f", short, avg10),
+                at: now
+            )
+        }
+        return WatchEvent(
+            kind: .psiPressure,
+            severity: .info,
+            serial: serial,
+            title: L10n.string("event.psi.clear"),
+            detail: String(format: "%@ · avg10=%.1f", short, avg10),
+            at: now,
+            isClear: true
+        )
+    }
+
+    /// load1 급증 — enter ≥ cores×2, clear ≤ cores×1, 60s
+    func feedLoad(serial: String, load1: Double, cores: Int, now: Date = .now) -> WatchEvent? {
+        guard cores > 0 else { return nil }
+        var gate = loadGates[serial]
+            ?? ThresholdGate(enter: Double(cores) * 2, clear: Double(cores), cooldown: 60)
+        let action = gate.evaluate(value: load1, now: now)
+        loadGates[serial] = gate
+        guard action != .none else { return nil }
+
+        let short = AdbClient.shortId(serial)
+        if action == .enter {
+            return WatchEvent(
+                kind: .loadSpike,
+                severity: load1 >= Double(cores) * 3 ? .critical : .warning,
+                serial: serial,
+                title: L10n.string("event.load.enter"),
+                detail: String(format: "%@ · load1=%.1f/%d", short, load1, cores),
+                at: now
+            )
+        }
+        return WatchEvent(
+            kind: .loadSpike,
+            severity: .info,
+            serial: serial,
+            title: L10n.string("event.load.clear"),
+            detail: String(format: "%@ · load1=%.1f/%d", short, load1, cores),
+            at: now,
+            isClear: true
+        )
+    }
+
+    /// MemAvailable 부족 — usedPct = 100−avail% · enter ≥90 (avail<10%), clear ≤80 (avail>20%), 60s
+    func feedMemory(serial: String, usedPct: Double, now: Date = .now) -> WatchEvent? {
+        var gate = memGates[serial] ?? ThresholdGate(enter: 90, clear: 80, cooldown: 60)
+        let action = gate.evaluate(value: usedPct, now: now)
+        memGates[serial] = gate
+        guard action != .none else { return nil }
+
+        let short = AdbClient.shortId(serial)
+        if action == .enter {
+            return WatchEvent(
+                kind: .memoryLow,
+                severity: usedPct >= 95 ? .critical : .warning,
+                serial: serial,
+                title: L10n.string("event.memory.enter"),
+                detail: String(format: "%@ · %.0f%%", short, usedPct),
+                at: now
+            )
+        }
+        return WatchEvent(
+            kind: .memoryLow,
+            severity: .info,
+            serial: serial,
+            title: L10n.string("event.memory.clear"),
+            detail: String(format: "%@ · %.0f%%", short, usedPct),
+            at: now,
+            isClear: true
         )
     }
 

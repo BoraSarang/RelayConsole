@@ -137,4 +137,82 @@ struct WatchEventTests {
         let again = WatchEngine.shared.feedBatteryLevel(serial: "B2", level: 20, charging: false, now: t0.addingTimeInterval(120))
         #expect(again != nil)
     }
+
+    // MARK: - Phase2 A5 (PSI / load / memory)
+
+    @Test func watchEnginePsiEnterAtFiveClearAtThree() {
+        WatchEngine.shared.resetAll()
+        defer { WatchEngine.shared.resetAll() }
+
+        #expect(WatchEngine.shared.feedPsi(serial: "P1", avg10: 4.9, now: t0) == nil)
+        let enter = WatchEngine.shared.feedPsi(serial: "P1", avg10: 5.0, now: t0.addingTimeInterval(1))
+        #expect(enter?.kind == .psiPressure)
+        #expect(enter?.severity == .warning)
+        #expect(enter?.isClear == false)
+        // hysteresis: 4.0은 clear 아님 (clear ≤3.0)
+        #expect(WatchEngine.shared.feedPsi(serial: "P1", avg10: 4.0, now: t0.addingTimeInterval(2)) == nil)
+        let clear = WatchEngine.shared.feedPsi(serial: "P1", avg10: 3.0, now: t0.addingTimeInterval(3))
+        #expect(clear?.isClear == true)
+        // cooldown 120s — 즉시 재진입 불가
+        #expect(WatchEngine.shared.feedPsi(serial: "P1", avg10: 6.0, now: t0.addingTimeInterval(10)) == nil)
+        let reenter = WatchEngine.shared.feedPsi(serial: "P1", avg10: 6.0, now: t0.addingTimeInterval(130))
+        #expect(reenter != nil)
+    }
+
+    @Test func watchEngineLoadSpikeEnterTwiceCores() {
+        WatchEngine.shared.resetAll()
+        defer { WatchEngine.shared.resetAll() }
+
+        // cores=8 → enter ≥16, clear ≤8
+        #expect(WatchEngine.shared.feedLoad(serial: "L1", load1: 15.9, cores: 8, now: t0) == nil)
+        let enter = WatchEngine.shared.feedLoad(serial: "L1", load1: 16.0, cores: 8, now: t0.addingTimeInterval(1))
+        #expect(enter?.kind == .loadSpike)
+        #expect(enter?.severity == .warning)
+        // 12는 hysteresis 구간 (8 < 12 < 16) — clear 아님
+        #expect(WatchEngine.shared.feedLoad(serial: "L1", load1: 12.0, cores: 8, now: t0.addingTimeInterval(2)) == nil)
+        let clear = WatchEngine.shared.feedLoad(serial: "L1", load1: 8.0, cores: 8, now: t0.addingTimeInterval(3))
+        #expect(clear?.isClear == true)
+        // critical: ≥ cores×3 = 24
+        #expect(WatchEngine.shared.feedLoad(serial: "L1", load1: 8.0, cores: 8, now: t0.addingTimeInterval(4)) == nil)
+        _ = WatchEngine.shared.feedLoad(serial: "L1", load1: 8.0, cores: 8, now: t0.addingTimeInterval(70))
+        let crit = WatchEngine.shared.feedLoad(serial: "L1", load1: 24.0, cores: 8, now: t0.addingTimeInterval(71))
+        #expect(crit?.severity == .critical)
+        // cores=0이면 스킵
+        #expect(WatchEngine.shared.feedLoad(serial: "L2", load1: 99, cores: 0, now: t0) == nil)
+    }
+
+    @Test func watchEngineMemoryUsedPctGate() {
+        WatchEngine.shared.resetAll()
+        defer { WatchEngine.shared.resetAll() }
+
+        // enter ≥90 usedPct (avail<10%), clear ≤80 (avail>20%)
+        #expect(WatchEngine.shared.feedMemory(serial: "M1", usedPct: 89.9, now: t0) == nil)
+        let enter = WatchEngine.shared.feedMemory(serial: "M1", usedPct: 90.0, now: t0.addingTimeInterval(1))
+        #expect(enter?.kind == .memoryLow)
+        #expect(enter?.severity == .warning)
+        #expect(WatchEngine.shared.feedMemory(serial: "M1", usedPct: 85.0, now: t0.addingTimeInterval(2)) == nil)
+        let clear = WatchEngine.shared.feedMemory(serial: "M1", usedPct: 80.0, now: t0.addingTimeInterval(3))
+        #expect(clear?.isClear == true)
+        // critical ≥95
+        #expect(WatchEngine.shared.feedMemory(serial: "M1", usedPct: 95.0, now: t0.addingTimeInterval(4)) == nil)
+        _ = WatchEngine.shared.feedMemory(serial: "M1", usedPct: 80.0, now: t0.addingTimeInterval(5))
+        _ = WatchEngine.shared.feedMemory(serial: "M1", usedPct: 80.0, now: t0.addingTimeInterval(70))
+        let crit = WatchEngine.shared.feedMemory(serial: "M1", usedPct: 95.0, now: t0.addingTimeInterval(71))
+        #expect(crit?.severity == .critical)
+    }
+
+    @Test func watchEngineForgetClearsPhase2Gates() {
+        WatchEngine.shared.resetAll()
+        defer { WatchEngine.shared.resetAll() }
+
+        _ = WatchEngine.shared.feedPsi(serial: "F2", avg10: 6.0, now: t0)
+        _ = WatchEngine.shared.feedLoad(serial: "F2", load1: 20, cores: 8, now: t0)
+        _ = WatchEngine.shared.feedMemory(serial: "F2", usedPct: 92, now: t0)
+        WatchEngine.shared.forget(serial: "F2")
+        // forget 후 새 baseline → 즉시 enter 가능
+        #expect(WatchEngine.shared.feedPsi(serial: "F2", avg10: 6.0, now: t0.addingTimeInterval(1)) != nil)
+        #expect(WatchEngine.shared.feedLoad(serial: "F2", load1: 20, cores: 8, now: t0.addingTimeInterval(2)) != nil)
+        #expect(WatchEngine.shared.feedMemory(serial: "F2", usedPct: 92, now: t0.addingTimeInterval(3)) != nil)
+    }
 }
+

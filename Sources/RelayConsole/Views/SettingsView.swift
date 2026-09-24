@@ -20,7 +20,7 @@ struct SettingsView: View {
                     }
                     // 메뉴바는 아이콘만 — 이 토글은 팝오버 헤더 n/m 표시
                     Toggle(L10n.string("settings.menubarMetrics"), isOn: $menubarMetrics)
-                    LabeledContent(L10n.string("settings.version"), value: "0.5.0")
+                    LabeledContent(L10n.string("settings.version"), value: "0.6.0")
                     LabeledContent(L10n.string("settings.bundleId"), value: "com.borasarang.relayconsole")
                 }
                 Section(L10n.string("settings.section.watch")) {
@@ -31,6 +31,9 @@ struct SettingsView: View {
                     Toggle(L10n.string("settings.watch.protection"), isOn: $store.watchProtection)
                     Toggle(L10n.string("settings.watch.lowPower"), isOn: $store.watchLowPower)
                     Toggle(L10n.string("settings.watch.battery"), isOn: $store.watchBattery)
+                    Toggle(L10n.string("settings.watch.psi"), isOn: $store.watchPsi)
+                    Toggle(L10n.string("settings.watch.load"), isOn: $store.watchLoad)
+                    Toggle(L10n.string("settings.watch.memory"), isOn: $store.watchMemory)
                 }
                 Section(L10n.string("settings.section.droid")) {
                     Text(L10n.string("settings.keyPrefix"))
