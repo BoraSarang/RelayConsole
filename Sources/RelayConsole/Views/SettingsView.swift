@@ -348,7 +348,7 @@ struct SettingsView: View {
     @ViewBuilder
     private var aboutSection: some View {
         Section(L10n.string("settings.section.about")) {
-            LabeledContent(L10n.string("settings.version"), value: "1.11.0")
+            LabeledContent(L10n.string("settings.version"), value: "1.12.0")
             LabeledContent(L10n.string("settings.bundleId"), value: "com.borasarang.relayconsole")
         }
         Section(L10n.string("settings.mcp.section")) {

@@ -2,10 +2,10 @@
 > 작업 추적 — bd 연동 (이슈 prefix: RelayConsole)
 
 ## 진행 중 (bd ready)
-- **S2 Device Health Score** — 구현·검증 완료 · 커밋/PR 직전
+- **A4 파일/스샷 갤러리** — 구현 중 · `RelayConsole-40v`
 
 ## 다음 스프린트 (사용자 선택 대기 · 리서치 §8)
-- P3: A4 갤러리 · A6 캘린더
+- P3: A6 캘린더
 - 보류: A9 Apple Phase 2 (기기 확보 시)
 
 ## 보류 (기기 확보 시)
@@ -13,6 +13,7 @@
 - [ ] **Apple Phase 2** — Developer Mode·sysmon 등 — 위 기기 확보 후 착수
 
 ## 완료 (2026-09-24)
+- [x] **S2 Device Health Score** — `HealthScoreLogic`(배터리40·발열40·스로틀20 가중 0–100) · HEALTH 카드 + 헤더 칩 · `relay.cards.health` · i18n **506** · HealthScoreTests +10 · **1.11.0** · `PLAN_health_score` · **PR #36 머지 `9bf0eb5`** · bd `RelayConsole-czg` closed
 - [x] **A10 로컬 MCP 서버** — `RelayMcpCore`·`relay-mcp` stdio · 읽기 전용 5도구(devices/sites/jobs/events/summary) · `AdbDevicesParser` · Settings MCP help · i18n **499** · McpProtocolTests +10 · **1.10.0** · `PLAN_local_mcp` · **PR #35 머지 `7fbe8e9`** · bd `RelayConsole-yzw` closed
 - [x] **A8 로그인 항목 + 헤드리스** — `LoginItemLogic`·`LoginItemController`(SMAppService) · `HeadlessLaunch` accessory · 설정 일반 토글 2종 · `relay.login.launchAtLogin`·`relay.launch.headless`(기본 ON) · i18n **496** · LoginItemTests +8 · **1.9.0** · `PLAN_login_item` · **PR #34 머지 `be12b61`** · bd `RelayConsole-njd` closed
 - [x] **A3 앱 미니 허브** — `AppHubLogic`·`AppHubController`·`AppHubSheet` · 헤더 Apps · 목록/런치/강제종료/삭제(확인) · i18n **484** · AppHubTests +10 · **1.8.0** · `PLAN_app_hub` · **PR #33 머지 `fb31578`** · bd `RelayConsole-mkk` closed

@@ -7,6 +7,7 @@ struct DroidDashboardView: View {
     @State private var showScreenshot = false
     @State private var showWifiOnboarding = false
     @State private var showAppHub = false
+    @State private var showGallery = false
     @ObservedObject private var shots = ScreenshotService.shared
     @ObservedObject private var scrcpy = ScrcpyController.shared
 
@@ -94,6 +95,9 @@ struct DroidDashboardView: View {
                 AppHubSheet(serial: d.serial)
             }
         }
+        .sheet(isPresented: $showGallery) {
+            GallerySheet(serial: device?.serial)
+        }
     }
 
     private var header: some View {
@@ -159,6 +163,27 @@ struct DroidDashboardView: View {
                 }
                 .buttonStyle(.plain)
                 .help(L10n.string("apphub.button.help"))
+                Button {
+                    showGallery = true
+                } label: {
+                    HStack(spacing: 3) {
+                        Image(systemName: "photo.on.rectangle.angled")
+                            .font(.system(size: 10, weight: .semibold))
+                        Text(L10n.string("gallery.button"))
+                            .font(OPFont.number(10))
+                    }
+                    .foregroundStyle(OPColor.cta)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 4)
+                    .background(OPColor.cta.opacity(0.12), in: RoundedRectangle(cornerRadius: 6))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 6)
+                            .stroke(OPColor.cta.opacity(0.35), lineWidth: 1)
+                    )
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help(L10n.string("gallery.button.help"))
                 Button {
                     showScreenshot = true
                 } label: {
