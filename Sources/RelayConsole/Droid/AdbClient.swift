@@ -281,6 +281,28 @@ enum AdbClient {
         return (up: up, down: down)
     }
 
+    /// 네트워크 속도 표시 단위 — ≥1.0 MB/s → MB/s, 미만 → KB/s
+    static func formatNetRate(_ mbps: Double) -> (value: String, unit: String) {
+        guard mbps.isFinite, mbps >= 0 else { return ("—", "") }
+        if mbps >= 1.0 {
+            let fmt = mbps >= 100 ? "%.0f" : "%.1f"
+            return (String(format: fmt, mbps), "MB/s")
+        }
+        let kbps = mbps * 1024.0
+        let fmt = kbps >= 100 ? "%.0f" : "%.1f"
+        return (String(format: fmt, kbps), "KB/s")
+    }
+
+    /// ↑↓ 한 줄 — 방향 단위가 다르면 각각 단위를 붙임
+    static func formatNetRatePair(up: Double, down: Double) -> String {
+        let u = formatNetRate(up)
+        let d = formatNetRate(down)
+        if u.unit == d.unit, !u.unit.isEmpty {
+            return "↑\(u.value) ↓\(d.value) \(u.unit)"
+        }
+        return "↑\(u.value) \(u.unit) ↓\(d.value) \(d.unit)"
+    }
+
     // MARK: - Settings watch (accelerometer_rotation / user_rotation)
 
     /// `settings get …` — "0"/"1"/"null" → trimmed value; null/empty → nil

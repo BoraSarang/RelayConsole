@@ -283,16 +283,20 @@ enum DroidCards {
     // MARK: - Network
 
     static func network(device: DeviceSnapshot?, metrics: DroidMetrics?) -> some View {
-        shell(L10n.string("droid.card.network.title")) {
+        let up = device?.netUpMBps
+        let down = device?.netDownMBps
+        let upFmt = up.map { AdbClient.formatNetRate($0) }
+        let downFmt = down.map { AdbClient.formatNetRate($0) }
+        return shell(L10n.string("droid.card.network.title")) {
             HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(L10n.string("droid.card.network.up"))
                         .font(OPFont.body(9))
                         .foregroundStyle(OPColor.inkDim)
-                    Text(device?.netUpMBps.map { String(format: "%.1f", $0) } ?? L10n.na)
+                    Text(upFmt?.value ?? L10n.na)
                         .font(OPFont.number(16))
                         .foregroundStyle(OPColor.cta)
-                    Text("MB/s")
+                    Text(upFmt?.unit ?? " ")
                         .font(OPFont.number(9))
                         .foregroundStyle(OPColor.inkDim)
                 }
@@ -301,10 +305,10 @@ enum DroidCards {
                     Text(L10n.string("droid.card.network.down"))
                         .font(OPFont.body(9))
                         .foregroundStyle(OPColor.inkDim)
-                    Text(device?.netDownMBps.map { String(format: "%.1f", $0) } ?? L10n.na)
+                    Text(downFmt?.value ?? L10n.na)
                         .font(OPFont.number(16))
                         .foregroundStyle(OPColor.thermalSoft)
-                    Text("MB/s")
+                    Text(downFmt?.unit ?? " ")
                         .font(OPFont.number(9))
                         .foregroundStyle(OPColor.inkDim)
                 }

@@ -230,6 +230,34 @@ struct AdbParsingTests {
         #expect(AdbClient.netRatesMBps(prev: a, curr: b, seconds: 1) == nil)
     }
 
+    // MARK: - Net rate display units
+
+    @Test func formatNetRateSwitchesToKilobytesBelowOneMb() {
+        let kb = AdbClient.formatNetRate(0.25)
+        #expect(kb.unit == "KB/s")
+        #expect(kb.value == "256")
+
+        let smallKb = AdbClient.formatNetRate(0.05)
+        #expect(smallKb.unit == "KB/s")
+        #expect(smallKb.value == "51.2")
+
+        let mb = AdbClient.formatNetRate(1.5)
+        #expect(mb.unit == "MB/s")
+        #expect(mb.value == "1.5")
+
+        let large = AdbClient.formatNetRate(120)
+        #expect(large.unit == "MB/s")
+        #expect(large.value == "120")
+    }
+
+    @Test func formatNetRatePairSharedAndSplitUnits() {
+        let same = AdbClient.formatNetRatePair(up: 2.0, down: 3.5)
+        #expect(same == "↑2.0 ↓3.5 MB/s")
+
+        let split = AdbClient.formatNetRatePair(up: 0.5, down: 2.0)
+        #expect(split == "↑512 KB/s ↓2.0 MB/s")
+    }
+
     // MARK: - Metrics ring
 
     @Test func metricsRingCapacity60() {

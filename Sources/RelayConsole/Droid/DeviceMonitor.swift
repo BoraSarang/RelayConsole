@@ -335,7 +335,7 @@ actor DeviceMonitor {
                 if let r = upDown {
                     state.cacheNetUp = r.up
                     state.cacheNetDown = r.down
-                    state.cacheNetworkInfo = String(format: "↑%.1f ↓%.1f MB/s", r.up, r.down)
+                    state.cacheNetworkInfo = AdbClient.formatNetRatePair(up: r.up, down: r.down)
                 }
             }
 
