@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 struct MenuBarPopoverView: View {
     @ObservedObject var store: ConsoleStore
@@ -10,6 +11,7 @@ struct MenuBarPopoverView: View {
 
     @State private var showDeviceDetail = false
     @State private var showEvents = false
+    @State private var showQuitConfirm = false
     /// 상단 감시 배너 TTL — 해제/충전 등 일회성 이벤트는 5분 후 자동 제거
     @State private var now = Date()
     @AppStorage("relay.menubarMetrics") private var menubarMetrics = true
@@ -857,6 +859,33 @@ struct MenuBarPopoverView: View {
             }
             .buttonStyle(.plain)
             .help(L10n.string("settings.section.general"))
+
+            Button {
+                showQuitConfirm = true
+            } label: {
+                Image(systemName: "power")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(OPColor.inkDim)
+                    .frame(width: 32, height: 32)
+                    .background(OPColor.card, in: RoundedRectangle(cornerRadius: 8))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(OPColor.border, lineWidth: 1)
+                    )
+            }
+            .buttonStyle(.plain)
+            .help(L10n.string("menubar.button.quit"))
+            .alert(
+                L10n.string("menubar.quit.title"),
+                isPresented: $showQuitConfirm
+            ) {
+                Button(L10n.string("menubar.quit.cancel"), role: .cancel) {}
+                Button(L10n.string("menubar.quit.confirm"), role: .destructive) {
+                    NSApp.terminate(nil)
+                }
+            } message: {
+                Text(L10n.string("menubar.quit.body"))
+            }
         }
     }
 }

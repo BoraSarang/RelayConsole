@@ -187,6 +187,7 @@
 "menubar.battery.cycle" = "cycle %d";
 "menubar.button.debug" = "디버그";
 "menubar.button.openConsole" = "◧ 콘솔 열기";
+"menubar.button.quit" = "Relay 종료";
 "menubar.cpu.8core" = "CPU 8코어";
 "menubar.device.adb" = "ADB";
 "menubar.device.android" = "Android";
@@ -199,6 +200,10 @@
 "menubar.events.empty" = "감지된 이벤트 없음";
 "menubar.events.recent" = "최신 이벤트 (%d)";
 "menubar.label" = "RELAY";
+"menubar.quit.body" = "백그라운드 감시·하트비트가 중단됩니다.";
+"menubar.quit.cancel" = "취소";
+"menubar.quit.confirm" = "종료";
+"menubar.quit.title" = "Relay Console 종료";
 "menubar.status.connected" = "연결됨";
 "menubar.status.disconnected" = "연결 끊김";
 "relay.menubar.label" = "RELAY";
