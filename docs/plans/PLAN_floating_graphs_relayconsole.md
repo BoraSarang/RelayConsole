@@ -1,6 +1,6 @@
 # PLAN_floating_graphs_relayconsole.md — 기기 그래프 플로팅창 (A7/F1)
 
-> 생성일: 2026-09-24 | 상태: **구현 완료 — 사용자 통합 테스트 대기** (투명도·헤더 안정화 포함)
+> 생성일: 2026-09-24 | 상태: **완료** (사용자 통합 테스트 ✓ 2026-09-24 · 투명도·헤더 안정화 포함)
 > 모체: 사용자 요청 · 벤치마크 **TetherLens** `FloatingWindowController` + `FloatingWindowView`
 > 앱: **Relay Console** | 목표 버전: **1.4.0** | 최소 OS: **macOS 26.0**
 > bd: `RelayConsole-d2e`
@@ -144,7 +144,7 @@ FloatingGraphController.shared  (NSPanel · 신규)
 - [x] i18n 3처 동치 (430) · `%s` 없음
 - [x] 금지 grep 0 · `print(` DebugLogger만
 - [x] `swift test` 통과 · `./scripts/build-macos.sh debug` **1.4.0**
-- [ ] **사용자 통합 테스트** (팝오버 핀 · 카드 토글 · 드래그 · 닫기 · 투명도 · 헤더 안정 · Settings 동기화)
+- [x] **사용자 통합 테스트** (팝오버 핀 · 카드 토글 · 드래그 · 닫기 · 투명도 · 헤더 안정 · Settings 동기화) ✓
 
 ---
 

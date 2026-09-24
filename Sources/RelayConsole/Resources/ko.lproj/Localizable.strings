@@ -157,6 +157,9 @@
 "event.signal.clear" = "신호 회복";
 "event.signal.drop" = "신호 급락";
 "event.site.down" = "사이트 다운";
+"event.site.sslClear" = "SSL 만료 경고 해소";
+"event.site.sslExpired" = "SSL 인증서 만료됨";
+"event.site.sslExpiring" = "SSL 인증서 %d일 남음";
 "event.site.up" = "사이트 복구";
 "event.throttling.clear" = "스로틀링 해제";
 "event.throttling.enter" = "스로틀링 진입";
@@ -330,7 +333,10 @@
 "settings.section.integrations" = "연동";
 "settings.section.jobs" = "하트비트";
 "settings.section.scrcpy" = "scrcpy 미러링";
+"settings.section.sites" = "사이트";
 "settings.section.watch" = "감시 알림";
+"settings.sites.sslWarnDays" = "SSL 경고 D-day";
+"settings.sites.sslWarnDays.help" = "인증서 만료까지 N일 이하면 sslExpiring 알림";
 "settings.theme" = "테마";
 "settings.theme.dark" = "다크";
 "settings.theme.light" = "라이트";
@@ -374,6 +380,9 @@
 "sites.error.target.http" = "http(s):// 형식 URL이 아닙니다";
 "sites.error.target.ping" = "호스트 형식이 아닙니다";
 "sites.error.target.tcp" = "host 또는 host:port 형식이 아닙니다";
+"sites.field.assert" = "본문 포함 문자열";
+"sites.field.assert.help" = "HTTP 응답에 이 문자열이 없으면 장애로 기록";
+"sites.field.assert.placeholder" = "예: ok (비워두면 검사 안 함)";
 "sites.field.hint" = "HTTP: https://host/health · TCP: host:5432 · PING: host";
 "sites.field.interval" = "주기";
 "sites.field.name" = "이름";

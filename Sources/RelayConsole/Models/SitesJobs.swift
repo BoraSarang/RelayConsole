@@ -17,19 +17,37 @@ struct SiteCheck: Codable, Equatable, Sendable, Identifiable {
     var latencyMs: Int?
     /// 오류 한 줄 (URL 마스킹 후)
     var detail: String?
+    /// HTTPS 인증서 만료일 (A5 — 해당 체크에서 수집 시)
+    var sslExpiresAt: Date?
 
     init(
         id: UUID = UUID(),
         at: Date = .now,
         ok: Bool,
         latencyMs: Int? = nil,
-        detail: String? = nil
+        detail: String? = nil,
+        sslExpiresAt: Date? = nil
     ) {
         self.id = id
         self.at = at
         self.ok = ok
         self.latencyMs = latencyMs
         self.detail = detail
+        self.sslExpiresAt = sslExpiresAt
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, at, ok, latencyMs, detail, sslExpiresAt
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        at = try c.decode(Date.self, forKey: .at)
+        ok = try c.decode(Bool.self, forKey: .ok)
+        latencyMs = try c.decodeIfPresent(Int.self, forKey: .latencyMs)
+        detail = try c.decodeIfPresent(String.self, forKey: .detail)
+        sslExpiresAt = try c.decodeIfPresent(Date.self, forKey: .sslExpiresAt)
     }
 }
 
@@ -44,6 +62,10 @@ struct Site: Codable, Equatable, Sendable, Identifiable {
     var enabled: Bool
     /// 연속 실패 N회째에만 down (UptimeRobot delay 유사) — 1...5, 기본 2
     var failThreshold: Int
+    /// HTTPS 인증서 만료일 (최근 체크 갱신 · A5)
+    var sslExpiresAt: Date?
+    /// HTTP 본문 assertion — body에 포함해야 ok (nil = 검사 안 함)
+    var assertBody: String?
     /// 최근 체크 (최신 last) — 90일 / 300건 cap
     var history: [SiteCheck]
     var createdAt: Date
@@ -56,6 +78,8 @@ struct Site: Codable, Equatable, Sendable, Identifiable {
         intervalSec: Int = 60,
         enabled: Bool = true,
         failThreshold: Int = 2,
+        sslExpiresAt: Date? = nil,
+        assertBody: String? = nil,
         history: [SiteCheck] = [],
         createdAt: Date = .now
     ) {
@@ -66,13 +90,15 @@ struct Site: Codable, Equatable, Sendable, Identifiable {
         self.intervalSec = max(10, intervalSec)
         self.enabled = enabled
         self.failThreshold = min(5, max(1, failThreshold))
+        self.sslExpiresAt = sslExpiresAt
+        self.assertBody = assertBody
         self.history = history
         self.createdAt = createdAt
     }
 
-    /// 하위호환: failThreshold 키 없던 기존 JSON → 기본 2
+    /// 하위호환: failThreshold·sslExpiresAt·assertBody 키 없던 기존 JSON → 기본
     private enum CodingKeys: String, CodingKey {
-        case id, name, target, probe, intervalSec, enabled, failThreshold, history, createdAt
+        case id, name, target, probe, intervalSec, enabled, failThreshold, sslExpiresAt, assertBody, history, createdAt
     }
 
     init(from decoder: Decoder) throws {
@@ -84,6 +110,8 @@ struct Site: Codable, Equatable, Sendable, Identifiable {
         intervalSec = try c.decode(Int.self, forKey: .intervalSec)
         enabled = try c.decode(Bool.self, forKey: .enabled)
         failThreshold = min(5, max(1, try c.decodeIfPresent(Int.self, forKey: .failThreshold) ?? 2))
+        sslExpiresAt = try c.decodeIfPresent(Date.self, forKey: .sslExpiresAt)
+        assertBody = try c.decodeIfPresent(String.self, forKey: .assertBody)
         history = try c.decode([SiteCheck].self, forKey: .history)
         createdAt = try c.decode(Date.self, forKey: .createdAt)
     }
@@ -384,4 +412,36 @@ enum DayBarStatus: Equatable, Sendable {
 enum JobTransition: Equatable, Sendable {
     case overdue
     case recovered
+}
+
+// MARK: - SSL · assertion (A5)
+
+enum SslAssertLogic {
+    /// 만료까지 남은 일수 — nil = 만료일 없음 · 음수 = 만료됨
+    static func daysRemaining(expiresAt: Date?, now: Date = .now) -> Int? {
+        guard let expiresAt else { return nil }
+        let cal = Calendar.current
+        let from = cal.startOfDay(for: now)
+        let to = cal.startOfDay(for: expiresAt)
+        return cal.dateComponents([.day], from: from, to: to).day
+    }
+
+    /// warnDays 이하(음수 포함)면 경고
+    static func sslShouldWarn(expiresAt: Date?, now: Date = .now, warnDays: Int) -> Bool {
+        guard let d = daysRemaining(expiresAt: expiresAt, now: now) else { return false }
+        return d <= max(0, warnDays)
+    }
+
+    /// HTTP 본문 assertion — expected nil이면 항상 통과
+    static func assertBody(_ body: String, expected: String?) -> Bool {
+        guard let expected, !expected.isEmpty else { return true }
+        return body.contains(expected)
+    }
+
+    /// D-day 라벨용 — nil = 표시 안 함
+    static func sslBadge(days: Int?) -> String? {
+        guard let days else { return nil }
+        if days < 0 { return "SSL ✕" }
+        return "SSL D-\(days)"
+    }
 }

@@ -26,6 +26,8 @@ enum WatchKind: String, Sendable, Equatable, CaseIterable, Codable {
     case jobOverdue
     /// 작업 하트비트 복구
     case jobRecovered
+    /// HTTPS 인증서 만료 임박 (A5)
+    case sslExpiring
 }
 
 /// 심각도 — 시스템 알림 interruptionLevel 매핑

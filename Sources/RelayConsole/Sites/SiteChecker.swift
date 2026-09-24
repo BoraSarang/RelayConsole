@@ -1,5 +1,6 @@
 import Foundation
 import Network
+import Security
 
 /// 사이트 업타임 체커 — HTTP / TCP / ping
 /// 동시 상한은 호출부(ConsoleStore)에서 prefix로 제한 · 외부 바이너리 다운로드 없음
@@ -12,7 +13,7 @@ final class SiteChecker: @unchecked Sendable {
     func check(_ site: Site) async -> SiteCheck {
         switch site.probe {
         case .http:
-            return await checkHTTP(SitesJobsLogic.sanitizeTarget(site.target, probe: .http))
+            return await checkHTTP(site)
         case .tcp:
             return await checkTCP(site.target)
         case .ping:
@@ -20,9 +21,10 @@ final class SiteChecker: @unchecked Sendable {
         }
     }
 
-    // MARK: - HTTP
+    // MARK: - HTTP (+ SSL expiry · assertion)
 
-    private func checkHTTP(_ urlString: String) async -> SiteCheck {
+    private func checkHTTP(_ site: Site) async -> SiteCheck {
+        let urlString = SitesJobsLogic.sanitizeTarget(site.target, probe: .http)
         guard let url = URL(string: urlString), let scheme = url.scheme?.lowercased(),
               scheme == "http" || scheme == "https" else {
             return SiteCheck(ok: false, detail: "bad-url")
@@ -32,17 +34,38 @@ final class SiteChecker: @unchecked Sendable {
         req.httpMethod = "GET"
         req.setValue("RelayConsole/1.0", forHTTPHeaderField: "User-Agent")
         let start = Date()
+        let box = TrustExpiryBox()
+        let config = URLSessionConfiguration.ephemeral
+        config.timeoutIntervalForRequest = Self.timeout
+        let session = URLSession(configuration: config, delegate: box, delegateQueue: nil)
         do {
-            let (_, response) = try await URLSession.shared.data(for: req)
+            let (data, response) = try await session.data(for: req)
             let ms = Int(Date().timeIntervalSince(start) * 1000)
+            session.finishTasksAndInvalidate()
+            let sslExp = box.expiry
             if let http = response as? HTTPURLResponse {
-                if (200...399).contains(http.statusCode) {
-                    return SiteCheck(ok: true, latencyMs: ms, detail: nil)
+                guard (200...399).contains(http.statusCode) else {
+                    return SiteCheck(
+                        ok: false,
+                        latencyMs: ms,
+                        detail: SitesJobsLogic.summarize(error: nil, httpStatus: http.statusCode),
+                        sslExpiresAt: sslExp
+                    )
                 }
-                return SiteCheck(ok: false, latencyMs: ms, detail: SitesJobsLogic.summarize(error: nil, httpStatus: http.statusCode))
+                let body = String(data: data, encoding: .utf8) ?? ""
+                if !SslAssertLogic.assertBody(body, expected: site.assertBody) {
+                    return SiteCheck(
+                        ok: false,
+                        latencyMs: ms,
+                        detail: "assert-fail",
+                        sslExpiresAt: sslExp
+                    )
+                }
+                return SiteCheck(ok: true, latencyMs: ms, detail: nil, sslExpiresAt: sslExp)
             }
-            return SiteCheck(ok: false, detail: "bad-response")
+            return SiteCheck(ok: false, detail: "bad-response", sslExpiresAt: sslExp)
         } catch {
+            session.finishTasksAndInvalidate()
             let ms = Int(Date().timeIntervalSince(start) * 1000)
             return SiteCheck(ok: false, latencyMs: ms, detail: SitesJobsLogic.summarize(error: error))
         }
@@ -154,5 +177,74 @@ final class OnceBox<T>: @unchecked Sendable {
         guard value == nil else { return nil }
         value = v
         return v
+    }
+}
+
+/// HTTPS trust 챌린지에서 인증서 만료일만 수집 (체크 실패로 연결 거부 안 함)
+final class TrustExpiryBox: NSObject, URLSessionDelegate, @unchecked Sendable {
+    private let lock = NSLock()
+    private var _expiry: Date?
+
+    var expiry: Date? {
+        lock.lock()
+        defer { lock.unlock() }
+        return _expiry
+    }
+
+    func urlSession(
+        _ session: URLSession,
+        didReceive challenge: URLAuthenticationChallenge,
+        completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
+    ) {
+        guard challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust,
+              let trust = challenge.protectionSpace.serverTrust
+        else {
+            completionHandler(.performDefaultHandling, nil)
+            return
+        }
+        if let date = Self.expiryDate(from: trust) {
+            lock.lock()
+            _expiry = date
+            lock.unlock()
+        }
+        // reachability 유지 — 만료 수집만 · pinning/CA down 처리는 OUT
+        completionHandler(.useCredential, URLCredential(trust: trust))
+    }
+
+    /// leaf cert notAfter 추출 — 실패 시 nil
+    static func expiryDate(from trust: SecTrust) -> Date? {
+        var error: CFError?
+        guard SecTrustEvaluateWithError(trust, &error) else {
+            // evaluate 실패여도 체인에서 시도
+            return leafNotAfter(trust)
+        }
+        return leafNotAfter(trust)
+    }
+
+    private static func leafNotAfter(_ trust: SecTrust) -> Date? {
+        var cert: SecCertificate?
+        if #available(macOS 12.0, *) {
+            if let chain = SecTrustCopyCertificateChain(trust) as? [SecCertificate] {
+                cert = chain.first
+            }
+        } else {
+            cert = SecTrustGetCertificateAtIndex(trust, 0)
+        }
+        guard let cert else { return nil }
+        // notAfter OID = 2.5.29.15 (kSecOIDX509CertificateValidityNotAfter)
+        let keys = ["2.5.29.15"] as CFArray
+        guard let dict = SecCertificateCopyValues(cert, keys, nil) as? [String: Any],
+              let notAfterDict = dict["2.5.29.15"] as? [String: Any]
+        else { return nil }
+        let raw = notAfterDict[kSecPropertyKeyValue as String]
+        if let date = raw as? Date { return date }
+        if let str = raw as? String {
+            let f = DateFormatter()
+            f.locale = Locale(identifier: "en_US_POSIX")
+            f.timeZone = TimeZone(identifier: "UTC")
+            f.dateFormat = "yyyyMMddHHmmss'Z'"
+            return f.date(from: str)
+        }
+        return nil
     }
 }

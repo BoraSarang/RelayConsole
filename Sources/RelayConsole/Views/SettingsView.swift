@@ -58,6 +58,7 @@ struct SettingsView: View {
                     cardsSection
                 case .alertsJobs:
                     alertsSection
+                    sitesSection
                     jobsSection
                 case .integrations:
                     notifySection
@@ -184,6 +185,25 @@ struct SettingsView: View {
         }
     }
 
+    /// Sites SSL 경고 D-day (A5)
+    @ViewBuilder
+    private var sitesSection: some View {
+        Section(L10n.string("settings.section.sites")) {
+            Stepper(
+                "\(L10n.string("settings.sites.sslWarnDays")): \(store.sslWarnDays)",
+                value: $store.sslWarnDays,
+                in: 1...90,
+                step: 1
+            )
+            .font(OPFont.body(12))
+            .foregroundStyle(OPColor.ink)
+            Text(L10n.string("settings.sites.sslWarnDays.help"))
+                .font(OPFont.body(10))
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
+        }
+    }
+
     @ViewBuilder
     private var jobsSection: some View {
         Section(L10n.string("settings.section.jobs")) {
@@ -290,7 +310,7 @@ struct SettingsView: View {
     @ViewBuilder
     private var aboutSection: some View {
         Section(L10n.string("settings.section.about")) {
-            LabeledContent(L10n.string("settings.version"), value: "1.4.0")
+            LabeledContent(L10n.string("settings.version"), value: "1.5.0")
             LabeledContent(L10n.string("settings.bundleId"), value: "com.borasarang.relayconsole")
         }
     }
