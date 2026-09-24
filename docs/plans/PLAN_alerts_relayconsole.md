@@ -1,8 +1,9 @@
 # PLAN_alerts_relayconsole.md — Alerts 사이드바 v0.9.1
 
-> 생성일: 2026-09-24 | 상태: **구현**
+> 생성일: 2026-09-24 | 상태: **구현 (육안 대기)**
 > 벤치마크: Zabbix · Grafana · Intune · Kandji · ManageEngine · iStat Menus
-> 앱: **Relay Console** | 목표 버전: **0.9.1** (Sites·Jobs 포함 시 1.0.0) | macOS 26.0
+> 앱: **Relay Console** | 버전: **0.9.1** (Sites·Jobs 포함 시 1.0.0) | macOS 26.0
+> PR **#10** (A) + PR-B (화면·액션·export)
 
 ---
 
