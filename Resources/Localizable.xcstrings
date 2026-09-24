@@ -2298,6 +2298,40 @@
         }
       }
     },
+    "event.job.overdue": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Heartbeat overdue"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "하트비트 overdue"
+          }
+        }
+      }
+    },
+    "event.job.recovered": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Heartbeat recovered"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "하트비트 복구"
+          }
+        }
+      }
+    },
     "event.load.clear": {
       "localizations": {
         "en": {
@@ -2518,6 +2552,40 @@
           "stringUnit": {
             "state": "translated",
             "value": "신호 급락"
+          }
+        }
+      }
+    },
+    "event.site.down": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Site down"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "사이트 다운"
+          }
+        }
+      }
+    },
+    "event.site.up": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Site recovered"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "사이트 복구"
           }
         }
       }
