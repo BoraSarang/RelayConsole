@@ -2639,6 +2639,141 @@
         }
       }
     },
+    "float.card.cpu": {
+      "extractionState": "manual",
+      "stringUnits": [
+        {
+          "language": "ko",
+          "state": "translated",
+          "value": "플로팅 CPU"
+        },
+        {
+          "language": "en",
+          "state": "translated",
+          "value": "Floating CPU"
+        }
+      ]
+    },
+    "float.card.gpu": {
+      "extractionState": "manual",
+      "stringUnits": [
+        {
+          "language": "ko",
+          "state": "translated",
+          "value": "플로팅 GPU"
+        },
+        {
+          "language": "en",
+          "state": "translated",
+          "value": "Floating GPU"
+        }
+      ]
+    },
+    "float.card.memory": {
+      "extractionState": "manual",
+      "stringUnits": [
+        {
+          "language": "ko",
+          "state": "translated",
+          "value": "플로팅 메모리"
+        },
+        {
+          "language": "en",
+          "state": "translated",
+          "value": "Floating memory"
+        }
+      ]
+    },
+    "float.close": {
+      "extractionState": "manual",
+      "stringUnits": [
+        {
+          "language": "ko",
+          "state": "translated",
+          "value": "플로팅 닫기"
+        },
+        {
+          "language": "en",
+          "state": "translated",
+          "value": "Close floating"
+        }
+      ]
+    },
+    "float.empty": {
+      "extractionState": "manual",
+      "stringUnits": [
+        {
+          "language": "ko",
+          "state": "translated",
+          "value": "연결된 Android 기기가 없습니다"
+        },
+        {
+          "language": "en",
+          "state": "translated",
+          "value": "No Android device connected"
+        }
+      ]
+    },
+    "float.menu.help": {
+      "extractionState": "manual",
+      "stringUnits": [
+        {
+          "language": "ko",
+          "state": "translated",
+          "value": "플로팅 카드 선택"
+        },
+        {
+          "language": "en",
+          "state": "translated",
+          "value": "Choose floating cards"
+        }
+      ]
+    },
+    "float.noDevice": {
+      "extractionState": "manual",
+      "stringUnits": [
+        {
+          "language": "ko",
+          "state": "translated",
+          "value": "기기 없음"
+        },
+        {
+          "language": "en",
+          "state": "translated",
+          "value": "No device"
+        }
+      ]
+    },
+    "float.toggle": {
+      "extractionState": "manual",
+      "stringUnits": [
+        {
+          "language": "ko",
+          "state": "translated",
+          "value": "플로팅 그래프"
+        },
+        {
+          "language": "en",
+          "state": "translated",
+          "value": "Floating graphs"
+        }
+      ]
+    },
+    "float.toggle.help": {
+      "extractionState": "manual",
+      "stringUnits": [
+        {
+          "language": "ko",
+          "state": "translated",
+          "value": "기기 그래프를 떠 있는 창으로 표시"
+        },
+        {
+          "language": "en",
+          "state": "translated",
+          "value": "Show device graphs in a floating window"
+        }
+      ]
+    },
     "jobs.add": {
       "extractionState": "manual",
       "localizations": {
@@ -4587,6 +4722,111 @@
           }
         }
       }
+    },
+    "settings.float.cpu": {
+      "extractionState": "manual",
+      "stringUnits": [
+        {
+          "language": "ko",
+          "state": "translated",
+          "value": "CPU"
+        },
+        {
+          "language": "en",
+          "state": "translated",
+          "value": "CPU"
+        }
+      ]
+    },
+    "settings.float.enabled": {
+      "extractionState": "manual",
+      "stringUnits": [
+        {
+          "language": "ko",
+          "state": "translated",
+          "value": "플로팅 창 표시"
+        },
+        {
+          "language": "en",
+          "state": "translated",
+          "value": "Show floating window"
+        }
+      ]
+    },
+    "settings.float.gpu": {
+      "extractionState": "manual",
+      "stringUnits": [
+        {
+          "language": "ko",
+          "state": "translated",
+          "value": "GPU"
+        },
+        {
+          "language": "en",
+          "state": "translated",
+          "value": "GPU"
+        }
+      ]
+    },
+    "settings.float.hint": {
+      "extractionState": "manual",
+      "stringUnits": [
+        {
+          "language": "ko",
+          "state": "translated",
+          "value": "기본: 네트워크 + CPU. 카드를 전부 끄면 네트워크가 유지됩니다."
+        },
+        {
+          "language": "en",
+          "state": "translated",
+          "value": "Default: network + CPU. Network stays if all cards are off."
+        }
+      ]
+    },
+    "settings.float.memory": {
+      "extractionState": "manual",
+      "stringUnits": [
+        {
+          "language": "ko",
+          "state": "translated",
+          "value": "메모리"
+        },
+        {
+          "language": "en",
+          "state": "translated",
+          "value": "Memory"
+        }
+      ]
+    },
+    "settings.float.network": {
+      "extractionState": "manual",
+      "stringUnits": [
+        {
+          "language": "ko",
+          "state": "translated",
+          "value": "네트워크 (고정)"
+        },
+        {
+          "language": "en",
+          "state": "translated",
+          "value": "Network (always)"
+        }
+      ]
+    },
+    "settings.float.section": {
+      "extractionState": "manual",
+      "stringUnits": [
+        {
+          "language": "ko",
+          "state": "translated",
+          "value": "플로팅 그래프"
+        },
+        {
+          "language": "en",
+          "state": "translated",
+          "value": "Floating graphs"
+        }
+      ]
     },
     "settings.hb.port": {
       "extractionState": "manual",

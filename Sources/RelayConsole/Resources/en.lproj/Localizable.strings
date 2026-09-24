@@ -160,6 +160,15 @@
 "event.site.up" = "Site recovered";
 "event.throttling.clear" = "Throttling cleared";
 "event.throttling.enter" = "Throttling started";
+"float.card.cpu" = "CPU";
+"float.card.gpu" = "GPU";
+"float.card.memory" = "Memory";
+"float.close" = "Close";
+"float.empty" = "No Android device connected";
+"float.menu.help" = "Choose cards to show";
+"float.noDevice" = "No device";
+"float.toggle" = "Floating graphs";
+"float.toggle.help" = "Show network·CPU graphs in a floating window";
 "jobs.add" = "Add job";
 "jobs.add.hint" = "curl the URL below from cron to update last beat.";
 "jobs.add.title" = "Add heartbeat job";
@@ -207,6 +216,8 @@
 "menubar.quit.title" = "Quit Relay Console";
 "menubar.status.connected" = "Connected";
 "menubar.status.disconnected" = "Disconnected";
+"notify.test.detail" = "Relay Console external notify channel test";
+"notify.test.title" = "Test notification";
 "relay.menubar.label" = "RELAY";
 "remediation.anr" = "ANR response";
 "remediation.anr.1" = "Find the ANR app in the log";
@@ -278,6 +289,13 @@
 "settings.cards.sensors" = "Sensors";
 "settings.cards.storage" = "Storage";
 "settings.cards.thermal" = "Thermal";
+"settings.float.cpu" = "CPU";
+"settings.float.enabled" = "Show floating window";
+"settings.float.gpu" = "GPU";
+"settings.float.hint" = "Default: network + CPU. Open from popover cards. Network stays if all off.";
+"settings.float.memory" = "Memory";
+"settings.float.network" = "Network";
+"settings.float.section" = "Floating graphs";
 "settings.hb.port" = "Heartbeat port";
 "settings.hb.restart" = "Restart server";
 "settings.keyPrefix" = "Key prefix: relay.*";
@@ -295,8 +313,6 @@
 "settings.notify.slack" = "Slack webhook";
 "settings.notify.slack.webhook" = "Incoming Webhook URL";
 "settings.notify.test" = "Send test";
-"notify.test.detail" = "Relay Console external notify channel test";
-"notify.test.title" = "Test notification";
 "settings.scrcpy.noControl" = "Read-only mirror (no input)";
 "settings.scrcpy.opts" = "Extra options (appended after defaults)";
 "settings.scrcpy.path" = "scrcpy path (blank = PATH)";

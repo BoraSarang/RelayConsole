@@ -5,15 +5,18 @@ import AppKit
 enum WindowFocus {
     /// 알림 배너 패널 ID — 메뉴 팝오버 닫기 대상에서 제외
     static let alertBannerWindowID = "RelayAlertBanner"
+    /// 기기 그래프 플로팅 ID — 메뉴 팝오버 닫기 대상에서 제외
+    static let floatingGraphWindowID = "RelayFloatingGraph"
 
     private static var savedFrontOrder: [ObjectIdentifier] = []
     private static var popoverWasOpen = false
 
-    /// 메뉴바 팝오버 패널(상태바 레벨) 닫기 — 알림 배너는 제외
+    /// 메뉴바 팝오버 패널(상태바 레벨) 닫기 — 알림 배너·플로팅 그래프는 제외
     static func dismissMenuBarPanels() {
         for window in NSApp.windows {
             guard let panel = window as? NSPanel else { continue }
             if panel.identifier?.rawValue == alertBannerWindowID { continue }
+            if panel.identifier?.rawValue == floatingGraphWindowID { continue }
             if panel.level == .statusBar || panel.level == .popUpMenu {
                 panel.perform(#selector(NSWindow.orderOut(_:)), with: nil)
             }
