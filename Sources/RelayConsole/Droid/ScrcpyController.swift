@@ -97,6 +97,45 @@ final class ScrcpyController: ObservableObject {
 
     // MARK: - Install (사용자 확인 1회 brew — 자동 다운로드 금지 유지)
 
+    /// 범용 brew install (libimobiledevice 등) — completion은 메인에서
+    func runBrew(_ args: [String], completion: @escaping @MainActor (Bool) -> Void) {
+        let brew = ["/opt/homebrew/bin/brew", "/usr/local/bin/brew", "/usr/bin/brew"]
+            .first { FileManager.default.isExecutableFile(atPath: $0) }
+        guard let brewPath = brew else {
+            lastError = ErrorCode.scrcpyBrewMissing.koMessage
+            completion(false)
+            return
+        }
+        let proc = Process()
+        proc.executableURL = URL(fileURLWithPath: brewPath)
+        proc.arguments = args
+        var env = ProcessInfo.processInfo.environment
+        env["PATH"] = "/opt/homebrew/bin:/usr/local/bin:" + (env["PATH"] ?? "")
+        proc.environment = env
+        let pipe = Pipe()
+        proc.standardOutput = pipe
+        proc.standardError = pipe
+        proc.terminationHandler = { p in
+            Task { @MainActor in
+                if p.terminationStatus == 0 {
+                    completion(true)
+                } else {
+                    let data = pipe.fileHandleForReading.readDataToEndOfFile()
+                    let text = String(decoding: data, as: UTF8.self)
+                    self.lastError = text.split(separator: "\n").last.map(String.init)
+                        ?? ErrorCode.appleInstallFailed.koMessage
+                    completion(false)
+                }
+            }
+        }
+        do {
+            try proc.run()
+        } catch {
+            lastError = ErrorCode.appleInstallFailed.koMessage
+            completion(false)
+        }
+    }
+
     func installViaBrew() {
         guard !isInstalling else { return }
         isInstalling = true

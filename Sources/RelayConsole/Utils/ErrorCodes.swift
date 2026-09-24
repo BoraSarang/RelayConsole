@@ -12,6 +12,10 @@ enum ErrorCode: String, Error {
     case scrcpyBrewMissing = "E-MAC-SCRCPY-0002"
     case scrcpyInstallFailed = "E-MAC-SCRCPY-0003"
     case scrcpyLaunchFailed = "E-MAC-SCRCPY-0004"
+    case appleBinaryMissing = "E-MAC-APL-0001"
+    case appleConnectFailed = "E-MAC-APL-0002"
+    case appleParseFailed = "E-MAC-APL-0003"
+    case appleInstallFailed = "E-MAC-APL-0004"
 
     var koMessage: String {
         switch self {
@@ -26,6 +30,10 @@ enum ErrorCode: String, Error {
         case .scrcpyBrewMissing: return "Homebrew를 찾을 수 없습니다. brew로 scrcpy를 설치해 주세요."
         case .scrcpyInstallFailed: return "scrcpy 설치에 실패했습니다. 터미널에서 brew install scrcpy 를 실행해 보세요."
         case .scrcpyLaunchFailed: return "미러링을 시작할 수 없습니다. 기기 연결과 scrcpy 버전을 확인해 주세요."
+        case .appleBinaryMissing: return "libimobiledevice(idevice_id/ideviceinfo)를 찾을 수 없습니다."
+        case .appleConnectFailed: return "Apple 기기에 연결할 수 없습니다. 신뢰 여부를 확인해 주세요."
+        case .appleParseFailed: return "Apple 기기 응답 파싱에 실패했습니다."
+        case .appleInstallFailed: return "libimobiledevice 설치에 실패했습니다. brew install libimobiledevice 를 실행해 보세요."
         }
     }
 }

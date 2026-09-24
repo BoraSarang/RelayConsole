@@ -69,7 +69,7 @@ struct ConsoleView: View {
         .preferredColorScheme(.dark)
     }
 
-    /// Android / Apple 세그먼트 — Apple은 플레이스홀더
+    /// Android / Apple 세그먼트 — Apple Trust-only Phase1
     private var devicesDetail: some View {
         VStack(spacing: 0) {
             Picker(L10n.string("sidebar.devices"), selection: $platform) {
@@ -86,7 +86,7 @@ struct ConsoleView: View {
             case .android:
                 DroidDashboardView(store: store)
             case .apple:
-                placeholder(DevicePlatform.apple.label, systemImage: "iphone")
+                AppleDashboardView(store: store)
             }
         }
     }

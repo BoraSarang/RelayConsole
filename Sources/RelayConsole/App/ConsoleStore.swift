@@ -17,8 +17,12 @@ final class ConsoleStore: ObservableObject {
     @Published private(set) var metricsHistory: [String: DroidMetrics] = [:]
     /// 현재 선택 기기 (팝오버/대시보드 기준) — PLAN_v0.3
     @Published var selectedSerial: String?
+    /// Apple Phase1 — Trust-only 기기 목록·선택
+    @Published private(set) var appleDevices: [AppleSnapshot] = []
+    @Published var selectedAppleUdid: String?
 
     private let selectedKey = "relay.selectedSerial"
+    private let selectedAppleKey = "relay.selectedAppleUdid"
     private var started = false
     private var lastNetPushAt: [String: Date] = [:]
     /// fingerprint → 마지막 시스템 알림 시각 (2중 쿨다운: Gate + notify 5분)
@@ -57,6 +61,7 @@ final class ConsoleStore: ObservableObject {
 
     private init() {
         selectedSerial = UserDefaults.standard.string(forKey: selectedKey)
+        selectedAppleUdid = UserDefaults.standard.string(forKey: selectedAppleKey)
         // EventStore 1차 — 앱 시작 시 이력 복원 (JSON 영구화)
         recentWatchEvents = EventStore.shared.load()
     }
@@ -75,11 +80,46 @@ final class ConsoleStore: ObservableObject {
                 self?.pushEvent(text)
             }
         }
+        let appleHandler: @Sendable (AppleSnapshot) -> Void = { [weak self] snap in
+            Task { @MainActor in
+                self?.ingestApple(snap)
+            }
+        }
+        let appleEventHandler: @Sendable (String) -> Void = { [weak self] text in
+            Task { @MainActor in
+                self?.pushEvent(text)
+            }
+        }
         Task {
             await DeviceMonitor.shared.attach(handler)
             await DeviceMonitor.shared.attachEvent(eventHandler)
             await DeviceMonitor.shared.start()
+            await AppleDeviceMonitor.shared.attach(appleHandler)
+            await AppleDeviceMonitor.shared.attachEvent(appleEventHandler)
+            await AppleDeviceMonitor.shared.start()
         }
+    }
+
+    /// Apple 스냅샷 반영 — 목록 갱신 + 온라인 자동 선택
+    private func ingestApple(_ snap: AppleSnapshot) {
+        if let idx = appleDevices.firstIndex(where: { $0.udid == snap.udid }) {
+            appleDevices[idx] = snap
+        } else {
+            appleDevices.append(snap)
+            appleDevices.sort { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }
+        }
+        if selectedAppleUdid == nil || appleDevices.contains(where: { $0.udid == selectedAppleUdid && $0.isOnline }) == false {
+            let online = appleDevices.first(where: \.isOnline) ?? appleDevices.first
+            if let pick = online {
+                selectedAppleUdid = pick.udid
+                UserDefaults.standard.set(pick.udid, forKey: selectedAppleKey)
+            }
+        }
+    }
+
+    var selectedAppleDevice: AppleSnapshot? {
+        guard let udid = selectedAppleUdid else { return nil }
+        return appleDevices.first(where: { $0.udid == udid }) ?? appleDevices.first
     }
 
     private func ingest(_ snapshot: DeviceSnapshot) {
