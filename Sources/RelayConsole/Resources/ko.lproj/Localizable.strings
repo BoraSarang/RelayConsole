@@ -167,6 +167,8 @@
 "float.empty" = "연결된 Android 기기가 없습니다";
 "float.menu.help" = "표시 카드 선택";
 "float.noDevice" = "기기 없음";
+"float.opacity" = "투명도";
+"float.opacity.help" = "창 투명도 조절";
 "float.toggle" = "플로팅 그래프";
 "float.toggle.help" = "네트워크·CPU 그래프를 떠 있는 창으로 표시";
 "jobs.add" = "작업 추가";
@@ -295,6 +297,7 @@
 "settings.float.hint" = "기본: 네트워크 + CPU. 팝오버 카드 영역에서 열 수 있습니다. 전부 끄면 네트워크가 유지됩니다.";
 "settings.float.memory" = "메모리";
 "settings.float.network" = "네트워크";
+"settings.float.opacity" = "창 투명도";
 "settings.float.section" = "플로팅 그래프";
 "settings.hb.port" = "하트비트 포트";
 "settings.hb.restart" = "서버 재시작";

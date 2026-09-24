@@ -167,6 +167,8 @@
 "float.empty" = "No Android device connected";
 "float.menu.help" = "Choose cards to show";
 "float.noDevice" = "No device";
+"float.opacity" = "Opacity";
+"float.opacity.help" = "Adjust window opacity";
 "float.toggle" = "Floating graphs";
 "float.toggle.help" = "Show network·CPU graphs in a floating window";
 "jobs.add" = "Add job";
@@ -295,6 +297,7 @@
 "settings.float.hint" = "Default: network + CPU. Open from popover cards. Network stays if all off.";
 "settings.float.memory" = "Memory";
 "settings.float.network" = "Network";
+"settings.float.opacity" = "Window opacity";
 "settings.float.section" = "Floating graphs";
 "settings.hb.port" = "Heartbeat port";
 "settings.hb.restart" = "Restart server";

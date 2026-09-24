@@ -2,7 +2,7 @@
 > 작업 추적 — bd 연동 (이슈 prefix: RelayConsole)
 
 ## 진행 중 (bd ready)
-- **F1 기기 그래프 플로팅창** — `PLAN_floating_graphs` · Network+CPU 기본 · `RelayConsole-d2e` · **1.4.0** · **PR #25 머지 `5dd8459`** · **육안 대기**
+- **F1 기기 그래프 플로팅창** — `PLAN_floating_graphs` · Network+CPU · **투명도** · 헤더 안정화 · `RelayConsole-d2e` · **1.4.0** · **사용자 통합 테스트 대기**
 
 ## 다음 스프린트 (사용자 선택 대기 · 리서치 §8) — F1 육안 이후 재개
 - **P1-2 (권장)** A5 Sites SSL·도메인 만료 + assertion → 선택 후 `PLAN_sites_ssl` 작성·승인
