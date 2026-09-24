@@ -165,6 +165,7 @@ struct AlertsView: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 8)
                     .background(tab == s ? OPColor.cta.opacity(0.15) : Color.clear)
+                    .contentShape(Rectangle())
                     .overlay(alignment: .bottom) {
                         if tab == s {
                             Rectangle()
