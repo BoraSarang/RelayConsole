@@ -93,10 +93,12 @@
 "event.anr.enter" = "ANR detected";
 "event.battery.clear" = "Battery threshold cleared";
 "event.battery.low" = "Battery %@%";
-"event.bsoh.clear" = "Bsoh stabilized";
-"event.bsoh.drop" = "Battery health dropped";
+"event.bsoh.clear" = "Bsoh stable";
+"event.bsoh.drop" = "Battery health drop";
 "event.charge.start" = "Charging started";
 "event.charge.stop" = "Charging stopped";
+"event.appleConnected" = "Apple device connected";
+"event.appleDisconnected" = "Apple device disconnected";
 "event.crash.detail" = "Crash hits %d";
 "event.crash.enter" = "Crash detected";
 "event.deviceConnected" = "Device connected %@";
