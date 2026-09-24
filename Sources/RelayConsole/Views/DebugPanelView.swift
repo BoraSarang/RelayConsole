@@ -153,6 +153,22 @@ struct DebugPanelView: View {
                         injectButton(L10n.string("ui.debug.inject.badgeOff")) {
                             store.debugClearCriticalBadge()
                         }
+                        injectButton(L10n.string("ui.debug.inject.anr")) {
+                            store.debugInjectSynthetic(
+                                kind: .anr,
+                                severity: .critical,
+                                title: L10n.string("event.anr.enter"),
+                                detail: "DEBUG · ANR in com.example"
+                            )
+                        }
+                        injectButton(L10n.string("ui.debug.inject.crash")) {
+                            store.debugInjectSynthetic(
+                                kind: .crash,
+                                severity: .critical,
+                                title: L10n.string("event.crash.enter"),
+                                detail: "DEBUG · FATAL EXCEPTION"
+                            )
+                        }
                     }
                     Text(L10n.string("ui.debug.inject.hint"))
                         .font(OPFont.body(10))

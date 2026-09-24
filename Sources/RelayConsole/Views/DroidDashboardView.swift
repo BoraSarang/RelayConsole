@@ -37,16 +37,32 @@ struct DroidDashboardView: View {
                             thermalBanner(device: d)
                         }
                         LazyVGrid(columns: columns, spacing: 16) {
-                            DroidCards.cpu(device: device, metrics: metrics)
-                            DroidCards.gpu(device: device, metrics: metrics)
-                            DroidCards.memory(device: device, metrics: metrics) {
-                                showProcessList = true
+                            if store.cardCpu {
+                                DroidCards.cpu(device: device, metrics: metrics)
                             }
-                            DroidCards.sensors(device: device, metrics: metrics)
-                            DroidCards.battery(device: device, metrics: metrics)
-                            DroidCards.network(device: device, metrics: metrics)
-                            DroidCards.thermal(device: device, metrics: metrics)
-                            DroidCards.storage(device: device, metrics: metrics)
+                            if store.cardGpu {
+                                DroidCards.gpu(device: device, metrics: metrics)
+                            }
+                            if store.cardMemory {
+                                DroidCards.memory(device: device, metrics: metrics) {
+                                    showProcessList = true
+                                }
+                            }
+                            if store.cardSensors {
+                                DroidCards.sensors(device: device, metrics: metrics)
+                            }
+                            if store.cardBattery {
+                                DroidCards.battery(device: device, metrics: metrics)
+                            }
+                            if store.cardNetwork {
+                                DroidCards.network(device: device, metrics: metrics)
+                            }
+                            if store.cardThermal {
+                                DroidCards.thermal(device: device, metrics: metrics)
+                            }
+                            if store.cardStorage {
+                                DroidCards.storage(device: device, metrics: metrics)
+                            }
                         }
                         footer
                     }

@@ -30,6 +30,11 @@ final class WatchEngine {
     private var rsrpEnterAt: [String: Date] = [:]
     private let rsrpCooldown: TimeInterval = 60
 
+    /// Phase v0.8 — ANR / 크래시 (logcat 1회성, 5분 쿨다운, clear 자동 없음)
+    private var anrLastAt: [String: Date] = [:]
+    private var crashLastAt: [String: Date] = [:]
+    private let logcatFatalCooldown: TimeInterval = 300
+
     private init() {}
 
     func thermalGate(for serial: String) -> ThresholdGate {
@@ -352,6 +357,40 @@ final class WatchEngine {
         return nil
     }
 
+    /// ANR logcat 적중 — 1회성, 5분 쿨다운, clear 자동 없음 (가이드 TTL 의존)
+    func feedAnr(serial: String, detail: String = "", now: Date = .now) -> WatchEvent? {
+        if let last = anrLastAt[serial], now.timeIntervalSince(last) < logcatFatalCooldown {
+            return nil
+        }
+        anrLastAt[serial] = now
+        let short = AdbClient.shortId(serial)
+        return WatchEvent(
+            kind: .anr,
+            severity: .critical,
+            serial: serial,
+            title: L10n.string("event.anr.enter"),
+            detail: detail.isEmpty ? short : "\(short) · \(detail)",
+            at: now
+        )
+    }
+
+    /// 크래시 logcat 적중 — 1회성, 5분 쿨다운, clear 자동 없음 (가이드 TTL 의존)
+    func feedCrash(serial: String, detail: String = "", now: Date = .now) -> WatchEvent? {
+        if let last = crashLastAt[serial], now.timeIntervalSince(last) < logcatFatalCooldown {
+            return nil
+        }
+        crashLastAt[serial] = now
+        let short = AdbClient.shortId(serial)
+        return WatchEvent(
+            kind: .crash,
+            severity: .critical,
+            serial: serial,
+            title: L10n.string("event.crash.enter"),
+            detail: detail.isEmpty ? short : "\(short) · \(detail)",
+            at: now
+        )
+    }
+
     /// 기기 분리 시 상태 정리 + 미해결 활성 gate의 synthetic clear 반환
     @discardableResult
     func forget(serial: String) -> [WatchEvent] {
@@ -437,7 +476,10 @@ final class WatchEngine {
         bsohAlertActive[serial] = nil
         rsrpLast.removeValue(forKey: serial)
         rsrpAlertActive[serial] = nil
-        rsrpEnterAt.removeValue(forKey: serial)
+        rsrpEnterAt[serial] = nil
+        // ANR/크래시 — clear는 자동 없음, 쿨다운만 재무장
+        anrLastAt[serial] = nil
+        crashLastAt[serial] = nil
         return clears
     }
 
@@ -457,5 +499,7 @@ final class WatchEngine {
         rsrpLast.removeAll()
         rsrpAlertActive.removeAll()
         rsrpEnterAt.removeAll()
+        anrLastAt.removeAll()
+        crashLastAt.removeAll()
     }
 }

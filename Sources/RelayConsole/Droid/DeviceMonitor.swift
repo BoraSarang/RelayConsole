@@ -6,6 +6,9 @@ actor DeviceMonitor {
     static let shared = DeviceMonitor()
     /// SKILLPACK §4 고정 키워드
     static let logcatKeywords = ["accelerometer_rotation", "wm_user_rotation_changed", "thermal"]
+    /// v0.8 — ANR / 크래시 감지 (대소문자 무시 부분 매칭)
+    static let anrKeywords = ["anr in", "am_anr", "application not responding", "input dispatching timed out"]
+    static let crashKeywords = ["fatal exception", "fatal signal", "has died", "force finishing"]
 
     /// 기기별 폴링 상태 (다중 serial)
     private struct DeviceState {
@@ -555,6 +558,29 @@ actor DeviceMonitor {
         if hits > 0 {
             state.logcatHitCount += hits
             await notifyEvent(L10n.format("event.logcatHits", hits))
+        }
+        // v0.8 ANR / 크래시 — 적중 시 WatchEngine 1회성 피드
+        let anrHits = AdbClient.countLogcatHits(
+            output,
+            keywords: Self.anrKeywords,
+            afterTimestamp: prevCursor
+        )
+        if anrHits > 0 {
+            let detail = L10n.format("event.anr.detail", anrHits)
+            if let ev = await WatchEngine.shared.feedAnr(serial: serial, detail: detail) {
+                await emitWatch(ev)
+            }
+        }
+        let crashHits = AdbClient.countLogcatHits(
+            output,
+            keywords: Self.crashKeywords,
+            afterTimestamp: prevCursor
+        )
+        if crashHits > 0 {
+            let detail = L10n.format("event.crash.detail", crashHits)
+            if let ev = await WatchEngine.shared.feedCrash(serial: serial, detail: detail) {
+                await emitWatch(ev)
+            }
         }
         if let ts = AdbClient.lastLogcatTimestamp(output) {
             state.logcatCursor = ts

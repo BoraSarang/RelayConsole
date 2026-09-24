@@ -411,5 +411,130 @@ struct WatchEventTests {
         #expect(active.count == 1)
         #expect(active.first?.title == "e2")
     }
+
+    // MARK: - v0.8 ANR / crash
+
+    @Test func feedAnrEmitsCriticalOnceWithCooldown() {
+        WatchEngine.shared.resetAll()
+        defer { WatchEngine.shared.resetAll() }
+
+        let first = WatchEngine.shared.feedAnr(serial: "A1", detail: "hits 1", now: t0)
+        #expect(first?.kind == .anr)
+        #expect(first?.severity == .critical)
+        #expect(first?.isClear == false)
+
+        // 5분 쿨다운 내 재발화 없음
+        #expect(WatchEngine.shared.feedAnr(serial: "A1", now: t0.addingTimeInterval(60)) == nil)
+        #expect(WatchEngine.shared.feedAnr(serial: "A1", now: t0.addingTimeInterval(299)) == nil)
+
+        // 쿨다운 이후 재발화
+        let second = WatchEngine.shared.feedAnr(serial: "A1", now: t0.addingTimeInterval(301))
+        #expect(second?.kind == .anr)
+        #expect(second?.id != first?.id)
+    }
+
+    @Test func feedCrashEmitsCriticalOnceWithCooldown() {
+        WatchEngine.shared.resetAll()
+        defer { WatchEngine.shared.resetAll() }
+
+        let first = WatchEngine.shared.feedCrash(serial: "C1", detail: "FATAL", now: t0)
+        #expect(first?.kind == .crash)
+        #expect(first?.severity == .critical)
+        #expect(first?.isClear == false)
+
+        #expect(WatchEngine.shared.feedCrash(serial: "C1", now: t0.addingTimeInterval(10)) == nil)
+        #expect(WatchEngine.shared.feedCrash(serial: "C1", now: t0.addingTimeInterval(301)) != nil)
+    }
+
+    @Test func feedAnrAndCrashAreIndependentCooldowns() {
+        WatchEngine.shared.resetAll()
+        defer { WatchEngine.shared.resetAll() }
+
+        #expect(WatchEngine.shared.feedAnr(serial: "X1", now: t0) != nil)
+        #expect(WatchEngine.shared.feedCrash(serial: "X1", now: t0) != nil)
+        // 같은 serial이어도 kind별 쿨다운 독립
+        #expect(WatchEngine.shared.feedAnr(serial: "X1", now: t0.addingTimeInterval(1)) == nil)
+        #expect(WatchEngine.shared.feedCrash(serial: "X1", now: t0.addingTimeInterval(1)) == nil)
+    }
+
+    @Test func forgetClearsAnrCrashCooldownWithoutSyntheticClear() {
+        WatchEngine.shared.resetAll()
+        defer { WatchEngine.shared.resetAll() }
+
+        _ = WatchEngine.shared.feedAnr(serial: "F1", now: t0)
+        _ = WatchEngine.shared.feedCrash(serial: "F1", now: t0)
+        let clears = WatchEngine.shared.forget(serial: "F1")
+        // clear 자동 없음 (가이드 TTL 의존)
+        #expect(!clears.contains { $0.kind == .anr || $0.kind == .crash })
+
+        // 쿨다운 초기화 → 즉시 재발화 가능
+        #expect(WatchEngine.shared.feedAnr(serial: "F1", now: t0.addingTimeInterval(1)) != nil)
+    }
+
+    @Test func logcatKeywordClassificationHitsAnrAndCrash() {
+        let anrText = """
+        09-24 10:00:00.000 E/ActivityManager: ANR in com.example.app
+        09-24 10:00:01.000 E/am_anr: [0,1234,com.example.app,552039,Input dispatching timed out]
+        """
+        let crashText = """
+        09-24 10:01:00.000 E/AndroidRuntime: FATAL EXCEPTION: main
+        09-24 10:01:01.000 I/Process: com.example.app has died, pid 1234
+        """
+        #expect(AdbClient.countLogcatHits(anrText, keywords: DeviceMonitor.anrKeywords) == 2)
+        #expect(AdbClient.countLogcatHits(anrText, keywords: DeviceMonitor.crashKeywords) == 0)
+        #expect(AdbClient.countLogcatHits(crashText, keywords: DeviceMonitor.crashKeywords) == 2)
+        #expect(AdbClient.countLogcatHits(crashText, keywords: DeviceMonitor.anrKeywords) == 0)
+        #expect(AdbClient.countLogcatHits("  ", keywords: DeviceMonitor.anrKeywords) == 0)
+    }
+
+    @Test func activeRemediationIncludesAnrAndCrashWithinTtl() {
+        let anr = WatchEvent(
+            kind: .anr, severity: .critical, serial: "S1",
+            title: "ANR", detail: "", at: t0
+        )
+        let crash = WatchEvent(
+            kind: .crash, severity: .critical, serial: "S1",
+            title: "Crash", detail: "", at: t0.addingTimeInterval(5)
+        )
+        let active = ConsoleStore.activeRemediation(
+            from: [crash, anr],
+            now: t0.addingTimeInterval(10),
+            ttl: 1800
+        )
+        #expect(active.count == 2)
+        #expect(Set(active.map(\.kind)) == Set([.anr, .crash]))
+
+        let expired = ConsoleStore.activeRemediation(
+            from: [crash, anr],
+            now: t0.addingTimeInterval(1810),
+            ttl: 1800
+        )
+        #expect(expired.isEmpty)
+    }
+
+    @Test func watchEventCodableRoundTrip() throws {
+        let original = WatchEvent(
+            kind: .anr,
+            severity: .critical,
+            serial: "SER12345",
+            title: "ANR 감지",
+            detail: "SER12345 · hits 2",
+            at: t0,
+            isClear: false
+        )
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        let data = try encoder.encode(original)
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let decoded = try decoder.decode(WatchEvent.self, from: data)
+        #expect(decoded.kind == original.kind)
+        #expect(decoded.severity == original.severity)
+        #expect(decoded.serial == original.serial)
+        #expect(decoded.title == original.title)
+        #expect(decoded.detail == original.detail)
+        #expect(decoded.isClear == original.isClear)
+        #expect(decoded.at.timeIntervalSince1970 == original.at.timeIntervalSince1970)
+    }
 }
 

@@ -33,6 +33,22 @@
         }
       }
     },
+    "cards.empty": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No cards visible — enable cards in Settings"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "표시할 카드가 없습니다 — 설정에서 카드 켜기"
+          }
+        }
+      }
+    },
     "common.na": {
       "comment": "nil 표시",
       "localizations": {
@@ -962,6 +978,38 @@
         }
       }
     },
+    "event.anr.detail": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ANR hits %d"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ANR 적중 %d건"
+          }
+        }
+      }
+    },
+    "event.anr.enter": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ANR detected"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ANR 감지"
+          }
+        }
+      }
+    },
     "event.battery.clear": {
       "localizations": {
         "en": {
@@ -1054,6 +1102,38 @@
           "stringUnit": {
             "state": "translated",
             "value": "충전 중단"
+          }
+        }
+      }
+    },
+    "event.crash.detail": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Crash hits %d"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "크래시 적중 %d건"
+          }
+        }
+      }
+    },
+    "event.crash.enter": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Crash detected"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "크래시 감지"
           }
         }
       }
@@ -1671,6 +1751,70 @@
         }
       }
     },
+    "remediation.anr": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ANR response"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ANR 대응"
+          }
+        }
+      }
+    },
+    "remediation.anr.1": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Find the ANR app in the log"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "로그에서 ANR 발생 앱 확인"
+          }
+        }
+      }
+    },
+    "remediation.anr.2": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Force-stop that app and relaunch"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "해당 앱 강제 종료 후 재실행"
+          }
+        }
+      }
+    },
+    "remediation.anr.3": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Check CPU/memory overload as well"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CPU·메모리 과부하 원인 함께 확인"
+          }
+        }
+      }
+    },
     "remediation.battery": {
       "localizations": {
         "en": {
@@ -1779,6 +1923,70 @@
           "stringUnit": {
             "state": "translated",
             "value": "충전 습관·온도 확인, 필요 시 서비스 점검"
+          }
+        }
+      }
+    },
+    "remediation.crash": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Crash response"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "크래시 대응"
+          }
+        }
+      }
+    },
+    "remediation.crash.1": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Check app/stack in FATAL EXCEPTION log"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "FATAL EXCEPTION 로그에서 앱·스택 확인"
+          }
+        }
+      }
+    },
+    "remediation.crash.2": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Force-stop the app and relaunch"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "앱 강제 종료 후 재실행"
+          }
+        }
+      }
+    },
+    "remediation.crash.3": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "If repeated, verify build/permission changes"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "반복 시 해당 빌드·권한 변경 여부 점검"
           }
         }
       }
@@ -2471,6 +2679,134 @@
         }
       }
     },
+    "settings.cards.battery": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Battery"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "배터리"
+          }
+        }
+      }
+    },
+    "settings.cards.cpu": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CPU"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CPU"
+          }
+        }
+      }
+    },
+    "settings.cards.gpu": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GPU"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GPU"
+          }
+        }
+      }
+    },
+    "settings.cards.memory": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Memory"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "메모리"
+          }
+        }
+      }
+    },
+    "settings.cards.network": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Network"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "네트워크"
+          }
+        }
+      }
+    },
+    "settings.cards.sensors": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sensors"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "센서"
+          }
+        }
+      }
+    },
+    "settings.cards.storage": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Storage"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "저장소"
+          }
+        }
+      }
+    },
+    "settings.cards.thermal": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Thermal"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "발열"
+          }
+        }
+      }
+    },
     "settings.keyPrefix": {
       "localizations": {
         "en": {
@@ -2563,6 +2899,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "다시 탐지"
+          }
+        }
+      }
+    },
+    "settings.section.cards": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Card visibility"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "카드 표시"
           }
         }
       }
@@ -2711,6 +3063,22 @@
         }
       }
     },
+    "settings.watch.anr": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ANR detection (logcat)"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ANR 감지 (logcat)"
+          }
+        }
+      }
+    },
     "settings.watch.banner": {
       "localizations": {
         "en": {
@@ -2771,6 +3139,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "충전 전이"
+          }
+        }
+      }
+    },
+    "settings.watch.crash": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Crash detection (logcat)"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "크래시 감지 (logcat)"
           }
         }
       }
@@ -2935,6 +3319,22 @@
         }
       }
     },
+    "ui.debug.inject.anr": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inject ANR"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ANR 주입"
+          }
+        }
+      }
+    },
     "ui.debug.inject.badgeOff": {
       "localizations": {
         "en": {
@@ -2995,6 +3395,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "충전 시작"
+          }
+        }
+      }
+    },
+    "ui.debug.inject.crash": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inject crash"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "크래시 주입"
           }
         }
       }

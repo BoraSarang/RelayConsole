@@ -2,9 +2,12 @@
 > 작업 추적 — bd 연동 (이슈 prefix: RelayConsole)
 
 ## 진행 중 (bd ready)
-- [ ] **실기기 육안 (v0.6·v0.7)** — DEBUG 주입 PSI/load/mem/Bsoh/RSRP/복구 + scrcpy 설치→미러링(창 앞으로) + **스샷 시트** + 로그창 + **스로틀링 해제 후 후속조치 사라짐** (사용자)
+- [ ] **실기기 육안 (v0.7~v0.9)** — scrcpy 설치→미러링 + 스샷 시트 + **ANR/크래시 DEBUG 주입** + **카드 On/Off** + 재시작 후 **이력 복원** (사용자)
 
 ## 완료 (2026-09-24)
+- [x] **v0.9 카드 On/Off + EventStore 1차** — `relay.cards.*` 8카드 `@AppStorage` · 대시보드·팝오버 공통 필터 · 전체 OFF `cards.empty` · 설정 섹션 · `WatchEvent: Codable` · `EventStore` JSON(Application Support, 500건, ISO8601) · 시작 로드/ingest 저장 · i18n **227** · 버전 **0.9.0**
+- [x] **v0.8 ANR/크래시 logcat** — `WatchKind.{anr,crash}` · `DeviceMonitor.{anr,crash}Keywords` · `feedAnr`/`feedCrash` 5분 쿨다운·kind 독립 · clear 자동 없음(TTL) · `relay.watch.{anr,crash}` · remediation steps · DEBUG 주입 · i18n · 테스트 +7
+- [x] **v0.7 PR #4 머지** — `feat/v07-scrcpy-watch` → main `39c4115` · scrcpy A안 + 감시 마감 + 스샷·로그뷰어
 - [x] **헤더 썸네일 UX A안** — 36×64 미니 썸네일 제거 · `[미러링][스샷][IP]` · 📷 → `ScreenshotPreviewSheet`(400pt·시각·새로고침·미러링 열기) · i18n **201** · 테스트 101/101 · debug 0.7.0
 - [x] **후속조치 영구잔류 수정 (A+B)** — 스로틀링 clear ≤2(SEVERE 이탈) · TransitionGate 해제는 쿨다운 무시 · forget/disconnect synthetic clear · 배터리 충전 시 warning clear · Bsoh pre-drop 회복 clear · 저전력 ON severity warning · 가이드 fingerprint 최신 우선 + **30분 TTL** · i18n **198** · 테스트 **101/101** · debug 0.7.0
 - [x] **scrcpy 창 포커스** — 런치 후 0.35/0.9/1.8/3s activate 리트라이 + System Events frontmost · 실행 중 헤더 클릭=창 앞으로(정지 아님, 종료=창 닫기) · `runningHint` 키 · i18n **196** · 테스트 91/91 · debug 0.7.0
