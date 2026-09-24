@@ -90,6 +90,40 @@ struct DebugPanelView: View {
                                 detail: "DEBUG · 20%"
                             )
                         }
+                        injectButton(L10n.string("ui.debug.inject.psi")) {
+                            store.debugInjectSynthetic(
+                                kind: .psiPressure,
+                                severity: .warning,
+                                title: L10n.string("event.psi.enter"),
+                                detail: "DEBUG · avg10=6.2"
+                            )
+                        }
+                        injectButton(L10n.string("ui.debug.inject.psiClear")) {
+                            store.debugInjectSynthetic(
+                                kind: .psiPressure,
+                                severity: .info,
+                                title: L10n.string("event.psi.clear"),
+                                detail: "DEBUG · avg10=2.1",
+                                isClear: true,
+                                resetCooldown: false
+                            )
+                        }
+                        injectButton(L10n.string("ui.debug.inject.load")) {
+                            store.debugInjectSynthetic(
+                                kind: .loadSpike,
+                                severity: .warning,
+                                title: L10n.string("event.load.enter"),
+                                detail: "DEBUG · load1=17.2/8"
+                            )
+                        }
+                        injectButton(L10n.string("ui.debug.inject.mem")) {
+                            store.debugInjectSynthetic(
+                                kind: .memoryLow,
+                                severity: .warning,
+                                title: L10n.string("event.memory.enter"),
+                                detail: "DEBUG · 93%"
+                            )
+                        }
                         injectButton(L10n.string("ui.debug.inject.badgeOff")) {
                             store.debugClearCriticalBadge()
                         }

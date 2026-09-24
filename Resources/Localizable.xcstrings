@@ -306,182 +306,6 @@
         }
       }
     },
-    "droid.process.close": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Close"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "닫기"
-          }
-        }
-      }
-    },
-    "droid.process.col.cpu": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "CPU"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "CPU"
-          }
-        }
-      }
-    },
-    "droid.process.col.name": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Name"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "이름"
-          }
-        }
-      }
-    },
-    "droid.process.col.path": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Command"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "커맨드"
-          }
-        }
-      }
-    },
-    "droid.process.col.pid": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "PID"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "PID"
-          }
-        }
-      }
-    },
-    "droid.process.col.ram": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "RAM"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "RAM"
-          }
-        }
-      }
-    },
-    "droid.process.empty": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "No process data"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "프로세스 데이터 없음"
-          }
-        }
-      }
-    },
-    "droid.process.hint": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Every 15s · Command=ps ARGS (app=packageId, native=path) · No icons"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "15초 주기 · 커맨드=ps ARGS(앱=패키지ID, 네이티브=경로) · 아이콘 없음"
-          }
-        }
-      }
-    },
-    "droid.process.more": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "More processes"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "프로세스 목록 더보기"
-          }
-        }
-      }
-    },
-    "droid.process.title": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Processes — %@"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "프로세스 — %@"
-          }
-        }
-      }
-    },
-    "droid.process.titleShort": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Processes"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "프로세스"
-          }
-        }
-      }
-    },
     "droid.card.network.down": {
       "localizations": {
         "en": {
@@ -738,6 +562,182 @@
         }
       }
     },
+    "droid.process.close": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Close"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "닫기"
+          }
+        }
+      }
+    },
+    "droid.process.col.cpu": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CPU"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CPU"
+          }
+        }
+      }
+    },
+    "droid.process.col.name": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Name"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이름"
+          }
+        }
+      }
+    },
+    "droid.process.col.path": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Command"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "커맨드"
+          }
+        }
+      }
+    },
+    "droid.process.col.pid": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "PID"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "PID"
+          }
+        }
+      }
+    },
+    "droid.process.col.ram": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "RAM"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "RAM"
+          }
+        }
+      }
+    },
+    "droid.process.empty": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No process data"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "프로세스 데이터 없음"
+          }
+        }
+      }
+    },
+    "droid.process.hint": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Every 15s · Command=ps ARGS (app=packageId, native=path) · No icons"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "15초 주기 · 커맨드=ps ARGS(앱=패키지ID, 네이티브=경로) · 아이콘 없음"
+          }
+        }
+      }
+    },
+    "droid.process.more": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "More processes"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "프로세스 목록 더보기"
+          }
+        }
+      }
+    },
+    "droid.process.title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Processes — %@"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "프로세스 — %@"
+          }
+        }
+      }
+    },
+    "droid.process.titleShort": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Processes"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "프로세스"
+          }
+        }
+      }
+    },
     "droid.storage.read": {
       "localizations": {
         "ko": {
@@ -866,6 +866,38 @@
         }
       }
     },
+    "event.load.clear": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Load normalized"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "load 정상화"
+          }
+        }
+      }
+    },
+    "event.load.enter": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Load spike"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "load 급증"
+          }
+        }
+      }
+    },
     "event.logcatHits": {
       "localizations": {
         "en": {
@@ -914,6 +946,38 @@
         }
       }
     },
+    "event.memory.clear": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Memory available again"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "메모리 여유 확보"
+          }
+        }
+      }
+    },
+    "event.memory.enter": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Low memory"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "메모리 부족"
+          }
+        }
+      }
+    },
     "event.protection.off": {
       "localizations": {
         "en": {
@@ -942,6 +1006,38 @@
           "stringUnit": {
             "state": "translated",
             "value": "보호모드 켜짐"
+          }
+        }
+      }
+    },
+    "event.psi.clear": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Memory pressure cleared"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "메모리 압박 해제"
+          }
+        }
+      }
+    },
+    "event.psi.enter": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Memory pressure"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "메모리 압박"
           }
         }
       }
@@ -1383,6 +1479,54 @@
         }
       }
     },
+    "remediation.load": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lower system load"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "부하 낮추기"
+          }
+        }
+      }
+    },
+    "remediation.load.1": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Check top CPU processes — pause heavy apps"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "상단 CPU 프로세스 확인 — 고부하 앱 일시 중지"
+          }
+        }
+      }
+    },
+    "remediation.load.2": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wait for builds/encodes to finish"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "build·인코딩 등 일시 작업 종료 대기"
+          }
+        }
+      }
+    },
     "remediation.lowPower": {
       "localizations": {
         "en": {
@@ -1431,6 +1575,54 @@
         }
       }
     },
+    "remediation.memory": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Free memory"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "메모리 확보"
+          }
+        }
+      }
+    },
+    "remediation.memory.1": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Close unnecessary background apps"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "불필요한 백그라운드 앱 종료"
+          }
+        }
+      }
+    },
+    "remediation.memory.2": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Check MemAvailable/swap on the MEM card"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MEM 카드에서 MemAvailable·스왑 확인"
+          }
+        }
+      }
+    },
     "remediation.protection": {
       "localizations": {
         "en": {
@@ -1475,6 +1667,54 @@
           "stringUnit": {
             "state": "translated",
             "value": "보호 임계(%)와 현재 충전 레벨 대조"
+          }
+        }
+      }
+    },
+    "remediation.psi": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Relieve memory pressure"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "메모리 압박 해소"
+          }
+        }
+      }
+    },
+    "remediation.psi.1": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Close top-RSS apps from the process list"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "프로세스 목록에서 RSS 상위 앱 정리"
+          }
+        }
+      }
+    },
+    "remediation.psi.2": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pause background sync/backup briefly"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "백그라운드 동기화·백업 일시 중지"
           }
         }
       }
@@ -1831,6 +2071,22 @@
         }
       }
     },
+    "settings.watch.load": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Load spike"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "load 급증"
+          }
+        }
+      }
+    },
     "settings.watch.lowPower": {
       "localizations": {
         "en": {
@@ -1847,6 +2103,22 @@
         }
       }
     },
+    "settings.watch.memory": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Low memory (Available)"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "메모리 부족 (Available)"
+          }
+        }
+      }
+    },
     "settings.watch.protection": {
       "localizations": {
         "en": {
@@ -1859,6 +2131,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "보호모드 전이"
+          }
+        }
+      }
+    },
+    "settings.watch.psi": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Memory pressure (PSI)"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "메모리 압박 (PSI)"
           }
         }
       }
@@ -1959,6 +2247,22 @@
         }
       }
     },
+    "ui.debug.inject.load": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Load spike"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "load 급증"
+          }
+        }
+      }
+    },
     "ui.debug.inject.lowPowerOn": {
       "localizations": {
         "en": {
@@ -1971,6 +2275,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "저전력 켜짐"
+          }
+        }
+      }
+    },
+    "ui.debug.inject.mem": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Low memory"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "메모리 부족"
           }
         }
       }
@@ -2003,6 +2323,38 @@
           "stringUnit": {
             "state": "translated",
             "value": "보호모드 켜짐"
+          }
+        }
+      }
+    },
+    "ui.debug.inject.psi": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "PSI pressure"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "PSI 압박"
+          }
+        }
+      }
+    },
+    "ui.debug.inject.psiClear": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "PSI clear"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "PSI 해제"
           }
         }
       }

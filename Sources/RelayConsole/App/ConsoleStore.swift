@@ -31,6 +31,10 @@ final class ConsoleStore: ObservableObject {
     @AppStorage("relay.watch.protection") var watchProtection = true
     @AppStorage("relay.watch.lowPower") var watchLowPower = true
     @AppStorage("relay.watch.battery") var watchBattery = true
+    /// Phase2 A5 — PSI / load / MemAvailable
+    @AppStorage("relay.watch.psi") var watchPsi = true
+    @AppStorage("relay.watch.load") var watchLoad = true
+    @AppStorage("relay.watch.memory") var watchMemory = true
     @AppStorage("relay.watch.notifications") var watchNotifications = true
     /// 알림형 상단 배너 (메뉴 팝오버 아님) — 기본 ON
     @AppStorage("relay.watch.banner") var watchBanner = true
@@ -178,7 +182,9 @@ final class ConsoleStore: ObservableObject {
         case .protectionChanged: return watchProtection
         case .lowPowerChanged: return watchLowPower
         case .batteryThreshold: return watchBattery
-        default: return true // Phase2 kinds: gate defaults
+        case .psiPressure: return watchPsi
+        case .loadSpike: return watchLoad
+        case .memoryLow: return watchMemory
         }
     }
 

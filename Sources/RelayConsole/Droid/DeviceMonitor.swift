@@ -41,6 +41,10 @@ actor DeviceMonitor {
         var logcatHitCount: Int = 0
         var logcatPrimed = false
         var metaPrimed = false
+        /// /proc/stat 코어 수 (load 임계용) — 첫 틱 후 캐시
+        var coreCount: Int?
+        /// MemAvailable % (15s meminfo) — usedPct = 100 − avail%
+        var memAvailablePct: Double?
     }
 
     private var timer: Task<Void, Never>?
@@ -180,11 +184,13 @@ actor DeviceMonitor {
             }
         }
 
+        var pendingLoad1: Double?
         if let loadText = try? shell(serial, "cat", "/proc/loadavg") {
             let la = AdbClient.parseLoadAvg(loadText)
             snap.load1 = la.load1
             snap.load5 = la.load5
             snap.load15 = la.load15
+            pendingLoad1 = la.load1
         }
 
         await pollSettingWatch(serial: serial, state: &state, snap: &snap)
@@ -203,8 +209,18 @@ actor DeviceMonitor {
                 snap.coreUsePercents = uses
             }
             state.prevCoreStat = coreCurr
+            if state.coreCount == nil, !coreCurr.cores.isEmpty {
+                state.coreCount = coreCurr.cores.count
+            }
         }
         if snap.cpuUsePercent == nil { snap.cpuUsePercent = state.cacheCPU }
+
+        // ── 감시: load1 급증 (코어 수 확정 후)
+        if let load1 = pendingLoad1, let cores = state.coreCount {
+            await emitWatch(
+                WatchEngine.shared.feedLoad(serial: serial, load1: load1, cores: cores)
+            )
+        }
 
         // ── cpufreq (15s 또는 첫 틱) — 단일 shell 문자열로 glob 확장 (sh -c 인자 분리 시 cat 만 실행되는 버그 회피)
         if tickCount % 3 == 1 || state.cacheGovernor == nil {
@@ -232,6 +248,17 @@ actor DeviceMonitor {
                 let mem = AdbClient.parseMemInfo(memText)
                 state.cacheMemoryTotalGB = mem.totalGB
                 state.cacheMemoryUsedGB = mem.usedGB
+                if let total = mem.totalGB, let avail = mem.availableGB, total > 0 {
+                    let availPct = avail / total * 100.0
+                    state.memAvailablePct = availPct
+                    // usedPct Gate — enter ≥90 (avail<10%), clear ≤80 (avail>20%)
+                    await emitWatch(
+                        WatchEngine.shared.feedMemory(
+                            serial: serial,
+                            usedPct: 100.0 - availPct
+                        )
+                    )
+                }
                 // swap used = total - free (SwapFree)
                 if let total = mem.swapTotalGB {
                     snap.swapUsedGB = estimateSwapUsed(memText: memText, totalGB: total)
@@ -243,6 +270,11 @@ actor DeviceMonitor {
                 let p = AdbClient.parsePressure(psiText)
                 snap.memPressurePct = p.pct
                 snap.memPressureLabel = p.label
+                if let avg10 = p.pct {
+                    await emitWatch(
+                        WatchEngine.shared.feedPsi(serial: serial, avg10: avg10)
+                    )
+                }
             }
             // swap fallback 라벨
             if snap.memPressureLabel == nil, let swap = snap.swapUsedGB, swap > 1.5 {
