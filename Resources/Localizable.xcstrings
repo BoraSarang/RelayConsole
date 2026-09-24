@@ -1127,6 +1127,23 @@
         }
       }
     },
+    "briefing.line": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%d/%d sites · %d late jobs · %d/%d phones · %d critical"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%d/%d 사이트 · %d 지연 작업 · %d/%d 폰 · critical %d"
+          }
+        }
+      }
+    },
     "cards.empty": {
       "localizations": {
         "en": {
@@ -4406,6 +4423,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "설치됨"
+          }
+        }
+      }
+    },
+    "settings.briefing": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show morning briefing line"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "아침 브리핑 한 줄 표시"
           }
         }
       }

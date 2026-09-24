@@ -85,6 +85,7 @@ struct SettingsView: View {
                 Text(L10n.string("settings.theme.light")).tag(OPThemeMode.light)
             }
             Toggle(L10n.string("settings.menubarMetrics"), isOn: $menubarMetrics)
+            Toggle(L10n.string("settings.briefing"), isOn: $store.briefingEnabled)
         }
     }
 
@@ -249,7 +250,7 @@ struct SettingsView: View {
     @ViewBuilder
     private var aboutSection: some View {
         Section(L10n.string("settings.section.about")) {
-            LabeledContent(L10n.string("settings.version"), value: "1.2.0")
+            LabeledContent(L10n.string("settings.version"), value: "1.3.0")
             LabeledContent(L10n.string("settings.bundleId"), value: "com.borasarang.relayconsole")
         }
     }

@@ -81,6 +81,8 @@ final class ConsoleStore: ObservableObject {
     @AppStorage("relay.cards.network") var cardNetwork = true
     @AppStorage("relay.cards.thermal") var cardThermal = true
     @AppStorage("relay.cards.storage") var cardStorage = true
+    /// 아침 브리핑 한 줄 (PLAN_briefing · S1)
+    @AppStorage("relay.briefing.enabled") var briefingEnabled = true
 
     private init() {
         selectedSerial = UserDefaults.standard.string(forKey: selectedKey)
@@ -806,15 +808,23 @@ final class ConsoleStore: ObservableObject {
     /// critical 미해결 존재 여부 — 메뉴바 배지용
     /// 같은 fingerprint의 clear가 더 최신이면 해제로 간주
     var hasActiveCritical: Bool {
-        for (i, e) in recentWatchEvents.enumerated() {
-            guard e.severity == .critical, !e.isClear else { continue }
-            let fp = e.fingerprint
-            let cleared = recentWatchEvents[..<i].contains {
-                $0.fingerprint == fp && $0.isClear
-            }
-            if !cleared { return true }
-        }
-        return false
+        BriefingLogic.activeCriticalCount(recentWatchEvents) > 0
+    }
+
+    /// 아침 브리핑 스냅숏 — 팝오버 헤더 한 줄 (PLAN_briefing)
+    func makeBriefing(now: Date = .now) -> BriefingSnapshot {
+        let android = inventory.devices
+        let apples = appleDevices
+        return BriefingLogic.snapshot(
+            sites: sites,
+            jobs: jobs,
+            androidOnline: android.filter(\.isOnline).count,
+            androidTotal: android.count,
+            appleOnline: apples.filter(\.isOnline).count,
+            appleTotal: apples.count,
+            events: recentWatchEvents,
+            now: now
+        )
     }
 
 #if DEBUG
