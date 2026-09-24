@@ -5,6 +5,7 @@ struct DroidDashboardView: View {
     @State private var showProcessList = false
     @State private var showLogs = false
     @State private var showScreenshot = false
+    @State private var showWifiOnboarding = false
     @ObservedObject private var shots = ScreenshotService.shared
     @ObservedObject private var scrcpy = ScrcpyController.shared
 
@@ -122,6 +123,7 @@ struct DroidDashboardView: View {
             Spacer(minLength: 8)
             if let d = device, !d.serial.isEmpty {
                 ScrcpyHeaderButton(serial: d.serial)
+                WifiOnboardingHeaderButton(serial: d.serial, connectionKind: d.connectionKind)
                 Button {
                     showScreenshot = true
                 } label: {
@@ -243,9 +245,18 @@ struct DroidDashboardView: View {
                 .font(OPFont.number(12))
                 .foregroundStyle(OPColor.inkDim.opacity(0.85))
                 .multilineTextAlignment(.center)
+            Button(L10n.string("wifi.button.enable")) {
+                showWifiOnboarding = true
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .padding(.top, 6)
         }
         .padding(.horizontal, OPSpace.xl)
         .frame(maxWidth: .infinity)
+        .sheet(isPresented: $showWifiOnboarding) {
+            WifiOnboardingSheet(presetSerial: nil, connectionKind: nil)
+        }
     }
 
     // MARK: - Values
