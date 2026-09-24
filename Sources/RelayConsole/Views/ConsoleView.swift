@@ -1,33 +1,45 @@
 import SwiftUI
 
 private enum ConsoleSection: String, CaseIterable, Identifiable {
-    case droid, apple, sites, jobs, notify
+    case devices, sites, jobs, alerts
     var id: String { rawValue }
 
     var label: String {
         switch self {
-        case .droid: return "Droid"
-        case .apple: return "Apple"
-        case .sites: return "Sites"
-        case .jobs: return "Jobs"
-        case .notify: return "Notify"
+        case .devices: return L10n.string("sidebar.devices")
+        case .sites: return L10n.string("sidebar.sites")
+        case .jobs: return L10n.string("sidebar.jobs")
+        case .alerts: return L10n.string("sidebar.alerts")
         }
     }
 
     var icon: String {
         switch self {
-        case .droid: return "cpu"
-        case .apple: return "iphone"
+        case .devices: return "iphone"
         case .sites: return "globe"
         case .jobs: return "clock"
-        case .notify: return "bell"
+        case .alerts: return "bell"
+        }
+    }
+}
+
+/// Devices 하위 플랫폼 — Android 실구현 · Apple 예정
+private enum DevicePlatform: String, CaseIterable, Identifiable {
+    case android, apple
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .android: return L10n.string("sidebar.platform.android")
+        case .apple: return L10n.string("sidebar.platform.apple")
         }
     }
 }
 
 struct ConsoleView: View {
     @ObservedObject var store: ConsoleStore
-    @State private var selection: ConsoleSection? = .droid
+    @State private var selection: ConsoleSection? = .devices
+    @State private var platform: DevicePlatform = .android
 
     var body: some View {
         ZStack {
@@ -41,22 +53,42 @@ struct ConsoleView: View {
                 .navigationSplitViewColumnWidth(min: 160, ideal: 180, max: 220)
             } detail: {
                 switch selection {
-                case .droid, .none:
-                    DroidDashboardView(store: store)
-                case .apple:
-                    placeholder("Apple", systemImage: "iphone")
+                case .devices, .none:
+                    devicesDetail
                 case .sites:
-                    placeholder("Sites", systemImage: "globe")
+                    placeholder(ConsoleSection.sites.label, systemImage: ConsoleSection.sites.icon)
                 case .jobs:
-                    placeholder("Jobs", systemImage: "clock")
-                case .notify:
-                    placeholder("Notify", systemImage: "bell")
+                    placeholder(ConsoleSection.jobs.label, systemImage: ConsoleSection.jobs.icon)
+                case .alerts:
+                    placeholder(ConsoleSection.alerts.label, systemImage: ConsoleSection.alerts.icon)
                 }
             }
             .navigationTitle(L10n.string("droid.header.title"))
         }
         .background(Color(hex: 0x0F111A))
         .preferredColorScheme(.dark)
+    }
+
+    /// Android / Apple 세그먼트 — Apple은 플레이스홀더
+    private var devicesDetail: some View {
+        VStack(spacing: 0) {
+            Picker(L10n.string("sidebar.devices"), selection: $platform) {
+                ForEach(DevicePlatform.allCases) { p in
+                    Text(p.label).tag(p)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .padding(OPSpace.md)
+            .background(Color(hex: 0x0F111A))
+
+            switch platform {
+            case .android:
+                DroidDashboardView(store: store)
+            case .apple:
+                placeholder(DevicePlatform.apple.label, systemImage: "iphone")
+            }
+        }
     }
 
     private func placeholder(_ title: String, systemImage: String) -> some View {
@@ -69,7 +101,7 @@ struct ConsoleView: View {
                 Text(title)
                     .font(OPFont.title(16))
                     .foregroundStyle(OPColor.ink)
-                Text(L10n.string("menubar.events.empty"))
+                Text(L10n.string("sidebar.soon"))
                     .font(OPFont.body(13))
                     .foregroundStyle(OPColor.inkDim)
             }

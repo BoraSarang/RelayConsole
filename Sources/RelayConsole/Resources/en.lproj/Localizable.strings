@@ -108,6 +108,13 @@
 "menubar.status.connected" = "Connected";
 "menubar.status.disconnected" = "Disconnected";
 "relay.menubar.label" = "RELAY";
+"sidebar.devices" = "Devices";
+"sidebar.sites" = "Sites";
+"sidebar.jobs" = "Jobs";
+"sidebar.alerts" = "Alerts";
+"sidebar.soon" = "Coming soon";
+"sidebar.platform.android" = "Android";
+"sidebar.platform.apple" = "Apple";
 "remediation.battery" = "Save battery";
 "remediation.battery.1" = "Close unnecessary background apps";
 "remediation.battery.2" = "Turn off location, sync, auto-update";
