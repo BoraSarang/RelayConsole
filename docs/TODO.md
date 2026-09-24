@@ -2,13 +2,20 @@
 > 작업 추적 — bd 연동 (이슈 prefix: RelayConsole)
 
 ## 진행 중 (bd ready)
-- (없음)
+- (육안 대기) **외부 알림 채널 A1** — `RelayConsole-avf` 구현·테스트·빌드 완료 · 설정→연동에서 ntfy/Slack 테스트 전송 확인 후 close
 
 ## 보류 (기기 확보 시)
 - [ ] **Apple 실기 Trust 육안** — iPad USB 데이터 불량(안드로이드 동일 케이블 OK·복구도 미인식). 기기 확보 후 `brew install libimobiledevice` → 배터리/스토리지 카드
 - [ ] **Apple Phase 2** — Developer Mode·sysmon 등 — 위 기기 확보 후 착수
 
+## 다음 (본 계획 후)
+- [ ] **리서치 재검토** — `RelayConsole-p1w` · `RESEARCH_competitive_v1` 재읽고 개선 항목 도출
+
 ## 완료 (2026-09-24)
+- [x] **README 공개용** — `README.md` · 포지셔닝·기능·설치·ntfy/Slack 설정
+- [x] **경쟁 리서치·방향 확정** — `RESEARCH_competitive_v1` · 사용자 승인: 알림 채널 1순위 · 로컬 전용 · Apple 보류 · README · 완료 후 재검토
+- [x] **종료 버튼+확인 (PR A)** — `menubar.button.quit`+`shutdown()` · `applicationWillTerminate` · **PR #19 머지 `4d72f52`**
+- [x] **설정 사이드바형 개편 (PR B)** — `NavigationSplitView` 6탭 · 감시 그룹 4 · about 버전/번들 · **PR #20 머지 `18ebab0`** · 버전 1.1.1
 - [x] **Alerts 잔여 육안 마감 (PLAN_alerts · 0.9.1)** — 3탭·필터·그룹·ack/mute/메모 재시작 유지 · Apple 연결/해소 · export JSON/CSV · **사용자 육안 완료**
 - [x] **Sites/Jobs 잔여 육안 마감 (PLAN_sites_jobs · 1.0.0)** — HTTP 주입/상태 바 · 잘못된 URL 거부+에딧 · curl 하트비트/overdue · curl 붙여넣기 토큰 · site down→Alerts · **사용자 육안 완료**
 - [x] **Sites v1.1 육안 마감 (PLAN_sites_v1_1 · 1.1.0)** — UptimeRobot·Google식 타임라인 · failThreshold·effectiveUp·dayBars·가동률%·범례/패딩 · 메뉴바 Sites 섹션 · i18n 382 · 테스트 35+139 · **PR #17 머지 `c383887`** · 사용자 육안 완료

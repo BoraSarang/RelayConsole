@@ -55,6 +55,7 @@ struct SettingsView: View {
                     alertsSection
                     jobsSection
                 case .integrations:
+                    notifySection
                     appleSection
                     scrcpySection
                     droidSection
@@ -173,6 +174,48 @@ struct SettingsView: View {
     }
 
     @ViewBuilder
+    private var notifySection: some View {
+        Section(L10n.string("settings.notify.section")) {
+            Toggle(L10n.string("settings.notify.ntfy"), isOn: $store.notifyNtfy)
+            if store.notifyNtfy {
+                TextField(L10n.string("settings.notify.ntfy.server"), text: $store.notifyNtfyServer)
+                    .textFieldStyle(.roundedBorder)
+                    .font(OPFont.body(12))
+                TextField(L10n.string("settings.notify.ntfy.topic"), text: $store.notifyNtfyTopic)
+                    .textFieldStyle(.roundedBorder)
+                    .font(OPFont.body(12))
+                SecureField(L10n.string("settings.notify.ntfy.token"), text: $store.notifyNtfyToken)
+                    .textFieldStyle(.roundedBorder)
+                    .font(OPFont.body(12))
+            }
+            Toggle(L10n.string("settings.notify.slack"), isOn: $store.notifySlack)
+            if store.notifySlack {
+                SecureField(L10n.string("settings.notify.slack.webhook"), text: $store.notifySlackWebhook)
+                    .textFieldStyle(.roundedBorder)
+                    .font(OPFont.body(12))
+            }
+            Picker(L10n.string("settings.notify.minSeverity"), selection: $store.notifyMinSeverity) {
+                Text(L10n.string("settings.notify.severity.warning")).tag("warning")
+                Text(L10n.string("settings.notify.severity.critical")).tag("critical")
+            }
+            Toggle(L10n.string("settings.notify.recovery"), isOn: $store.notifyRecovery)
+            HStack {
+                Button(L10n.string("settings.notify.test")) {
+                    store.sendNotifyTest()
+                }
+                .buttonStyle(.plain)
+                .font(OPFont.body(11))
+                .foregroundStyle(OPColor.cta)
+                Spacer()
+            }
+            Text(L10n.string("settings.notify.hint"))
+                .font(OPFont.body(10))
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
+        }
+    }
+
+    @ViewBuilder
     private var appleSection: some View {
         Section(L10n.string("settings.section.apple")) {
             LabeledContent(L10n.string("settings.apple.tools"), value: IdeviceClient.toolsAvailable
@@ -206,7 +249,7 @@ struct SettingsView: View {
     @ViewBuilder
     private var aboutSection: some View {
         Section(L10n.string("settings.section.about")) {
-            LabeledContent(L10n.string("settings.version"), value: "1.1.1")
+            LabeledContent(L10n.string("settings.version"), value: "1.2.0")
             LabeledContent(L10n.string("settings.bundleId"), value: "com.borasarang.relayconsole")
         }
     }

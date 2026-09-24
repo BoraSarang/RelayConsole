@@ -23,6 +23,7 @@ enum ErrorCode: String, Error {
     case netPingFailed = "E-MAC-NET-0005"
     case jobBindFailed = "E-MAC-JOB-0001"
     case jobUnknownToken = "E-MAC-JOB-0002"
+    case notifyPublishFailed = "E-MAC-NOTIFY-0001"
 
     var koMessage: String {
         switch self {
@@ -48,6 +49,7 @@ enum ErrorCode: String, Error {
         case .netPingFailed: return "ping 체크에 실패했습니다. 대상 호스트를 확인해 주세요."
         case .jobBindFailed: return "하트비트 서버를 시작할 수 없습니다. 포트가 사용 중인지 확인해 주세요."
         case .jobUnknownToken: return "알 수 없는 하트비트 토큰입니다."
+        case .notifyPublishFailed: return "외부 알림 채널(ntfy/Slack) 전송에 실패했습니다. 설정과 네트워크를 확인해 주세요."
         }
     }
 }
