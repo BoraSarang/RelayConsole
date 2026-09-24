@@ -52,6 +52,8 @@ actor DeviceMonitor {
     private var onEvent: (@Sendable (String) -> Void)?
 
     private var adbPath: String?
+    /// UI(썸네일·로그뷰어)용 경로 — resolveDevices가 찾은 경로 공유
+    var adbPathForUI: String? { adbPath }
     private var serials: [String] = []
     private var states: [String: DeviceState] = [:]
     private var knownSerials: Set<String> = []
@@ -147,6 +149,12 @@ actor DeviceMonitor {
                         level: level,
                         charging: charging
                     )
+                )
+            }
+            // ── 감시: Bsoh 급락 (Samsung 필드 부재 시 생략)
+            if let bsoh = batt.batteryHealthPct {
+                await emitWatch(
+                    WatchEngine.shared.feedBsoh(serial: serial, bsoh: bsoh)
                 )
             }
         } else {
@@ -339,6 +347,12 @@ actor DeviceMonitor {
                 let sig = AdbClient.parseSignal(sigText)
                 snap.rsrp = sig.rsrp
                 snap.signalOperator = sig.carrier
+                // ── 감시: RSRP 급락
+                if let rsrp = sig.rsrp {
+                    await emitWatch(
+                        WatchEngine.shared.feedRsrp(serial: serial, rsrp: rsrp)
+                    )
+                }
             }
 
             // Wi-Fi
@@ -580,6 +594,11 @@ actor DeviceMonitor {
                 }
                 return
             }
+            // 신규 adb 탐지 → UI(썸네일) 갱신 트리거
+            let found = adbPath
+            Task { @MainActor in
+                NotificationCenter.default.post(name: .adbPathReady, object: found)
+            }
         }
         guard let adb = adbPath else { return }
 
@@ -601,15 +620,22 @@ actor DeviceMonitor {
             let short = conn.kind == .network ? s : AdbClient.shortId(s)
             await notifyEvent(L10n.format("event.deviceConnected", short))
             await log(.info, "[INFO] [ADB] 기기 연결 meta=\(short) kind=\(conn.kind.rawValue)")
+            // 연결 직후 썸네일 1회 (상시 폴링 아님)
+            let path = adbPath
+            Task { @MainActor in
+                ScreenshotService.shared.refresh(serial: s, adbPath: path)
+            }
         }
 
-        // 끊김
+        // 끊김 — 활성 gate synthetic clear (후속조치 영구잔류 방지)
         for s in knownSerials where !foundSet.contains(s) {
             knownSerials.remove(s)
             states.removeValue(forKey: s)
             await MainActor.run {
                 ConsoleStore.shared.markDeviceOffline(s)
-                WatchEngine.shared.forget(serial: s)
+                for e in WatchEngine.shared.forget(serial: s) {
+                    ConsoleStore.shared.ingestWatch(e, forceNotify: false)
+                }
             }
             let short = AdbClient.parseConnection(s).kind == .network ? s : AdbClient.shortId(s)
             await notifyEvent(L10n.format("event.deviceDisconnected", short))
@@ -618,7 +644,7 @@ actor DeviceMonitor {
         serials = found
     }
 
-    private func findAdb() -> String? {
+    nonisolated private static func locateAdb() -> String? {
         let candidates = [
             "/opt/homebrew/bin/adb",
             "/usr/local/bin/adb",
@@ -633,6 +659,15 @@ actor DeviceMonitor {
             if FileManager.default.isExecutableFile(atPath: p) { return p }
         }
         return nil
+    }
+
+    private func findAdb() -> String? {
+        Self.locateAdb()
+    }
+
+    /// UI(썸네일·로그뷰어) 동기 조회 — actor 밖에서 사용
+    nonisolated static func adbPathNow() -> String? {
+        locateAdb()
     }
 
     /// 모든 셸은 반드시 `-s serial` (PLAN_v0.3 DoD)

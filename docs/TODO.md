@@ -2,9 +2,13 @@
 > 작업 추적 — bd 연동 (이슈 prefix: RelayConsole)
 
 ## 진행 중 (bd ready)
-- [ ] **실기기 육안 (v0.6)** — DEBUG 주입 PSI/load/mem → 알림·배너·배지·권장 조치 확인 (사용자)
+- [ ] **실기기 육안 (v0.6·v0.7)** — DEBUG 주입 PSI/load/mem/Bsoh/RSRP/복구 + scrcpy 설치→미러링(창 앞으로) + **스샷 시트** + 로그창 + **스로틀링 해제 후 후속조치 사라짐** (사용자)
 
 ## 완료 (2026-09-24)
+- [x] **헤더 썸네일 UX A안** — 36×64 미니 썸네일 제거 · `[미러링][스샷][IP]` · 📷 → `ScreenshotPreviewSheet`(400pt·시각·새로고침·미러링 열기) · i18n **201** · 테스트 101/101 · debug 0.7.0
+- [x] **후속조치 영구잔류 수정 (A+B)** — 스로틀링 clear ≤2(SEVERE 이탈) · TransitionGate 해제는 쿨다운 무시 · forget/disconnect synthetic clear · 배터리 충전 시 warning clear · Bsoh pre-drop 회복 clear · 저전력 ON severity warning · 가이드 fingerprint 최신 우선 + **30분 TTL** · i18n **198** · 테스트 **101/101** · debug 0.7.0
+- [x] **scrcpy 창 포커스** — 런치 후 0.35/0.9/1.8/3s activate 리트라이 + System Events frontmost · 실행 중 헤더 클릭=창 앞으로(정지 아님, 종료=창 닫기) · `runningHint` 키 · i18n **196** · 테스트 91/91 · debug 0.7.0
+- [x] **v0.7 scrcpy A안 + 감시 마감 + 썸네일·로그뷰어** — `ScrcpyController`(PATH/brew/원클릭/옵션 8종) · 헤더 버튼 2면 · `feedBsoh`(Δ≥5)·`feedRsrp`(Δ≤−6)·복구 토글 · screencap 썸네일 · logcat 창 `id:"logs"` · C3 Scrcpy 해제 · i18n **195→196키 3곳** · `PLAN_v0.7` · 버전 **0.7.0**
 - [x] **v0.6 Phase2 감시 A5** — `feedPsi`(5.0/3.0/120s)·`feedLoad`(cores×2/×1/60s, ≥3× critical)·`feedMemory`(usedPct 90/80, ≥95 critical) · DeviceMonitor 연결(coreCount·mem usedPct·PSI) · 설정 `relay.watch.{psi,load,memory}` · remediation 3종 · DEBUG 주입 4 · i18n **151키 3곳** · 테스트 **88/88** · debug **0.6.0** OK · `PLAN_v0.6`
 - [x] **브랜치 정리** — `feat/watch-events` 로컬·원격 삭제 · `feat/menubar-ux-windowfocus` 원격 prune · main 동기화
 - [x] **v0.5 PR #2 머지** — `feat/watch-events` → main `64d84e4` · 육안 확인 완료 · 다음 스프린트: Phase2

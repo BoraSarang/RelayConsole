@@ -65,12 +65,23 @@ struct ThresholdGateTests {
         _ = g.evaluate(current: false, now: t0)
         #expect(g.evaluate(current: true, now: t0) == .enter)
         #expect(g.evaluate(current: true, now: t0.addingTimeInterval(1)) == .none)
-        // 빠른 토글 within cooldown — lastFiredAt은 t0 유지
-        _ = g.evaluate(current: false, now: t0.addingTimeInterval(2))
+        // 해제(false)는 쿨다운 무시 — 즉시 fire (clear 삼킴 방지)
+        #expect(g.evaluate(current: false, now: t0.addingTimeInterval(2)) == .enter)
+        #expect(g.problemActive == false)
+        // 직후 ON은 쿨다운 중 — enter 스킵
         #expect(g.evaluate(current: true, now: t0.addingTimeInterval(3)) == .none)
-        // cooldown(5s) 만료 후 다음 전이 1회 fire (lastValue=true → false)
         #expect(g.evaluate(current: false, now: t0.addingTimeInterval(6)) == .enter)
-        #expect(g.evaluate(current: true, now: t0.addingTimeInterval(7)) == .none) // cooldown 재시작
+        #expect(g.evaluate(current: true, now: t0.addingTimeInterval(7)) == .none)
+    }
+
+    @Test func transitionClearIgnoresCooldown() {
+        var g = TransitionGate(cooldown: 10)
+        _ = g.evaluate(current: false, now: t0)
+        #expect(g.evaluate(current: true, now: t0.addingTimeInterval(1)) == .enter)
+        #expect(g.problemActive)
+        // enter 직후 1초 만에 OFF — clear가 삼켜지면 후속조치 영구잔류
+        #expect(g.evaluate(current: false, now: t0.addingTimeInterval(2)) == .enter)
+        #expect(g.problemActive == false)
     }
 
     @Test func transitionResetForgetsBaseline() {

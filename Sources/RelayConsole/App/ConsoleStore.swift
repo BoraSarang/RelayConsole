@@ -35,6 +35,10 @@ final class ConsoleStore: ObservableObject {
     @AppStorage("relay.watch.psi") var watchPsi = true
     @AppStorage("relay.watch.load") var watchLoad = true
     @AppStorage("relay.watch.memory") var watchMemory = true
+    /// Phase v0.7 — Bsoh / RSRP / 복구 알림
+    @AppStorage("relay.watch.bsoh") var watchBsoh = true
+    @AppStorage("relay.watch.rsrp") var watchRsrp = true
+    @AppStorage("relay.watch.recovery") var watchRecovery = true
     @AppStorage("relay.watch.notifications") var watchNotifications = true
     /// 알림형 상단 배너 (메뉴 팝오버 아님) — 기본 ON
     @AppStorage("relay.watch.banner") var watchBanner = true
@@ -153,8 +157,10 @@ final class ConsoleStore: ObservableObject {
 
         if !forceNotify {
             guard watchEnabled(for: event.kind), watchNotifications else { return }
-            // enter는 warning+만, clear는 복구 알림이므로 severity 무관 발송
-            if !event.isClear {
+            // clear = 복구 알림 — 별도 토글
+            if event.isClear {
+                guard watchRecovery else { return }
+            } else {
                 guard event.severity >= .warning else { return }
             }
         }
@@ -185,19 +191,31 @@ final class ConsoleStore: ObservableObject {
         case .psiPressure: return watchPsi
         case .loadSpike: return watchLoad
         case .memoryLow: return watchMemory
+        case .bsohDrop: return watchBsoh
+        case .signalDrop: return watchRsrp
         }
     }
 
     /// 스로틀링 등 미해결 진입 이벤트 — 후속 조치 가이드용
+    /// fingerprint별 **최신** 이벤트가 clear면 숨김 · enter 후 30분 TTL
     var activeRemediationEvents: [WatchEvent] {
-        recentWatchEvents.filter { e in
-            guard !e.isClear, e.severity >= .warning else { return false }
-            let fp = e.fingerprint
-            let cleared = recentWatchEvents.contains {
-                $0.fingerprint == fp && $0.isClear && $0.at >= e.at
-            }
-            return !cleared
+        Self.activeRemediation(from: recentWatchEvents, now: Date())
+    }
+
+    /// 순수 판정 — 테스트용 (now 주입)
+    static func activeRemediation(
+        from events: [WatchEvent],
+        now: Date,
+        ttl: TimeInterval = 1800
+    ) -> [WatchEvent] {
+        var latest: [String: WatchEvent] = [:]
+        for e in events {
+            if let cur = latest[e.fingerprint], cur.at >= e.at { continue }
+            latest[e.fingerprint] = e
         }
+        return latest.values
+            .filter { !$0.isClear && $0.severity >= .warning && now.timeIntervalSince($0.at) < ttl }
+            .sorted { $0.at > $1.at }
     }
 
     private func pruneNotifyCooldown(now: Date) {

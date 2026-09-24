@@ -59,6 +59,7 @@ struct ThresholdGate: Sendable {
 }
 
 /// 충전/보호모드 등 bool 전이 게이트 — 빠른 토글에도 전이당 1회 fire
+/// 해제 전이(current==false)는 쿨다운 무시 — clear 삼킴 시 후속조치 영구잔류
 struct TransitionGate: Sendable {
     let cooldown: TimeInterval
     private var lastValue: Bool?
@@ -68,16 +69,24 @@ struct TransitionGate: Sendable {
         self.cooldown = cooldown
     }
 
-    /// nil 첫 틱은 baseline만 기록 (이벤트 없음). 이후 bool 변경 시 true 1회.
+    /// nil 첫 틱은 baseline만 기록 (이벤트 없음). 이후 bool 변경 시 fire.
+    /// ON(true): cooldown 적용 · OFF(false): 즉시 fire (호출부가 isClear 판정)
     mutating func evaluate(current: Bool, now: Date = .now) -> GateAction {
         defer { lastValue = current }
         guard let prev = lastValue, prev != current else { return .none }
+        if !current {
+            lastFiredAt = now
+            return .enter
+        }
         if let at = lastFiredAt, now.timeIntervalSince(at) < cooldown {
             return .none
         }
         lastFiredAt = now
         return .enter
     }
+
+    /// true(문제 ON) 유지 중 — forget 시 synthetic clear용
+    var problemActive: Bool { lastValue == true }
 
     mutating func reset() {
         lastValue = nil

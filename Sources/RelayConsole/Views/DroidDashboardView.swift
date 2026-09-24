@@ -3,6 +3,10 @@ import SwiftUI
 struct DroidDashboardView: View {
     @ObservedObject var store: ConsoleStore
     @State private var showProcessList = false
+    @State private var showLogs = false
+    @State private var showScreenshot = false
+    @ObservedObject private var shots = ScreenshotService.shared
+    @ObservedObject private var scrcpy = ScrcpyController.shared
 
     private let columns = [
         GridItem(.flexible(), spacing: 16, alignment: .top),
@@ -56,6 +60,14 @@ struct DroidDashboardView: View {
         .sheet(isPresented: $showProcessList) {
             ProcessListSheet(store: store)
         }
+        .sheet(isPresented: $showLogs) {
+            LogViewerSheet(store: store)
+        }
+        .sheet(isPresented: $showScreenshot) {
+            if let d = device, !d.serial.isEmpty {
+                ScreenshotPreviewSheet(serial: d.serial)
+            }
+        }
     }
 
     private var header: some View {
@@ -93,6 +105,33 @@ struct DroidDashboardView: View {
             }
             Spacer(minLength: 8)
             if let d = device, !d.serial.isEmpty {
+                ScrcpyHeaderButton(serial: d.serial)
+                Button {
+                    showScreenshot = true
+                } label: {
+                    HStack(spacing: 3) {
+                        if shots.loadingSerials.contains(d.serial) {
+                            ProgressView()
+                                .controlSize(.mini)
+                        } else {
+                            Image(systemName: "camera")
+                                .font(.system(size: 10, weight: .semibold))
+                        }
+                        Text(L10n.string("scrcpy.thumb.title"))
+                            .font(OPFont.number(10))
+                    }
+                    .foregroundStyle(OPColor.inkDim)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 4)
+                    .background(OPColor.card, in: RoundedRectangle(cornerRadius: 6))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 6)
+                            .stroke(OPColor.border, lineWidth: 1)
+                    )
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help(L10n.string("scrcpy.thumb.openHint"))
                 Text(d.connectionKind == .network ? (d.connectionLabel ?? "") : AdbClient.shortId(d.serial))
                     .font(OPFont.number(11))
                     .foregroundStyle(OPColor.inkDim)
@@ -221,5 +260,8 @@ struct DroidDashboardView: View {
         .padding(OPSpace.md)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(OPColor.card, in: RoundedRectangle(cornerRadius: 12))
+        .contentShape(Rectangle())
+        .onTapGesture { showLogs = true }
+        .help(L10n.string("droid.logs.button"))
     }
 }

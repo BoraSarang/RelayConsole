@@ -50,15 +50,19 @@ struct WatchEventTests {
         #expect(WatchEngine.shared.feedThermal(serial: "T1", status: 5, now: t0.addingTimeInterval(10)) == nil)
     }
 
-    @Test func watchEngineThermalClearBelowHysteresis() {
+    @Test func watchEngineThermalClearAtModerate() {
         WatchEngine.shared.resetAll()
         defer { WatchEngine.shared.resetAll() }
 
         _ = WatchEngine.shared.feedThermal(serial: "T2", status: 3, now: t0)
-        #expect(WatchEngine.shared.feedThermal(serial: "T2", status: 2, now: t0.addingTimeInterval(1)) == nil)
-        let clear = WatchEngine.shared.feedThermal(serial: "T2", status: 1, now: t0.addingTimeInterval(2))
+        // clear ≤2 — SEVERE 이탈(2) 즉시 해제 (Status 2 공백 제거)
+        let clear = WatchEngine.shared.feedThermal(serial: "T2", status: 2, now: t0.addingTimeInterval(1))
         #expect(clear?.isClear == true)
         #expect(clear?.severity == .info)
+        // Status 1에서도 clear 경로 정상
+        _ = WatchEngine.shared.feedThermal(serial: "T2", status: 1, now: t0.addingTimeInterval(120))
+        let clear2 = WatchEngine.shared.feedThermal(serial: "T2", status: 2, now: t0.addingTimeInterval(121))
+        #expect(clear2 == nil) // 비활성 상태에서 2는 clear 아님
     }
 
     @Test func watchEngineChargingTransitionOnce() {
@@ -97,6 +101,17 @@ struct WatchEventTests {
         #expect(off?.isClear == true)
     }
 
+    @Test func watchEngineProtectionClearWithinCooldown() {
+        WatchEngine.shared.resetAll()
+        defer { WatchEngine.shared.resetAll() }
+
+        _ = WatchEngine.shared.feedProtection(serial: "P2", enabled: false, now: t0)
+        _ = WatchEngine.shared.feedProtection(serial: "P2", enabled: true, now: t0.addingTimeInterval(1))
+        // enter 직후 1s 만에 OFF — clear가 삼켜지면 가이드 영구잔류
+        let off = WatchEngine.shared.feedProtection(serial: "P2", enabled: false, now: t0.addingTimeInterval(2))
+        #expect(off?.isClear == true)
+    }
+
     @Test func watchEngineLowPowerTransition() {
         WatchEngine.shared.resetAll()
         defer { WatchEngine.shared.resetAll() }
@@ -104,9 +119,10 @@ struct WatchEventTests {
         #expect(WatchEngine.shared.feedLowPower(serial: "L1", enabled: false, now: t0) == nil)
         let on = WatchEngine.shared.feedLowPower(serial: "L1", enabled: true, now: t0.addingTimeInterval(1))
         #expect(on?.kind == .lowPowerChanged)
+        #expect(on?.severity == .warning) // 가이드 진입용
         #expect(on?.isClear == false)
         #expect(WatchEngine.shared.feedLowPower(serial: "L1", enabled: true, now: t0.addingTimeInterval(5)) == nil)
-        let off = WatchEngine.shared.feedLowPower(serial: "L1", enabled: false, now: t0.addingTimeInterval(20))
+        let off = WatchEngine.shared.feedLowPower(serial: "L1", enabled: false, now: t0.addingTimeInterval(6))
         #expect(off?.isClear == true)
     }
 
@@ -136,6 +152,23 @@ struct WatchEventTests {
         // 다음 방전에서 재발화
         let again = WatchEngine.shared.feedBatteryLevel(serial: "B2", level: 20, charging: false, now: t0.addingTimeInterval(120))
         #expect(again != nil)
+    }
+
+    @Test func watchEngineBatteryWarningClearsOnCharge() {
+        WatchEngine.shared.resetAll()
+        defer { WatchEngine.shared.resetAll() }
+
+        // 20% info 먼저 소진 후 10% = warning (가이드 대상)
+        let e20 = WatchEngine.shared.feedBatteryLevel(serial: "B3", level: 20, charging: false, now: t0)
+        #expect(e20?.severity == .info)
+        let e10 = WatchEngine.shared.feedBatteryLevel(serial: "B3", level: 10, charging: false, now: t0.addingTimeInterval(5))
+        #expect(e10?.severity == .warning)
+        // 충전 시작 → 미해결 warning clear
+        let clear = WatchEngine.shared.feedBatteryLevel(serial: "B3", level: 12, charging: true, now: t0.addingTimeInterval(30))
+        #expect(clear?.isClear == true)
+        #expect(clear?.kind == .batteryThreshold)
+        // 이미 clear 후 충전 유지 — 중복 clear 없음
+        #expect(WatchEngine.shared.feedBatteryLevel(serial: "B3", level: 50, charging: true, now: t0.addingTimeInterval(60)) == nil)
     }
 
     // MARK: - Phase2 A5 (PSI / load / memory)
@@ -213,6 +246,170 @@ struct WatchEventTests {
         #expect(WatchEngine.shared.feedPsi(serial: "F2", avg10: 6.0, now: t0.addingTimeInterval(1)) != nil)
         #expect(WatchEngine.shared.feedLoad(serial: "F2", load1: 20, cores: 8, now: t0.addingTimeInterval(2)) != nil)
         #expect(WatchEngine.shared.feedMemory(serial: "F2", usedPct: 92, now: t0.addingTimeInterval(3)) != nil)
+    }
+
+    // MARK: - v0.7 (Bsoh / RSRP)
+
+    @Test func watchEngineBsohBaselineThenDropFive() {
+        WatchEngine.shared.resetAll()
+        defer { WatchEngine.shared.resetAll() }
+
+        // 첫 틱 baseline
+        #expect(WatchEngine.shared.feedBsoh(serial: "H1", bsoh: 91, now: t0) == nil)
+        // 4pt 하락 — 미발화
+        #expect(WatchEngine.shared.feedBsoh(serial: "H1", bsoh: 87, now: t0.addingTimeInterval(60)) == nil)
+        // 5pt 이상 하락 (baseline 91 → 85)
+        let drop = WatchEngine.shared.feedBsoh(serial: "H1", bsoh: 85, now: t0.addingTimeInterval(120))
+        #expect(drop?.kind == .bsohDrop)
+        #expect(drop?.severity == .warning)
+        #expect(drop?.isClear == false)
+        // baseline 갱신 후 동일값 재발화 없음
+        #expect(WatchEngine.shared.feedBsoh(serial: "H1", bsoh: 85, now: t0.addingTimeInterval(180)) == nil)
+        // 추가 5pt 하락 재발화
+        let drop2 = WatchEngine.shared.feedBsoh(serial: "H1", bsoh: 80, now: t0.addingTimeInterval(240))
+        #expect(drop2 != nil)
+    }
+
+    @Test func watchEngineBsohClearOnRecoverToPreDrop() {
+        WatchEngine.shared.resetAll()
+        defer { WatchEngine.shared.resetAll() }
+
+        _ = WatchEngine.shared.feedBsoh(serial: "H2", bsoh: 91, now: t0)
+        let drop = WatchEngine.shared.feedBsoh(serial: "H2", bsoh: 85, now: t0.addingTimeInterval(60))
+        #expect(drop?.severity == .warning)
+        // pre-drop(91)까지 회복 → clear
+        let clear = WatchEngine.shared.feedBsoh(serial: "H2", bsoh: 91, now: t0.addingTimeInterval(120))
+        #expect(clear?.isClear == true)
+        #expect(clear?.kind == .bsohDrop)
+        // 회복 후 중복 clear 없음
+        #expect(WatchEngine.shared.feedBsoh(serial: "H2", bsoh: 91, now: t0.addingTimeInterval(180)) == nil)
+    }
+
+    @Test func watchEngineForgetReturnsSyntheticClears() {
+        WatchEngine.shared.resetAll()
+        defer { WatchEngine.shared.resetAll() }
+
+        _ = WatchEngine.shared.feedThermal(serial: "F4", status: 3, now: t0)
+        _ = WatchEngine.shared.feedProtection(serial: "F4", enabled: false, now: t0)
+        _ = WatchEngine.shared.feedProtection(serial: "F4", enabled: true, now: t0.addingTimeInterval(1))
+        _ = WatchEngine.shared.feedPsi(serial: "F4", avg10: 6.0, now: t0)
+
+        let clears = WatchEngine.shared.forget(serial: "F4")
+        #expect(clears.contains { $0.kind == .throttling && $0.isClear })
+        #expect(clears.contains { $0.kind == .protectionChanged && $0.isClear })
+        #expect(clears.contains { $0.kind == .psiPressure && $0.isClear })
+        #expect(clears.allSatisfy { $0.isClear })
+    }
+
+    @Test func watchEngineRsrpDropAndRecover() {
+        WatchEngine.shared.resetAll()
+        defer { WatchEngine.shared.resetAll() }
+
+        // baseline
+        #expect(WatchEngine.shared.feedRsrp(serial: "S1", rsrp: -100, now: t0) == nil)
+        // 5dB 악화 — 미발화 (Δ≤−6 필요)
+        #expect(WatchEngine.shared.feedRsrp(serial: "S1", rsrp: -105, now: t0.addingTimeInterval(5)) == nil)
+        // Δ = -105 → -112 = -7
+        let enter = WatchEngine.shared.feedRsrp(serial: "S1", rsrp: -112, now: t0.addingTimeInterval(10))
+        #expect(enter?.kind == .signalDrop)
+        #expect(enter?.severity == .warning)
+        #expect(enter?.isClear == false)
+        // 쿨다운 중 재진입 없음
+        #expect(WatchEngine.shared.feedRsrp(serial: "S1", rsrp: -120, now: t0.addingTimeInterval(20)) == nil)
+        // 회복 Δ≥+6 — last=-120 → -110 = +10
+        let clear = WatchEngine.shared.feedRsrp(serial: "S1", rsrp: -110, now: t0.addingTimeInterval(70))
+        #expect(clear?.isClear == true)
+        #expect(clear?.kind == .signalDrop)
+    }
+
+    @Test func watchEngineForgetClearsV07Gates() {
+        WatchEngine.shared.resetAll()
+        defer { WatchEngine.shared.resetAll() }
+
+        _ = WatchEngine.shared.feedBsoh(serial: "F3", bsoh: 91, now: t0)
+        _ = WatchEngine.shared.feedRsrp(serial: "F3", rsrp: -100, now: t0)
+        WatchEngine.shared.forget(serial: "F3")
+        // forget 후 새 baseline
+        #expect(WatchEngine.shared.feedBsoh(serial: "F3", bsoh: 91, now: t0.addingTimeInterval(1)) == nil)
+        #expect(WatchEngine.shared.feedRsrp(serial: "F3", rsrp: -100, now: t0.addingTimeInterval(2)) == nil)
+        #expect(WatchEngine.shared.feedBsoh(serial: "F3", bsoh: 85, now: t0.addingTimeInterval(3)) != nil)
+    }
+
+    // MARK: - Remediation guide (최신 우선 + TTL)
+
+    @Test func activeRemediationLatestClearHidesEnter() {
+        let enter = WatchEvent(
+            kind: .throttling, severity: .critical, serial: "S1",
+            title: "enter", detail: "", at: t0
+        )
+        let clear = WatchEvent(
+            kind: .throttling, severity: .info, serial: "S1",
+            title: "clear", detail: "", at: t0.addingTimeInterval(10), isClear: true
+        )
+        let active = ConsoleStore.activeRemediation(
+            from: [clear, enter],
+            now: t0.addingTimeInterval(20)
+        )
+        #expect(active.isEmpty)
+    }
+
+    @Test func activeRemediationKeepsUnclearedWarning() {
+        let enter = WatchEvent(
+            kind: .throttling, severity: .critical, serial: "S1",
+            title: "enter", detail: "", at: t0
+        )
+        let active = ConsoleStore.activeRemediation(
+            from: [enter],
+            now: t0.addingTimeInterval(20)
+        )
+        #expect(active.count == 1)
+        #expect(active.first?.kind == .throttling)
+    }
+
+    @Test func activeRemediationExpiresAfterTTL() {
+        let enter = WatchEvent(
+            kind: .throttling, severity: .critical, serial: "S1",
+            title: "enter", detail: "", at: t0
+        )
+        let active = ConsoleStore.activeRemediation(
+            from: [enter],
+            now: t0.addingTimeInterval(1801),
+            ttl: 1800
+        )
+        #expect(active.isEmpty)
+    }
+
+    @Test func activeRemediationIgnoresInfoSeverity() {
+        let enter = WatchEvent(
+            kind: .chargeChanged, severity: .info, serial: "S1",
+            title: "chg", detail: "", at: t0
+        )
+        let active = ConsoleStore.activeRemediation(
+            from: [enter],
+            now: t0.addingTimeInterval(10)
+        )
+        #expect(active.isEmpty)
+    }
+
+    @Test func activeRemediationReenterAfterClearShowsAgain() {
+        let enter1 = WatchEvent(
+            kind: .throttling, severity: .critical, serial: "S1",
+            title: "e1", detail: "", at: t0
+        )
+        let clear = WatchEvent(
+            kind: .throttling, severity: .info, serial: "S1",
+            title: "c", detail: "", at: t0.addingTimeInterval(10), isClear: true
+        )
+        let enter2 = WatchEvent(
+            kind: .throttling, severity: .critical, serial: "S1",
+            title: "e2", detail: "", at: t0.addingTimeInterval(20)
+        )
+        let active = ConsoleStore.activeRemediation(
+            from: [enter2, clear, enter1],
+            now: t0.addingTimeInterval(30)
+        )
+        #expect(active.count == 1)
+        #expect(active.first?.title == "e2")
     }
 }
 

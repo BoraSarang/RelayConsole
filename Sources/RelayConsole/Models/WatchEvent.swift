@@ -10,6 +10,8 @@ enum WatchKind: String, Sendable, Equatable, CaseIterable {
     case psiPressure
     case loadSpike
     case memoryLow
+    case bsohDrop
+    case signalDrop
 }
 
 /// 심각도 — 시스템 알림 interruptionLevel 매핑
