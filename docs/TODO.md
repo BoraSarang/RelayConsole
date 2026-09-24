@@ -2,7 +2,8 @@
 > 작업 추적 — bd 연동 (이슈 prefix: RelayConsole)
 
 ## 진행 중 (bd ready)
-- [ ] **실기기 육안 — Apple Phase1** — 사이드바 Apple 세그먼트 · libimobiledevice 설치 안내 · USB Trust 연결 시 배터리/스토리지/디바이스/써멀 카드
+- [ ] **Apple 오프라인 UI 육안 (USB 불필요)** — DEBUG 주입 Apple 온/오프/오류/도구오류 · 오프라인 배너 · E-MAC-APL 배너 · 카드 OFF `cards.empty`
+- [ ] **실기기 Trust 육안 (보류)** — iPad USB 데이터 불량(안드로이드 케이블 OK·복구도 미인식). 기기/케이블 확보 후 `brew install libimobiledevice`
 
 ## 완료 (2026-09-24)
 - [x] **Apple 감시 1차 (방향 A Phase 1)** — Trust-only `IdeviceClient` 파서·`AppleDeviceMonitor` 60s 폴링 · `AppleDashboardView`+4카드(`OPColor.apple`) · brew 확인 1회 안내 · `relay.selectedAppleUdid` · E-MAC-APL-0001..4 · i18n **264** · 테스트 **120/120** · debug **0.9.0** · `PLAN_apple_phase1`

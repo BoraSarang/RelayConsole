@@ -16,9 +16,11 @@
 "apple.device.picker" = "Device";
 "apple.empty.noDevice" = "No Apple device connected";
 "apple.empty.noDeviceBody" = "Connect via USB and tap Trust on the device.";
+"apple.error.title" = "Apple device error";
 "apple.event.connected" = "Apple device connected: %@";
 "apple.event.disconnected" = "Apple device disconnected: %@";
 "apple.footer.poll" = "60s poll · Trust USB";
+"apple.offline.banner" = "Device disconnected — showing last snapshot. Check cable, Allow, and Trust.";
 "apple.thermal.critical" = "Critical";
 "apple.thermal.fair" = "Fair";
 "apple.thermal.nominal" = "Nominal";
@@ -245,6 +247,11 @@
 "sidebar.soon" = "Coming soon";
 "ui.debug.clear" = "Clear";
 "ui.debug.inject.anr" = "Inject ANR";
+"ui.debug.inject.appleClear" = "Apple clear inject";
+"ui.debug.inject.appleErr" = "Apple error";
+"ui.debug.inject.appleOff" = "Apple off";
+"ui.debug.inject.appleOn" = "Apple on";
+"ui.debug.inject.appleTools" = "Apple tools err";
 "ui.debug.inject.badgeOff" = "Clear badge";
 "ui.debug.inject.battery20" = "Battery 20%";
 "ui.debug.inject.bsoh" = "Bsoh drop";

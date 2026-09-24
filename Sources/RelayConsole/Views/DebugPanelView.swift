@@ -169,6 +169,21 @@ struct DebugPanelView: View {
                                 detail: "DEBUG · FATAL EXCEPTION"
                             )
                         }
+                        injectButton(L10n.string("ui.debug.inject.appleOn")) {
+                            store.debugInjectAppleOnline()
+                        }
+                        injectButton(L10n.string("ui.debug.inject.appleOff")) {
+                            store.debugInjectAppleOffline()
+                        }
+                        injectButton(L10n.string("ui.debug.inject.appleErr")) {
+                            store.debugInjectAppleError(.appleConnectFailed)
+                        }
+                        injectButton(L10n.string("ui.debug.inject.appleTools")) {
+                            store.debugInjectAppleError(.appleBinaryMissing)
+                        }
+                        injectButton(L10n.string("ui.debug.inject.appleClear")) {
+                            store.debugClearApple()
+                        }
                     }
                     Text(L10n.string("ui.debug.inject.hint"))
                         .font(OPFont.body(10))
