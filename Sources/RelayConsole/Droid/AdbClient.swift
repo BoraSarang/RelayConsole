@@ -364,6 +364,300 @@ enum AdbClient {
         return n
     }
 
+    // MARK: - Crash context extraction
+
+    /// 크래시 컨텍스트 — FATAL EXCEPTION 주변에서 추출한 구조화 정보
+    struct CrashContext: Equatable, Sendable {
+        /// 패키지명 (Process: com.xxx)
+        var packageName: String?
+        /// PID
+        var pid: String?
+        /// 예외 클래스 (java.lang.XxxException)
+        var exceptionClass: String?
+        /// 예외 메시지
+        var exceptionMessage: String?
+        /// 스택 트레이스 (앞 N줄)
+        var stackTrace: [String]
+        /// 원시 크래시 블록 (원문 그대로)
+        var rawBlock: String
+        /// 한 줄 요약
+        var summary: String {
+            var parts: [String] = []
+            if let pkg = packageName { parts.append(pkg) }
+            if let exc = exceptionClass {
+                var s = exc
+                if let msg = exceptionMessage, !msg.isEmpty {
+                    s += ": \(msg)"
+                }
+                parts.append(s)
+            }
+            return parts.isEmpty ? rawBlock : parts.joined(separator: " · ")
+        }
+    }
+
+    /// FATAL EXCEPTION 블록 추출 — `Process:` / 예외 라인 / 스택트레이스 (최대 stackLines줄)
+    static func extractCrashContext(
+        _ text: String,
+        afterTimestamp: String? = nil,
+        stackLines: Int = 8
+    ) -> CrashContext? {
+        let lines = text.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        var ctx = CrashContext(stackTrace: [], rawBlock: "")
+        var inCrash = false
+        var crashLines: [String] = []
+        var found = false
+
+        for line in lines {
+            if let cutoff = afterTimestamp, let ts = logcatLineTimestamp(line), ts <= cutoff {
+                continue
+            }
+            let lower = line.lowercased()
+
+            // 크래시 블록 시작 감지
+            if !inCrash {
+                if lower.contains("fatal exception") || lower.contains("fatal signal") {
+                    inCrash = true
+                    found = true
+                    crashLines.append(line)
+                    // FATAL EXCEPTION 라인에서 예외 메시지 추출 (예: "FATAL EXCEPTION: main")
+                    // 실제 예외는 다음 라인에 있음
+                }
+                continue
+            }
+
+            // 크래시 블록 내부
+            crashLines.append(line)
+
+            // Process: com.xxx, PID: 123
+            if ctx.packageName == nil, let range = line.range(of: "Process:") {
+                let afterProcess = line[range.upperBound...]
+                let processPart = afterProcess.split(separator: ",").first.map(String.init) ?? String(afterProcess)
+                ctx.packageName = processPart.trimmingCharacters(in: .whitespaces)
+                if let pidRange = line.range(of: "PID:") {
+                    ctx.pid = line[pidRange.upperBound...].trimmingCharacters(in: .whitespacesAndNewlines)
+                }
+            }
+
+            // 예외 클래스 + 메시지 (예: "java.lang.RuntimeException: ForegroundService...")
+            if ctx.exceptionClass == nil {
+                let trimmed = line.trimmingCharacters(in: .whitespaces)
+                // 태그 제거 후 내용 추출 (예: "E AndroidRuntime: java.lang...")
+                let content: String
+                if let colonIdx = trimmed.firstIndex(of: ":") {
+                    let prefix = trimmed[trimmed.startIndex..<colonIdx]
+                    // "09-24 19:46:03.123 E AndroidRuntime:" 같은 태그 패턴인지 확인
+                    if prefix.contains("AndroidRuntime") || prefix.contains("ActivityManager") || prefix.contains("DEBUG") {
+                        content = trimmed[trimmed.index(after: colonIdx)...].trimmingCharacters(in: .whitespaces)
+                    } else {
+                        content = trimmed
+                    }
+                } else {
+                    content = trimmed
+                }
+
+                // java.lang.XxxException 또는 android.xxxException 패턴
+                if content.hasPrefix("java.") || content.hasPrefix("android.") ||
+                    content.hasPrefix("kotlin.") || content.contains("Exception") ||
+                    content.contains("Error:") {
+                    let parts = content.components(separatedBy: ": ")
+                    if parts.count >= 2 {
+                        ctx.exceptionClass = parts[0].trimmingCharacters(in: .whitespaces)
+                        ctx.exceptionMessage = parts.dropFirst().joined(separator: ": ")
+                    } else {
+                        ctx.exceptionClass = content
+                    }
+                }
+            }
+
+            // 스택 트레이스 (at xxx.yyy)
+            if line.contains("\tat ") || line.contains("  at ") {
+                if ctx.stackTrace.count < stackLines {
+                    let trace = line.trimmingCharacters(in: .whitespaces)
+                    ctx.stackTrace.append(trace)
+                }
+            }
+
+            // 빈 줄이나 새 태그 = 블록 종료
+            if line.trimmingCharacters(in: .whitespaces).isEmpty ||
+                (inCrash && crashLines.count > 3 && !line.contains("AndroidRuntime") && !line.contains("\tat ") && !line.contains("  at ") && !lower.contains("caused by") && !lower.contains("suppressed")) {
+                // 예외 블록이 끝났을 수 있음 — 최소한 예외 클래스를 찾았으면 종료
+                if ctx.exceptionClass != nil || crashLines.count > 20 {
+                    break
+                }
+            }
+        }
+
+        guard found else { return nil }
+        ctx.rawBlock = crashLines.joined(separator: "\n")
+        return ctx
+    }
+
+    // MARK: - ANR context extraction
+
+    /// ANR 파서 — `ANR in com.x` / `am_anr: [0,pid,com.x,…]` / `Input dispatching timed out`
+    /// CrashContext와 동일 타입 재사용 (stackTrace는 비어 있을 수 있음)
+    static func extractAnrContext(
+        _ text: String,
+        afterTimestamp: String? = nil
+    ) -> CrashContext? {
+        var ctx = CrashContext(stackTrace: [], rawBlock: "")
+        var anrLines: [String] = []
+        var found = false
+
+        for line in text.split(separator: "\n", omittingEmptySubsequences: false).map(String.init) {
+            if let cutoff = afterTimestamp, let ts = logcatLineTimestamp(line), ts <= cutoff {
+                continue
+            }
+            let lower = line.lowercased()
+            let isAnrMarker = lower.contains("anr in")
+                || lower.contains("am_anr")
+                || lower.contains("application not responding")
+                || lower.contains("input dispatching timed out")
+            guard isAnrMarker else {
+                if found && !anrLines.isEmpty && anrLines.count < 30 {
+                    // ANR 블록 뒤 관련 라인 몇 줄만 유지
+                    if lower.contains("activitymanager") || lower.contains("anr") || line.contains("\tat ") {
+                        anrLines.append(line)
+                    }
+                }
+                continue
+            }
+            found = true
+            anrLines.append(line)
+
+            // ANR in com.example.app  → 패키지
+            if ctx.packageName == nil, let range = line.range(of: "ANR in ") {
+                let after = line[range.upperBound...]
+                let pkg = after.split(whereSeparator: { $0 == " " || $0 == "," || $0 == "(" })
+                    .first.map(String.init)
+                if let pkg, pkg.contains(".") {
+                    ctx.packageName = pkg
+                }
+            }
+            // am_anr: [0,1234,com.example.app,552039,Input dispatching timed out]
+            if ctx.packageName == nil, let range = line.range(of: "am_anr:") {
+                let after = line[range.upperBound...]
+                // 괄호 안 필드 split — 3번째가 보통 패키지
+                let inner = after
+                    .replacingOccurrences(of: "[", with: "")
+                    .replacingOccurrences(of: "]", with: "")
+                let parts = inner.split(separator: ",").map {
+                    $0.trimmingCharacters(in: .whitespaces)
+                }
+                if parts.count >= 3, parts[2].contains(".") {
+                    ctx.packageName = parts[2]
+                    if parts.count >= 1 { ctx.pid = parts[1] }
+                }
+                if parts.count >= 5 {
+                    ctx.exceptionClass = "ANR"
+                    ctx.exceptionMessage = parts[4]
+                }
+            }
+            // Input dispatching timed out (… com.example.app …)
+            if ctx.packageName == nil, lower.contains("input dispatching timed out") {
+                for token in line.split(whereSeparator: { $0 == " " || $0 == "," || $0 == "(" }) {
+                    let t = String(token)
+                    if t.contains("."), t.first?.isLetter == true, !t.contains("/") {
+                        ctx.packageName = t
+                        break
+                    }
+                }
+                if ctx.exceptionClass == nil {
+                    ctx.exceptionClass = "ANR"
+                    if ctx.exceptionMessage == nil {
+                        ctx.exceptionMessage = "Input dispatching timed out"
+                    }
+                }
+            }
+        }
+
+        guard found else { return nil }
+        ctx.rawBlock = anrLines.joined(separator: "\n")
+        if ctx.exceptionClass == nil { ctx.exceptionClass = "ANR" }
+        return ctx
+    }
+
+    /// crash buffer (`logcat -b crash`) 블록에서 패키지/예외 추출 — main logcat과 동일 형식
+    static func extractCrashBufferContext(_ text: String) -> CrashContext? {
+        extractCrashContext(text, afterTimestamp: nil, stackLines: 12)
+    }
+
+    /// `dumpsys package <pkg>` → versionName / versionCode
+    static func parsePackageVersion(_ text: String) -> (versionName: String?, versionCode: String?) {
+        var name: String?
+        var code: String?
+        for line in text.split(separator: "\n") {
+            let s = line.trimmingCharacters(in: .whitespaces)
+            if name == nil, s.hasPrefix("versionName=") {
+                name = String(s.dropFirst("versionName=".count))
+            }
+            if code == nil, s.hasPrefix("versionCode=") {
+                var v = String(s.dropFirst("versionCode=".count))
+                if let sp = v.firstIndex(of: " ") { v = String(v[..<sp]) }
+                code = v
+            }
+            if name != nil && code != nil { break }
+        }
+        return (name, code)
+    }
+
+    /// 포그라운드 앱 — `dumpsys activity activities` ResumedActivity / mResumedActivity
+    /// 한 줄(`mResumedActivity: ActivityRecord{…}`)과 다음 줄에 ActivityRecord가 오는 멀티라인 모두 지원
+    static func parseForegroundPackage(_ text: String) -> String? {
+        let lines = text.split(separator: "\n", omittingEmptySubsequences: false)
+        for (idx, line) in lines.enumerated() {
+            let s = String(line)
+            guard s.contains("ResumedActivity") || s.contains("mResumedActivity") || s.contains("topResumedActivity") else {
+                continue
+            }
+            // 같은 줄에서 시도
+            if let pkg = packageFromActivityLine(s) { return pkg }
+            // 다음 줄이 ActivityRecord인 경우
+            if idx + 1 < lines.count {
+                let next = String(lines[idx + 1])
+                if next.contains("ActivityRecord") {
+                    if let pkg = packageFromActivityLine(next) { return pkg }
+                }
+            }
+        }
+        return nil
+    }
+
+    private static func packageFromActivityLine(_ s: String) -> String? {
+        // u0 com.pkg/.MainActivity 또는 ComponentInfo{com.pkg/…}
+        if let range = s.range(of: "u0 ") {
+            let after = s[range.upperBound...]
+            if let slash = after.firstIndex(of: "/") {
+                let pkg = after[after.startIndex..<slash]
+                    .trimmingCharacters(in: .whitespaces)
+                if pkg.contains(".") { return String(pkg) }
+            }
+        }
+        if let range = s.range(of: "ComponentInfo{") {
+            let after = s[range.upperBound...]
+            if let slash = after.firstIndex(of: "/") {
+                let pkg = after[after.startIndex..<slash]
+                if pkg.contains(".") { return String(pkg) }
+            }
+        }
+        return nil
+    }
+
+    /// dropbox 최신 항목 타임라인 — `dumpsys dropbox` 출력에서 crash/ANR 시각 라인
+    static func parseDropboxRecentTags(_ text: String, limit: Int = 20) -> [String] {
+        var out: [String] = []
+        for line in text.split(separator: "\n") {
+            let s = line.trimmingCharacters(in: .whitespaces)
+            // `09-24 19:46:03 com.borasarang.droidrelay@1234.crash (age=…)` 형식
+            if s.contains(".crash") || s.contains(".anr") || s.contains("system_app_crash") ||
+                s.contains("system_app_anr") || s.contains("data_app_crash") || s.contains("data_app_anr") {
+                out.append(s)
+                if out.count >= limit { break }
+            }
+        }
+        return out
+    }
+
     // MARK: - CPU cores (cpufreq sysfs + /proc/stat per-core)
 
     struct CoreFreqSample: Equatable, Sendable {

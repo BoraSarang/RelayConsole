@@ -14,7 +14,7 @@ struct AppleDashboardView: View {
 
     var body: some View {
         ZStack {
-            Color(hex: 0x0F111A).ignoresSafeArea()
+            OPColor.popBG.ignoresSafeArea()
             ScrollView {
                 VStack(alignment: .leading, spacing: OPSpace.lg) {
                     // 주입/기기 우선 — USB·도구 없이도 오프라인 UI 육안 가능
@@ -70,8 +70,8 @@ struct AppleDashboardView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
-        .background(Color(hex: 0x0F111A))
-        .preferredColorScheme(.dark)
+        .background(OPColor.popBG)
+        .preferredColorScheme(ThemeManager.shared.mode.preferred)
         .onAppear {
             Task { await AppleDeviceMonitor.shared.refreshNow() }
         }

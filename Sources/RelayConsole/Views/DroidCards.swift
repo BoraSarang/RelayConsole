@@ -5,9 +5,11 @@ enum DroidCards {
     static func shell(
         _ title: String,
         accent: Color = OPColor.inkDim,
+        backgroundOpacity: Double = 1,
         @ViewBuilder content: () -> some View
     ) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+        let bgAlpha = min(max(backgroundOpacity, 0), 1)
+        return VStack(alignment: .leading, spacing: 8) {
             Text(title)
                 .font(OPFont.body(11))
                 .foregroundStyle(accent)
@@ -18,17 +20,29 @@ enum DroidCards {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(OPSpace.lg)
-        .background(OPColor.card, in: RoundedRectangle(cornerRadius: OPSpace.radiusCard))
+        // 배경·테두리만 투명도 반영 — 텍스트는 선명 유지 (TetherLens 동일)
+        .background(
+            OPColor.card.opacity(bgAlpha),
+            in: RoundedRectangle(cornerRadius: OPSpace.radiusCard)
+        )
         .overlay(
             RoundedRectangle(cornerRadius: OPSpace.radiusCard)
-                .stroke(OPColor.border, lineWidth: 1)
+                .stroke(OPColor.border.opacity(0.5 * bgAlpha), lineWidth: 1)
         )
     }
 
     // MARK: - CPU
 
-    static func cpu(device: DeviceSnapshot?, metrics: DroidMetrics?) -> some View {
-        shell(L10n.string("droid.card.cpu.title"), accent: OPColor.inkDim) {
+    static func cpu(
+        device: DeviceSnapshot?,
+        metrics: DroidMetrics?,
+        backgroundOpacity: Double = 1
+    ) -> some View {
+        shell(
+            L10n.string("droid.card.cpu.title"),
+            accent: OPColor.inkDim,
+            backgroundOpacity: backgroundOpacity
+        ) {
             Text(cpuValue(device))
                 .font(OPFont.number(16))
                 .foregroundStyle(OPColor.ink)
@@ -80,8 +94,15 @@ enum DroidCards {
 
     // MARK: - GPU
 
-    static func gpu(device: DeviceSnapshot?, metrics: DroidMetrics?) -> some View {
-        shell(L10n.string("droid.card.gpu.title")) {
+    static func gpu(
+        device: DeviceSnapshot?,
+        metrics: DroidMetrics?,
+        backgroundOpacity: Double = 1
+    ) -> some View {
+        shell(
+            L10n.string("droid.card.gpu.title"),
+            backgroundOpacity: backgroundOpacity
+        ) {
             Text(gpuValue(device))
                 .font(OPFont.number(16))
                 .foregroundStyle(OPColor.ink)
@@ -117,9 +138,13 @@ enum DroidCards {
     static func memory(
         device: DeviceSnapshot?,
         metrics: DroidMetrics?,
+        backgroundOpacity: Double = 1,
         onMore: (() -> Void)? = nil
     ) -> some View {
-        shell(L10n.string("droid.card.memory.title")) {
+        shell(
+            L10n.string("droid.card.memory.title"),
+            backgroundOpacity: backgroundOpacity
+        ) {
             Text(memoryValue(device))
                 .font(OPFont.number(16))
                 .foregroundStyle(OPColor.ink)
@@ -282,12 +307,19 @@ enum DroidCards {
 
     // MARK: - Network
 
-    static func network(device: DeviceSnapshot?, metrics: DroidMetrics?) -> some View {
+    static func network(
+        device: DeviceSnapshot?,
+        metrics: DroidMetrics?,
+        backgroundOpacity: Double = 1
+    ) -> some View {
         let up = device?.netUpMBps
         let down = device?.netDownMBps
         let upFmt = up.map { AdbClient.formatNetRate($0) }
         let downFmt = down.map { AdbClient.formatNetRate($0) }
-        return shell(L10n.string("droid.card.network.title")) {
+        return shell(
+            L10n.string("droid.card.network.title"),
+            backgroundOpacity: backgroundOpacity
+        ) {
             HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(L10n.string("droid.card.network.up"))

@@ -81,8 +81,8 @@ struct GallerySheet: View {
             statusLine
         }
         .frame(minWidth: 560, minHeight: 420)
-        .background(Color(hex: 0x0F111A))
-        .preferredColorScheme(.dark)
+        .background(OPColor.popBG)
+        .preferredColorScheme(ThemeManager.shared.mode.preferred)
         .onAppear {
             store.reload()
             if mode == .remote, let s = serial { ctl.listRemote(serial: s) }

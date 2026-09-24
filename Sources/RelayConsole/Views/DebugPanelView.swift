@@ -5,21 +5,17 @@ struct DebugPanelView: View {
     @ObservedObject private var store = ConsoleStore.shared
 
     var body: some View {
-        ZStack {
-            Color(hex: 0x0F111A).ignoresSafeArea()
-            VStack(alignment: .leading, spacing: 0) {
-                HStack {
-                    Text(L10n.string("ui.debug.title"))
-                        .font(OPFont.title(14))
-                        .foregroundStyle(OPColor.ink)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                    Spacer()
-                    Button(L10n.string("ui.debug.clear")) { logger.clear() }
-                        .buttonStyle(.plain)
-                }
-                .padding(OPSpace.md)
-                Divider().overlay(OPColor.border)
+        VStack(alignment: .leading, spacing: 0) {
+            // 시스템 타이틀바에 제목 있음 — 콘텐츠 헤더는 액션만 (제목 중복 금지)
+            HStack {
+                Spacer()
+                Button(L10n.string("ui.debug.clear")) { logger.clear() }
+                    .buttonStyle(.plain)
+                    .font(OPFont.body(12))
+                    .foregroundStyle(OPColor.cta)
+            }
+            .padding(OPSpace.md)
+            Divider().overlay(OPColor.border)
 
                 // 합성 감시 이벤트 주입 — DoD 육안 검증 (release 미사용)
                 VStack(alignment: .leading, spacing: OPSpace.sm) {
@@ -246,10 +242,9 @@ struct DebugPanelView: View {
                     }
                     .padding(OPSpace.sm)
                 }
-            }
         }
-        .background(Color(hex: 0x0F111A))
-        .preferredColorScheme(.dark)
+        .background(OPColor.popBG)
+        .preferredColorScheme(ThemeManager.shared.mode.preferred)
     }
 
     private func injectButton(_ title: String, action: @escaping () -> Void) -> some View {

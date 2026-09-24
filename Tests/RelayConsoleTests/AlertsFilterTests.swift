@@ -197,7 +197,7 @@ struct AlertsFilterTests {
         let ev = e(title: "제목, 포함", detail: "line\nbreak", source: .apple, note: "quote\"x")
         let csv = WatchEventAlerts.exportCSV([ev], now: t0)
         let lines = csv.split(separator: "\n")
-        #expect(lines.first == "at,source,serial,kind,severity,state,title,detail,ackAt,note,mutedUntil")
+        #expect(lines.first == "at,source,serial,kind,severity,state,title,detail,package,exception,ackAt,note,mutedUntil")
         #expect(csv.contains("\"제목, 포함\""))
         #expect(csv.contains("\"quote\"\"x\""))
         #expect(csv.contains(",apple,"))

@@ -11,6 +11,14 @@
 ## 보류 (기기 확보 시)
 - [ ] **Apple 실기 Trust 육안** — iPad USB 데이터 불량(안드로이드 동일 케이블 OK·복구도 미인식). 기기 확보 후 `brew install libimobiledevice` → 배터리/스토리지 카드
 - [ ] **Apple Phase 2** — Developer Mode·sysmon 등 — 위 기기 확보 후 착수
+- [ ] **Apple 크래시 리포트 수집 (반드시 해야 할 작업)** — `idevicecrashreport`로 iOS `.ips` crash/ANR를 IncidentBundle에 첨부. 기기 확보 시 1순위. Trust USB + `idevicecrashreport -u <udid> copy` 패턴. Android `logcat -b crash`/dropbox 대응 Apple 쪽 원재료 — **기기 확보 전 구현 불가, 반드시 기억할 것**
+
+## 진행 중
+- [x] **인사이트 리모델링 Phase1 저장 계층** — WatchEvent 구조화(package/exception/fingerprint) · androidConnected/Disconnected · ConnectionSessionStore · DeviceDailyStore(1분 롤업) · retention/pattern 설정화 · ANR/dropbox/포그라운드/AppHub 액션 로그 수집 · InsightLogic/PatternLogic + 테스트
+  - [x] Phase1 저장 계층 + Phase2 InsightLogic/PatternLogic + 테스트 275 통과
+  - [x] Phase3 UI — InsightsView(캘린더·패턴·전일대비·export) · Alerts 오늘/어제 칩 · Dashboard 오늘 요약 · Settings retention/pattern · i18n 610키 3처 정합 · `swift build`/`swift test` 통과
+  - [x] Phase4 반복/해소 리포트 export 마감 — `InsightReportExport`/`InsightReportLogic` · 패턴 CSV 전체 컬럼 · `IssuePattern` Codable · 테스트 +3 · i18n 612 3처 · `swift test`/`build-macos` 통과
+  - [x] 미커밋 작업 흡수 커밋 — 설정/테마/플로팅/창 크롬 + Phase1~4 일괄
 
 ## 완료 (2026-09-24)
 - [x] **A6 Sites 90일 캘린더 + 태그** — `Site.tags`·`SitesCalendarLogic` · 태그 폼·필터 칩(AND) · 리스트/캘린더 · 90일 주 격자 · i18n **536** · SitesCalendarTests +13 · **1.13.0** · `PLAN_sites_calendar` · **PR #38 머지 `6e4b40e`** · bd `RelayConsole-9vi` closed

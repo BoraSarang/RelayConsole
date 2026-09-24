@@ -50,6 +50,64 @@ final class FloatingGraphTests: XCTestCase {
         XCTAssertEqual(back?.y, 20)
     }
 
+    func testTopLeftOfFrame() {
+        let frame = NSRect(x: 100, y: 400, width: 300, height: 150)
+        let tl = FloatingGraphLogic.topLeft(of: frame)
+        XCTAssertEqual(tl.x, 100)
+        XCTAssertEqual(tl.y, 550)
+    }
+
+    func testBottomLeftFromTopLeft() {
+        let bl = FloatingGraphLogic.bottomLeft(fromTopLeft: NSPoint(x: 100, y: 550), height: 150)
+        XCTAssertEqual(bl.x, 100)
+        XCTAssertEqual(bl.y, 400)
+    }
+
+    func testTopLeftSaveRestoresSameTopAfterHeightChange() {
+        // 하단 저장 버그 재현: 높이가 달라도 상단 y는 유지되어야 함
+        let screen = NSRect(x: 0, y: 0, width: 1512, height: 900)
+        let original = NSRect(x: 200, y: 500, width: 300, height: 320)
+        let saved = FloatingGraphLogic.topLeft(of: original)
+
+        let createHeight: CGFloat = 200
+        let createBottom = FloatingGraphLogic.bottomLeft(fromTopLeft: saved, height: createHeight)
+        XCTAssertEqual(createBottom.y + createHeight, original.maxY, "생성 직후 상단이 원래 상단과 일치")
+
+        // fitToContent와 동일: 상단 고정으로 높이 조정
+        var fitBottom = createBottom
+        fitBottom.y += createHeight - original.height
+        XCTAssertEqual(fitBottom.y + original.height, original.maxY, "fit 후에도 상단 유지")
+        XCTAssertEqual(fitBottom.y, original.minY, "원래 높이로 돌아가면 원래 하단도 일치")
+    }
+
+    func testClampTopLeftKeepsWindowOnScreen() {
+        let screen = NSRect(x: 0, y: 0, width: 1000, height: 800)
+        let size = NSSize(width: 300, height: 200)
+        let clamped = FloatingGraphLogic.clampTopLeft(NSPoint(x: -50, y: 900), size: size, in: screen)
+        XCTAssertEqual(clamped.x, 0)
+        XCTAssertEqual(clamped.y, 800)
+        let clamped2 = FloatingGraphLogic.clampTopLeft(NSPoint(x: 999, y: 10), size: size, in: screen)
+        XCTAssertEqual(clamped2.x, 700)
+        XCTAssertEqual(clamped2.y, 200)
+    }
+
+    func testSavableFrameRejectsDegenerate() {
+        XCTAssertTrue(FloatingGraphLogic.isSavableFrame(NSRect(x: 20, y: 682, width: 300, height: 200)))
+        XCTAssertFalse(FloatingGraphLogic.isSavableFrame(NSRect(x: 20, y: 682, width: 300, height: 0)))
+        XCTAssertFalse(FloatingGraphLogic.isSavableFrame(NSRect(x: 20, y: 682, width: 300, height: 40)))
+        XCTAssertFalse(FloatingGraphLogic.isSavableFrame(NSRect(x: 0, y: 0, width: 0, height: 200)))
+    }
+
+    func testDefaultTopLeftIsLeftEdge() {
+        // 저장값 없을 때 오른쪽이 아니라 왼쪽 기준
+        let screen = NSRect(x: 0, y: 0, width: 1512, height: 900)
+        let size = NSSize(width: 300, height: 200)
+        let defaultTopLeft = NSPoint(x: screen.minX + 20, y: screen.maxY - 48)
+        let clamped = FloatingGraphLogic.clampTopLeft(defaultTopLeft, size: size, in: screen)
+        XCTAssertEqual(clamped.x, 20)
+        XCTAssertLessThan(clamped.x, screen.midX)
+    }
+
     func testClampOpacityValid() {
         XCTAssertEqual(FloatingGraphLogic.clampOpacity(1.0), 1.0)
         XCTAssertEqual(FloatingGraphLogic.clampOpacity(0.5), 0.5)

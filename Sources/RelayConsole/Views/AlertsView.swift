@@ -11,6 +11,7 @@ struct AlertsView: View {
     @State private var tab: AlertsState = .active
     @State private var severities: Set<WatchSeverity> = []
     @State private var sources: Set<WatchSource> = []
+    @State private var kinds: Set<WatchKind> = []
     @State private var period: AlertsPeriod = .h24
     @State private var searchText = ""
     @State private var collapsed: Set<String> = []
@@ -20,7 +21,7 @@ struct AlertsView: View {
 
     var body: some View {
         ZStack {
-            Color(hex: 0x0F111A).ignoresSafeArea()
+            OPColor.popBG.ignoresSafeArea()
             VStack(spacing: 0) {
                 filterBar
                 Divider().overlay(OPColor.border)
@@ -29,8 +30,8 @@ struct AlertsView: View {
                 listOrEmpty
             }
         }
-        .background(Color(hex: 0x0F111A))
-        .preferredColorScheme(.dark)
+        .background(OPColor.popBG)
+        .preferredColorScheme(ThemeManager.shared.mode.preferred)
         .navigationTitle(L10n.string("sidebar.alerts"))
         .onAppear {
             if period == .h24 {
@@ -79,6 +80,41 @@ struct AlertsView: View {
                 .menuStyle(.borderlessButton)
                 .fixedSize()
 
+                // kind 필터 — 크래시/ANR/온도 등 카테고리
+                Menu {
+                    Button {
+                        if kinds.isEmpty { kinds = Set(WatchKind.allCases) }
+                        else { kinds.removeAll() }
+                    } label: {
+                        Text(kinds.isEmpty
+                             ? L10n.string("alerts.filter.kind.all")
+                             : L10n.format("alerts.filter.kind.count", kinds.count))
+                    }
+                    Divider()
+                    // 주요 카테고리 먼저 (크래시/ANR 강조)
+                    ForEach(primaryKinds, id: \.self) { kind in
+                        Toggle(isOn: kindBinding(kind)) {
+                            Text(kindLabel(kind))
+                        }
+                    }
+                    if Set(primaryKinds) != Set(WatchKind.allCases) {
+                        Divider()
+                        ForEach(WatchKind.allCases.filter { !primaryKinds.contains($0) }, id: \.self) { kind in
+                            Toggle(isOn: kindBinding(kind)) {
+                                Text(kindLabel(kind))
+                            }
+                        }
+                    }
+                } label: {
+                    filterChip(
+                        L10n.string("alerts.filter.kind"),
+                        value: kinds.isEmpty ? nil : kindFilterValue()
+                    )
+                }
+                .menuStyle(.borderlessButton)
+                .fixedSize()
+
+                // 기간 — 오늘/어제 day 칩 + 1h/24h/7d/all
                 Menu {
                     ForEach(AlertsPeriod.allCases) { p in
                         Button(L10n.string(p.labelKey)) { period = p }
@@ -88,6 +124,12 @@ struct AlertsView: View {
                 }
                 .menuStyle(.borderlessButton)
                 .fixedSize()
+
+                // 오늘/어제 바로가기 칩 (A 표시 위치)
+                HStack(spacing: 4) {
+                    dayChip(.today)
+                    dayChip(.yesterday)
+                }
 
                 Menu {
                     Button {
@@ -202,7 +244,9 @@ struct AlertsView: View {
         var f = AlertsFilter()
         f.severities = severities.isEmpty ? nil : severities
         f.sources = sources.isEmpty ? nil : sources
+        f.kinds = kinds.isEmpty ? nil : kinds
         f.since = period.since(now: .now)
+        f.until = period.until(now: .now)
         let q = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         f.search = q.isEmpty ? nil : q
         return f
@@ -490,6 +534,56 @@ struct AlertsView: View {
 
     // MARK: - helpers
 
+    /// kind 필터 바인딩
+    private func kindBinding(_ kind: WatchKind) -> Binding<Bool> {
+        Binding(
+            get: { kinds.contains(kind) },
+            set: { on in
+                if on { kinds.insert(kind) } else { kinds.remove(kind) }
+            }
+        )
+    }
+
+    /// 주요 kind (메뉴 상단에 노출) — 크래시/ANR 우선
+    private var primaryKinds: [WatchKind] {
+        [.crash, .anr, .siteDown, .jobOverdue, .throttling, .batteryThreshold]
+    }
+
+    /// kind 필터 chip 값 텍스트
+    private func kindFilterValue() -> String {
+        if kinds.count == 1, let only = kinds.first {
+            return kindLabel(only)
+        }
+        return L10n.format("alerts.filter.kind.count", kinds.count)
+    }
+
+    /// kind 한국어/영문 라벨
+    private func kindLabel(_ kind: WatchKind) -> String {
+        switch kind {
+        case .crash: return L10n.string("kind.crash")
+        case .anr: return L10n.string("kind.anr")
+        case .throttling: return L10n.string("kind.throttling")
+        case .chargeChanged: return L10n.string("kind.chargeChanged")
+        case .protectionChanged: return L10n.string("kind.protectionChanged")
+        case .lowPowerChanged: return L10n.string("kind.lowPowerChanged")
+        case .batteryThreshold: return L10n.string("kind.batteryThreshold")
+        case .psiPressure: return L10n.string("kind.psiPressure")
+        case .loadSpike: return L10n.string("kind.loadSpike")
+        case .memoryLow: return L10n.string("kind.memoryLow")
+        case .bsohDrop: return L10n.string("kind.bsohDrop")
+        case .signalDrop: return L10n.string("kind.signalDrop")
+        case .appleConnected: return L10n.string("kind.appleConnected")
+        case .appleDisconnected: return L10n.string("kind.appleDisconnected")
+        case .androidConnected: return L10n.string("kind.androidConnected")
+        case .androidDisconnected: return L10n.string("kind.androidDisconnected")
+        case .siteDown: return L10n.string("kind.siteDown")
+        case .siteUp: return L10n.string("kind.siteUp")
+        case .jobOverdue: return L10n.string("kind.jobOverdue")
+        case .jobRecovered: return L10n.string("kind.jobRecovered")
+        case .sslExpiring: return L10n.string("kind.sslExpiring")
+        }
+    }
+
     private func severityBinding(_ sev: WatchSeverity) -> Binding<Bool> {
         Binding(
             get: { severities.contains(sev) },
@@ -536,6 +630,26 @@ struct AlertsView: View {
         .overlay(RoundedRectangle(cornerRadius: 6).stroke(OPColor.border, lineWidth: 1))
     }
 
+    /// 오늘/어제 day 칩 (A 표시 위치)
+    private func dayChip(_ p: AlertsPeriod) -> some View {
+        let active = period == p
+        return Button {
+            period = active ? .h24 : p
+        } label: {
+            Text(L10n.string(p.labelKey))
+                .font(OPFont.body(11))
+                .foregroundStyle(active ? Color.white : OPColor.inkDim)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 5)
+                .background(active ? OPColor.cta : OPColor.card, in: RoundedRectangle(cornerRadius: 6))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6)
+                        .stroke(active ? OPColor.cta : OPColor.border, lineWidth: 1)
+                )
+        }
+        .buttonStyle(.plain)
+    }
+
     private func tabKey(_ s: AlertsState) -> String {
         switch s {
         case .active: return "alerts.tab.active"
@@ -571,6 +685,19 @@ struct AlertsView: View {
     }
 
     private func shortSerial(_ serial: String) -> String {
+        // 기기 인벤토리에서 displayName 시도
+        if let device = store.device(for: serial), !device.displayName.isEmpty {
+            return device.displayName
+        }
+        // network serial: IP만 (포트 제외)
+        if serial.contains(":") {
+            let ip = serial.split(separator: ":").first.map(String.init) ?? serial
+            return ip
+        }
+        // USB serial: 연결 라벨 또는 shortId
+        if let label = store.device(for: serial)?.connectionLabel, label != "USB" {
+            return label
+        }
         guard serial.count > 4 else { return serial }
         return "…" + serial.suffix(4)
     }
@@ -579,13 +706,15 @@ struct AlertsView: View {
 // MARK: - 기간
 
 enum AlertsPeriod: String, CaseIterable, Identifiable {
-    case h1, h24, d7, all
+    case h1, h24, today, yesterday, d7, all
     var id: String { rawValue }
 
     init?(raw: String) {
         switch raw {
         case "1h": self = .h1
         case "24h": self = .h24
+        case "today": self = .today
+        case "yesterday": self = .yesterday
         case "7d": self = .d7
         case "all": self = .all
         default: return nil
@@ -596,6 +725,8 @@ enum AlertsPeriod: String, CaseIterable, Identifiable {
         switch self {
         case .h1: return "alerts.period.1h"
         case .h24: return "alerts.period.24h"
+        case .today: return "alerts.period.today"
+        case .yesterday: return "alerts.period.yesterday"
         case .d7: return "alerts.period.7d"
         case .all: return "alerts.period.all"
         }
@@ -605,17 +736,32 @@ enum AlertsPeriod: String, CaseIterable, Identifiable {
         switch self {
         case .h1: return "1h"
         case .h24: return "24h"
+        case .today: return "today"
+        case .yesterday: return "yesterday"
         case .d7: return "7d"
         case .all: return "all"
         }
     }
 
     func since(now: Date) -> Date? {
+        let cal = Calendar.current
         switch self {
         case .h1: return now.addingTimeInterval(-3600)
         case .h24: return now.addingTimeInterval(-86400)
+        case .today: return cal.startOfDay(for: now)
+        case .yesterday:
+            return cal.date(byAdding: .day, value: -1, to: cal.startOfDay(for: now))
         case .d7: return now.addingTimeInterval(-604800)
         case .all: return nil
+        }
+    }
+
+    /// day 필터용 상한 (yesterday = 오늘 0시, today/all = nil)
+    func until(now: Date) -> Date? {
+        let cal = Calendar.current
+        switch self {
+        case .yesterday: return cal.startOfDay(for: now)
+        case .today, .h1, .h24, .d7, .all: return nil
         }
     }
 }

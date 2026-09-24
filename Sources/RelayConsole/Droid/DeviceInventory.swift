@@ -1,7 +1,7 @@
 import Foundation
 
 /// ADB 연결 방식 — serial에 `:` 유무로 판별 (IP:PORT = network)
-enum ConnectionKind: String, Sendable, Equatable {
+enum ConnectionKind: String, Sendable, Equatable, Codable {
     case usb
     case network
 }
@@ -112,6 +112,8 @@ struct DeviceSnapshot: Sendable, Equatable {
     var settingsChangedCount: Int?
     /// 세션 중 logcat 키워드 적중 수
     var logcatHitCount: Int?
+    /// 포그라운드 앱 패키지 (15s dumpsys activity)
+    var foregroundPackage: String?
     var lastError: String?
 
     /// Equatable — 배열/옵셔널 필드 자동 합성 충분 (tuple 없음)
@@ -175,6 +177,7 @@ struct DeviceInventory: Equatable {
                 merged.sdkInt = merged.sdkInt ?? prev.sdkInt
                 merged.settingsChangedCount = merged.settingsChangedCount ?? prev.settingsChangedCount
                 merged.logcatHitCount = merged.logcatHitCount ?? prev.logcatHitCount
+                merged.foregroundPackage = merged.foregroundPackage ?? prev.foregroundPackage
                 if merged.model.isEmpty { merged.model = prev.model }
                 merged.connectionKind = merged.connectionKind ?? prev.connectionKind
                 merged.connectionLabel = merged.connectionLabel ?? prev.connectionLabel

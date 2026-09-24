@@ -13,7 +13,7 @@ struct JobsView: View {
 
     var body: some View {
         ZStack {
-            Color(hex: 0x0F111A).ignoresSafeArea()
+            OPColor.popBG.ignoresSafeArea()
             VStack(spacing: 0) {
                 header
                 Divider().overlay(OPColor.border)
@@ -35,8 +35,8 @@ struct JobsView: View {
                 }
             }
         }
-        .background(Color(hex: 0x0F111A))
-        .preferredColorScheme(.dark)
+        .background(OPColor.popBG)
+        .preferredColorScheme(ThemeManager.shared.mode.preferred)
         .navigationTitle(L10n.string("sidebar.jobs"))
         .sheet(isPresented: $showingAdd, onDismiss: resetAddForm) { addSheet }
     }
@@ -242,7 +242,7 @@ struct JobsView: View {
 
     private var addSheet: some View {
         ZStack {
-            Color(hex: 0x0F111A).ignoresSafeArea()
+            OPColor.popBG.ignoresSafeArea()
             VStack(alignment: .leading, spacing: 14) {
                 Text(L10n.string("jobs.add.title"))
                     .font(OPFont.title(15))
@@ -313,7 +313,7 @@ struct JobsView: View {
             .padding(OPSpace.xl)
         }
         .frame(minWidth: 400, minHeight: 420)
-        .preferredColorScheme(.dark)
+        .preferredColorScheme(ThemeManager.shared.mode.preferred)
     }
 
     private func submitAdd() {

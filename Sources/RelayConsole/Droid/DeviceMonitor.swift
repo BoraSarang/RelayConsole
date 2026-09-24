@@ -48,6 +48,8 @@ actor DeviceMonitor {
         var coreCount: Int?
         /// MemAvailable % (15s meminfo) — usedPct = 100 − avail%
         var memAvailablePct: Double?
+        /// 포그라운드 앱 패키지 (15s)
+        var cacheForegroundPackage: String?
     }
 
     private var timer: Task<Void, Never>?
@@ -358,6 +360,16 @@ actor DeviceMonitor {
                 }
             }
 
+            // 포그라운드 앱 (15s) — 문제 순간 컨텍스트
+            if let actText = try? shell(serial, "dumpsys", "activity", "activities") {
+                if let fg = AdbClient.parseForegroundPackage(actText) {
+                    state.cacheForegroundPackage = fg
+                    snap.foregroundPackage = fg
+                }
+            } else {
+                snap.foregroundPackage = state.cacheForegroundPackage
+            }
+
             // Wi-Fi
             if let wifiText = try? shell(serial, "cmd", "wifi", "status") {
                 let w = AdbClient.parseWifiStatus(wifiText)
@@ -559,16 +571,30 @@ actor DeviceMonitor {
             state.logcatHitCount += hits
             await notifyEvent(L10n.format("event.logcatHits", hits))
         }
-        // v0.8 ANR / 크래시 — 적중 시 WatchEngine 1회성 피드
+        // v0.8 ANR / 크래시 — 적중 시 WatchEngine 1회성 피드 (상세 컨텍스트 포함)
         let anrHits = AdbClient.countLogcatHits(
             output,
             keywords: Self.anrKeywords,
             afterTimestamp: prevCursor
         )
         if anrHits > 0 {
-            let detail = L10n.format("event.anr.detail", anrHits)
-            if let ev = await WatchEngine.shared.feedAnr(serial: serial, detail: detail) {
+            // ANR 전용 파서 — ANR in / am_anr 패키지 추출
+            let anrCtx = AdbClient.extractAnrContext(output, afterTimestamp: prevCursor)
+                ?? AdbClient.extractCrashContext(output, afterTimestamp: prevCursor)
+            let detail: String
+            if let ctx = anrCtx, !ctx.summary.isEmpty {
+                detail = ctx.summary
+            } else {
+                detail = L10n.format("event.anr.detail", anrHits)
+            }
+            if let ev = await WatchEngine.shared.feedAnr(
+                serial: serial,
+                detail: detail,
+                packageName: anrCtx?.packageName,
+                exceptionClass: anrCtx?.exceptionClass ?? "ANR"
+            ) {
                 await emitWatch(ev)
+                await enrichFatal(ev, serial: serial)
             }
         }
         let crashHits = AdbClient.countLogcatHits(
@@ -577,15 +603,87 @@ actor DeviceMonitor {
             afterTimestamp: prevCursor
         )
         if crashHits > 0 {
-            let detail = L10n.format("event.crash.detail", crashHits)
-            if let ev = await WatchEngine.shared.feedCrash(serial: serial, detail: detail) {
+            // 상세 컨텍스트 추출 — 패키지명, 예외 클래스, 메시지, 스택트레이스
+            let crashCtx = AdbClient.extractCrashContext(output, afterTimestamp: prevCursor)
+            // crash buffer 보강 — main logcat에 안 나온 경우
+            var enrichedCtx = crashCtx
+            if enrichedCtx?.packageName == nil,
+               let crashBuf = try? shell(serial, "logcat", "-d", "-b", "crash", "-t", "50"),
+               !crashBuf.isEmpty,
+               let bufCtx = AdbClient.extractCrashBufferContext(crashBuf) {
+                enrichedCtx = bufCtx
+            }
+            let detail: String
+            if let ctx = enrichedCtx {
+                var lines: [String] = []
+                if !ctx.summary.isEmpty {
+                    lines.append(ctx.summary)
+                } else if let pkg = ctx.packageName {
+                    lines.append(pkg)
+                } else {
+                    lines.append(L10n.format("event.crash.detail", crashHits))
+                }
+                if let pid = ctx.pid {
+                    lines.append("PID: \(pid)")
+                }
+                if let firstTrace = ctx.stackTrace.first {
+                    lines.append(firstTrace)
+                }
+                detail = lines.joined(separator: "\n")
+            } else {
+                detail = L10n.format("event.crash.detail", crashHits)
+            }
+            if let ev = await WatchEngine.shared.feedCrash(
+                serial: serial,
+                detail: detail,
+                packageName: enrichedCtx?.packageName,
+                exceptionClass: enrichedCtx?.exceptionClass
+            ) {
                 await emitWatch(ev)
+                await enrichFatal(ev, serial: serial)
+                await readDropboxOnce(serial: serial, state: &state, package: enrichedCtx?.packageName)
             }
         }
         if let ts = AdbClient.lastLogcatTimestamp(output) {
             state.logcatCursor = ts
         }
     }
+
+    /// crash/ANR 이벤트 보강 — 앱 버전(dumpsys package)
+    private func enrichFatal(_ event: WatchEvent, serial: String) async {
+        guard let pkg = event.packageName, !pkg.isEmpty else { return }
+        var enriched = event
+        if let pkgText = try? shell(serial, "dumpsys", "package", pkg) {
+            let ver = AdbClient.parsePackageVersion(pkgText)
+            if let name = ver.versionName {
+                enriched = enriched.structured(appVersion: name)
+            }
+        }
+        if enriched.appVersion != nil {
+            await MainActor.run {
+                ConsoleStore.shared.refreshWatchEvent(enriched)
+            }
+        }
+    }
+
+    /// crash 시점 dropbox 1회 스캔 — 5분 쿨다운 (actor 격리)
+    private func readDropboxOnce(serial: String, state: inout DeviceState, package: String?) async {
+        _ = state
+        _ = package
+        if let last = dropboxScannedAt[serial],
+           Date().timeIntervalSince(last) < 300 {
+            return
+        }
+        dropboxScannedAt[serial] = Date()
+        guard let text = try? shell(serial, "dumpsys", "dropbox", "--print", "-n", "20"),
+              !text.isEmpty else { return }
+        let tags = AdbClient.parseDropboxRecentTags(text, limit: 10)
+        guard !tags.isEmpty else { return }
+        await notifyEvent(L10n.format("event.dropbox.hits", tags.count))
+    }
+
+    /// dropbox 쿨다운 (actor 격리 상태)
+    private var dropboxScannedAt: [String: Date] = [:]
 
     private func notifyEvent(_ text: String) async {
         await MainActor.run {
@@ -646,6 +744,15 @@ actor DeviceMonitor {
             let short = conn.kind == .network ? s : AdbClient.shortId(s)
             await notifyEvent(L10n.format("event.deviceConnected", short))
             await log(.info, "[INFO] [ADB] 기기 연결 meta=\(short) kind=\(conn.kind.rawValue)")
+            // Phase1 — Android 연결 WatchEvent (영구화 + 세션)
+            let connectEvent = WatchEvent(
+                kind: .androidConnected,
+                severity: .info,
+                serial: s,
+                title: L10n.string("event.androidConnected"),
+                detail: "\(short) · \(conn.kind.rawValue)"
+            )
+            await emitWatch(connectEvent)
             // 연결 직후 썸네일 1회 (상시 폴링 아님)
             let path = adbPath
             Task { @MainActor in
@@ -665,6 +772,16 @@ actor DeviceMonitor {
             }
             let short = AdbClient.parseConnection(s).kind == .network ? s : AdbClient.shortId(s)
             await notifyEvent(L10n.format("event.deviceDisconnected", short))
+            // Phase1 — Android 해제 WatchEvent (세션 close)
+            let disconnectEvent = WatchEvent(
+                kind: .androidDisconnected,
+                severity: .info,
+                serial: s,
+                title: L10n.string("event.androidDisconnected"),
+                detail: short,
+                isClear: true
+            )
+            await emitWatch(disconnectEvent)
         }
 
         serials = found
