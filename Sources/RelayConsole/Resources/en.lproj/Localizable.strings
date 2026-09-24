@@ -187,6 +187,7 @@
 "menubar.battery.cycle" = "cycle %d";
 "menubar.button.debug" = "Debug";
 "menubar.button.openConsole" = "◧ Open Console";
+"menubar.button.quit" = "Quit Relay";
 "menubar.cpu.8core" = "CPU 8-Core";
 "menubar.device.adb" = "ADB";
 "menubar.device.android" = "Android";
@@ -199,6 +200,10 @@
 "menubar.events.empty" = "No Events Detected";
 "menubar.events.recent" = "Recent Events (%d)";
 "menubar.label" = "RELAY";
+"menubar.quit.body" = "Background monitoring and heartbeats will stop.";
+"menubar.quit.cancel" = "Cancel";
+"menubar.quit.confirm" = "Quit";
+"menubar.quit.title" = "Quit Relay Console";
 "menubar.status.connected" = "Connected";
 "menubar.status.disconnected" = "Disconnected";
 "relay.menubar.label" = "RELAY";

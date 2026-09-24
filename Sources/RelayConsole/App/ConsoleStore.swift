@@ -417,6 +417,25 @@ final class ConsoleStore: ObservableObject {
         HeartbeatServer.shared.stop()
     }
 
+    /// 앱 종료 정리 — applicationWillTerminate에서 호출
+    func shutdown() {
+        stopSitesJobs()
+        ScrcpyController.shared.stop()
+        let group = DispatchGroup()
+        group.enter()
+        Task.detached {
+            await DeviceMonitor.shared.stop()
+            group.leave()
+        }
+        group.enter()
+        Task.detached {
+            await AppleDeviceMonitor.shared.stop()
+            group.leave()
+        }
+        _ = group.wait(timeout: .now() + 0.5)
+        DebugLogger.shared.info("Store", "[INFO] ConsoleStore shutdown 완료")
+    }
+
     /// Apple 스냅샷 반영 — 목록 갱신 + 온라인 자동 선택
     private func ingestApple(_ snap: AppleSnapshot) {
         if let idx = appleDevices.firstIndex(where: { $0.udid == snap.udid }) {

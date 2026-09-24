@@ -3094,6 +3094,22 @@
         }
       }
     },
+    "menubar.button.quit": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quit Relay"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Relay 종료"
+          }
+        }
+      }
+    },
     "menubar.cpu.8core": {
       "localizations": {
         "en": {
@@ -3286,6 +3302,70 @@
           "stringUnit": {
             "state": "translated",
             "value": "RELAY"
+          }
+        }
+      }
+    },
+    "menubar.quit.body": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Background monitoring and heartbeats will stop."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "백그라운드 감시·하트비트가 중단됩니다."
+          }
+        }
+      }
+    },
+    "menubar.quit.cancel": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cancel"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "취소"
+          }
+        }
+      }
+    },
+    "menubar.quit.confirm": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quit"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "종료"
+          }
+        }
+      }
+    },
+    "menubar.quit.title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quit Relay Console"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Relay Console 종료"
           }
         }
       }

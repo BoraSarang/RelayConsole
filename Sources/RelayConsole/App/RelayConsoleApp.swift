@@ -24,7 +24,8 @@ struct RelayConsoleApp: App {
             .frame(width: 360, height: 560)
             .preferredColorScheme(.dark)
             .background(Color(hex: 0x0F111A)) // SOLID — V0-2: no material/glass
-        }         label: {
+        }
+        label: {
             // 아이콘만 — 텍스트 없음. 0대: 흰 안테나 · 1대+: 흰 Android + 초록점 · critical 미해결: 주황 배지
             ZStack(alignment: .topTrailing) {
                 Image(nsImage: statusIcon)
@@ -41,6 +42,14 @@ struct RelayConsoleApp: App {
         }
         .menuBarExtraStyle(.window)
         .windowResizability(.contentSize)
+        .commands {
+            CommandGroup(replacing: .appTermination) {
+                Button(L10n.string("menubar.button.quit")) {
+                    NSApp.terminate(nil)
+                }
+                .keyboardShortcut("q")
+            }
+        }
 
         Window(L10n.string("droid.header.title"), id: "console") {
             ZStack {
