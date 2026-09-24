@@ -15,7 +15,7 @@
 ## 2. 번들ID / 앱 ID
 - macOS bundleIdentifier: `com.borasarang.relayconsole` **확정** (AGENTS 플랫폼 규칙 `com.borasarang.{AppName}`)
 - 앱 표시명: Relay Console / 메뉴바: RELAY
-- **버전**: `1.11.0` (기기 그래프 플로팅창 — 이전 1.3.0 브리핑 S1)
+- **버전**: `1.12.0` (기기 그래프 플로팅창 — 이전 1.3.0 브리핑 S1)
 - UserDefaults·설정 키 접두어: `relay.*` (구 `outpost.*` 계승 금지 — 코드 신규)
 
 ## 3. 성능 예산 Override
