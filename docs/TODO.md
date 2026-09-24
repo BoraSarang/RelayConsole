@@ -2,9 +2,9 @@
 > 작업 추적 — bd 연동 (이슈 prefix: RelayConsole)
 
 ## 진행 중 (bd ready)
-- (없음 — 육안 2건 close 완료)
+- **F1 기기 그래프 플로팅창** — `PLAN_floating_graphs` · Network+CPU 기본 · `RelayConsole-d2e` · 1.4.0 · **구현·검증 완료 · 육안 대기**
 
-## 다음 스프린트 (사용자 선택 대기 · 리서치 §8)
+## 다음 스프린트 (사용자 선택 대기 · 리서치 §8) — F1 육안 이후 재개
 - **P1-2 (권장)** A5 Sites SSL·도메인 만료 + assertion → 선택 후 `PLAN_sites_ssl` 작성·승인
 - **P1-3** A2 Wi-Fi ADB 온보딩 → 선택 후 PLAN
 - P2: S4 Incident Bundle · A3 앱 미니 허브 · A8 로그인 항목

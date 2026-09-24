@@ -32,6 +32,10 @@ struct SettingsView: View {
     @ObservedObject private var theme = ThemeManager.shared
     @AppStorage("relay.menubarMetrics") private var menubarMetrics = true
     @AppStorage("relay.alerts.defaultPeriod") private var alertsPeriod = "24h"
+    @AppStorage("relay.float.showNetwork") private var showFloatNetwork = true
+    @AppStorage("relay.float.showCPU") private var showFloatCPU = true
+    @AppStorage("relay.float.showGPU") private var showFloatGPU = false
+    @AppStorage("relay.float.showMemory") private var showFloatMemory = false
     @State private var selection: SettingsTab? = .general
 
     var body: some View {
@@ -86,6 +90,27 @@ struct SettingsView: View {
             }
             Toggle(L10n.string("settings.menubarMetrics"), isOn: $menubarMetrics)
             Toggle(L10n.string("settings.briefing"), isOn: $store.briefingEnabled)
+            floatSection
+        }
+    }
+
+    // MARK: - 플로팅 그래프 (PLAN_floating_graphs)
+
+    @ViewBuilder
+    private var floatSection: some View {
+        Section(L10n.string("settings.float.section")) {
+            Toggle(L10n.string("settings.float.enabled"), isOn: Binding(
+                get: { UserDefaults.standard.bool(forKey: "relay.float.enabled") },
+                set: { FloatingGraphController.shared.setEnabled($0) }
+            ))
+            Toggle(L10n.string("settings.float.network"), isOn: $showFloatNetwork)
+            Toggle(L10n.string("settings.float.cpu"), isOn: $showFloatCPU)
+            Toggle(L10n.string("settings.float.gpu"), isOn: $showFloatGPU)
+            Toggle(L10n.string("settings.float.memory"), isOn: $showFloatMemory)
+            Text(L10n.string("settings.float.hint"))
+                .font(OPFont.body(10))
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
         }
     }
 
@@ -250,7 +275,7 @@ struct SettingsView: View {
     @ViewBuilder
     private var aboutSection: some View {
         Section(L10n.string("settings.section.about")) {
-            LabeledContent(L10n.string("settings.version"), value: "1.3.0")
+            LabeledContent(L10n.string("settings.version"), value: "1.4.0")
             LabeledContent(L10n.string("settings.bundleId"), value: "com.borasarang.relayconsole")
         }
     }

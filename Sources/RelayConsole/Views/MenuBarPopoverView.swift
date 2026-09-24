@@ -124,7 +124,7 @@ struct MenuBarPopoverView: View {
                         .font(OPFont.number(11))
                         .foregroundStyle(OPColor.inkDim)
                 }
-                Text("1.3.0")
+                Text("1.4.0")
                     .font(OPFont.number(10))
                     .foregroundStyle(OPColor.inkDim)
             }
@@ -593,6 +593,29 @@ struct MenuBarPopoverView: View {
 
     private var cards: some View {
         VStack(spacing: 12) {
+            // 플로팅 그래프 진입 (PLAN_floating_graphs)
+            HStack {
+                Spacer()
+                Button {
+                    FloatingGraphController.shared.toggle()
+                } label: {
+                    Label(
+                        L10n.string("float.toggle"),
+                        systemImage: "chart.xyaxis.line"
+                    )
+                    .font(OPFont.body(11))
+                    .foregroundStyle(OPColor.cta)
+                    .frame(height: 28)
+                    .padding(.horizontal, 10)
+                    .background(OPColor.card, in: RoundedRectangle(cornerRadius: 8))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(OPColor.border, lineWidth: 1)
+                    )
+                }
+                .buttonStyle(.plain)
+                .help(L10n.string("float.toggle.help"))
+            }
             if store.cardCpu {
                 DroidCards.cpu(device: device, metrics: metrics)
             }
