@@ -18,6 +18,8 @@ struct RelayConsoleApp: App {
                 openSettingsWindow()
             }, openProcesses: {
                 openProcesses()
+            }, openLogs: {
+                openLogs()
             })
             .frame(width: 360, height: 560)
             .preferredColorScheme(.dark)
@@ -63,6 +65,18 @@ struct RelayConsoleApp: App {
         }
         .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 640, height: 520)
+
+        Window(L10n.string("droid.logs.titleShort"), id: "logs") {
+            ZStack {
+                Color(hex: 0x0F111A).ignoresSafeArea()
+                LogViewerWindowView(store: store)
+            }
+            .frame(minWidth: 640, minHeight: 420)
+            .preferredColorScheme(.dark)
+            .background(Color(hex: 0x0F111A))
+        }
+        .windowStyle(.hiddenTitleBar)
+        .defaultSize(width: 720, height: 480)
 
         Settings {
             ZStack {
@@ -125,6 +139,12 @@ struct RelayConsoleApp: App {
         WindowFocus.dismissMenuBarPanels()
         openWindow(id: "processes")
         WindowFocus.present(sceneID: "processes")
+    }
+
+    private func openLogs() {
+        WindowFocus.dismissMenuBarPanels()
+        openWindow(id: "logs")
+        WindowFocus.present(sceneID: "logs")
     }
 
     /// 기기 0대 → Off(흰 안테나) · 1대+ → Online(흰 Android + 초록점)

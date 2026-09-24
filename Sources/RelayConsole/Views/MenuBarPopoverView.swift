@@ -6,6 +6,7 @@ struct MenuBarPopoverView: View {
     var openDebug: () -> Void = {}
     var openSettings: () -> Void = {}
     var openProcesses: () -> Void = {}
+    var openLogs: () -> Void = {}
 
     @State private var showDeviceDetail = false
     @State private var showEvents = false
@@ -120,7 +121,7 @@ struct MenuBarPopoverView: View {
                         .font(OPFont.number(11))
                         .foregroundStyle(OPColor.inkDim)
                 }
-                Text("0.6.0")
+                Text("0.7.0")
                     .font(OPFont.number(10))
                     .foregroundStyle(OPColor.inkDim)
             }
@@ -143,6 +144,7 @@ struct MenuBarPopoverView: View {
                         .foregroundStyle(d.isOnline ? OPColor.ok : OPColor.bad)
                         .lineLimit(1)
                     Spacer(minLength: 4)
+                    ScrcpyHeaderButton(serial: d.serial)
                     Button {
                         withAnimation(.easeInOut(duration: 0.15)) {
                             showDeviceDetail.toggle()
@@ -431,6 +433,8 @@ struct MenuBarPopoverView: View {
         case .psiPressure: return L10n.string("remediation.psi")
         case .loadSpike: return L10n.string("remediation.load")
         case .memoryLow: return L10n.string("remediation.memory")
+        case .bsohDrop: return L10n.string("remediation.bsoh")
+        case .signalDrop: return L10n.string("remediation.signal")
         default: return L10n.string("remediation.title")
         }
     }
@@ -475,6 +479,16 @@ struct MenuBarPopoverView: View {
             return [
                 L10n.string("remediation.memory.1"),
                 L10n.string("remediation.memory.2")
+            ]
+        case .bsohDrop:
+            return [
+                L10n.string("remediation.bsoh.1"),
+                L10n.string("remediation.bsoh.2")
+            ]
+        case .signalDrop:
+            return [
+                L10n.string("remediation.signal.1"),
+                L10n.string("remediation.signal.2")
             ]
         default:
             return []
@@ -698,6 +712,7 @@ struct MenuBarPopoverView: View {
         HStack(spacing: OPSpace.sm) {
             if device != nil {
                 OPPrimaryButton(title: L10n.string("menubar.button.openConsole"), action: openConsole)
+                OPSecondaryButton(title: L10n.string("droid.logs.button"), action: openLogs)
             }
             OPSecondaryButton(title: L10n.string("menubar.button.debug"), action: openDebug)
             Spacer()

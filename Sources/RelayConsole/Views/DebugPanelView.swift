@@ -124,6 +124,32 @@ struct DebugPanelView: View {
                                 detail: "DEBUG · 93%"
                             )
                         }
+                        injectButton(L10n.string("ui.debug.inject.bsoh")) {
+                            store.debugInjectSynthetic(
+                                kind: .bsohDrop,
+                                severity: .warning,
+                                title: L10n.string("event.bsoh.drop"),
+                                detail: "DEBUG · 91% → 85%"
+                            )
+                        }
+                        injectButton(L10n.string("ui.debug.inject.rsrp")) {
+                            store.debugInjectSynthetic(
+                                kind: .signalDrop,
+                                severity: .warning,
+                                title: L10n.string("event.signal.drop"),
+                                detail: "DEBUG · -100 → -108 dBm"
+                            )
+                        }
+                        injectButton(L10n.string("ui.debug.inject.recovery")) {
+                            store.debugInjectSynthetic(
+                                kind: .throttling,
+                                severity: .info,
+                                title: L10n.string("event.throttling.clear"),
+                                detail: "DEBUG · recovery",
+                                isClear: true,
+                                resetCooldown: false
+                            )
+                        }
                         injectButton(L10n.string("ui.debug.inject.badgeOff")) {
                             store.debugClearCriticalBadge()
                         }

@@ -6,7 +6,7 @@ import Foundation
 final class WatchEngine {
     static let shared = WatchEngine()
 
-    /// 스로틀링: enter≥3 SEVERE, clear≤1 LIGHT, 60s 쿨다운
+    /// 스로틀링: enter≥3 SEVERE, clear≤2 (SEVERE 이탈), 60s 쿨다운
     private var thermalGates: [String: ThresholdGate] = [:]
     private var chargeGates: [String: TransitionGate] = [:]
     private var protectionGates: [String: TransitionGate] = [:]
@@ -20,20 +20,31 @@ final class WatchEngine {
     private var loadGates: [String: ThresholdGate] = [:]
     private var memGates: [String: ThresholdGate] = [:]
 
+    /// Phase v0.7 — Bsoh 급락 / RSRP 급락
+    private var bsohBaseline: [String: Int] = [:]
+    private var bsohPreDrop: [String: Int] = [:]
+    private var bsohAlertActive: [String: Bool] = [:]
+    private var batteryAlertActive: [String: Bool] = [:]
+    private var rsrpLast: [String: Int] = [:]
+    private var rsrpAlertActive: [String: Bool] = [:]
+    private var rsrpEnterAt: [String: Date] = [:]
+    private let rsrpCooldown: TimeInterval = 60
+
     private init() {}
 
     func thermalGate(for serial: String) -> ThresholdGate {
         if let g = thermalGates[serial] { return g }
-        let g = ThresholdGate(enter: 3, clear: 1, cooldown: 60)
+        // clear ≤2 (SEVERE 이탈) — Status 2 구간에서 후속조치 잔류 방지, 60s 쿨다운 유지
+        let g = ThresholdGate(enter: 3, clear: 2, cooldown: 60)
         thermalGates[serial] = g
         return g
     }
 
     // MARK: - Feed (DeviceMonitor 호출)
 
-    /// thermalStatus 0~6
+    /// thermalStatus 0~6 — enter ≥3, clear ≤2 (SEVERE 이탈), 60s
     func feedThermal(serial: String, status: Int, now: Date = .now) -> WatchEvent? {
-        var gate = thermalGates[serial] ?? ThresholdGate(enter: 3, clear: 1, cooldown: 60)
+        var gate = thermalGates[serial] ?? ThresholdGate(enter: 3, clear: 2, cooldown: 60)
         let action = gate.evaluate(value: Double(status), now: now)
         thermalGates[serial] = gate
         guard action != .none else { return nil }
@@ -117,7 +128,7 @@ final class WatchEngine {
             : L10n.string("event.lowPower.off")
         return WatchEvent(
             kind: .lowPowerChanged,
-            severity: enabled ? .info : .info,
+            severity: enabled ? .warning : .info,
             serial: serial,
             title: title,
             detail: short,
@@ -126,7 +137,7 @@ final class WatchEngine {
         )
     }
 
-    /// 배터리 하강 임계 (20/10/5%) — 충전 중 재충전 시 재무장
+    /// 배터리 하강 임계 (20/10/5%) — 충전 중 재충전 시 재무장 + 미해결 warning clear
     func feedBatteryLevel(serial: String, level: Int, charging: Bool, now: Date = .now) -> WatchEvent? {
         var armed = batteryArmed[serial] ?? Set(batteryThresholds)
         if charging {
@@ -135,6 +146,19 @@ final class WatchEngine {
                 armed.insert(t)
             }
             batteryArmed[serial] = armed
+            if batteryAlertActive[serial] == true {
+                batteryAlertActive[serial] = false
+                let short = AdbClient.shortId(serial)
+                return WatchEvent(
+                    kind: .batteryThreshold,
+                    severity: .info,
+                    serial: serial,
+                    title: L10n.string("event.battery.clear"),
+                    detail: "\(short) · \(level)% charging",
+                    at: now,
+                    isClear: true
+                )
+            }
             return nil
         }
         guard armed.contains(where: { level <= $0 }) else {
@@ -149,6 +173,9 @@ final class WatchEngine {
 
         let short = AdbClient.shortId(serial)
         let sev: WatchSeverity = threshold <= 10 ? .warning : .info
+        if sev >= .warning {
+            batteryAlertActive[serial] = true
+        }
         return WatchEvent(
             kind: .batteryThreshold,
             severity: sev,
@@ -248,16 +275,170 @@ final class WatchEngine {
         )
     }
 
-    /// 기기 분리 시 상태 정리
-    func forget(serial: String) {
+    /// Bsoh 건강 급락 — 하락 Δ≥5pt 1회성 · pre-drop 이상 회복 시 clear
+    func feedBsoh(serial: String, bsoh: Int, now: Date = .now) -> WatchEvent? {
+        if bsohAlertActive[serial] == true, let pre = bsohPreDrop[serial], bsoh >= pre {
+            bsohAlertActive[serial] = false
+            bsohPreDrop[serial] = nil
+            bsohBaseline[serial] = bsoh
+            let short = AdbClient.shortId(serial)
+            return WatchEvent(
+                kind: .bsohDrop,
+                severity: .info,
+                serial: serial,
+                title: L10n.string("event.bsoh.clear"),
+                detail: String(format: "%@ · %d%%", short, bsoh),
+                at: now,
+                isClear: true
+            )
+        }
+        if let base = bsohBaseline[serial] {
+            guard bsoh <= base - 5 else { return nil }
+            bsohPreDrop[serial] = base
+            bsohAlertActive[serial] = true
+            bsohBaseline[serial] = bsoh
+            let short = AdbClient.shortId(serial)
+            return WatchEvent(
+                kind: .bsohDrop,
+                severity: .warning,
+                serial: serial,
+                title: L10n.string("event.bsoh.drop"),
+                detail: String(format: "%@ · %d%% → %d%%", short, base, bsoh),
+                at: now
+            )
+        }
+        bsohBaseline[serial] = bsoh
+        return nil
+    }
+
+    /// RSRP 급락 — 악화 Δ≤−6 enter · 회복 Δ≥+6 clear · 60s enter 쿨다운
+    func feedRsrp(serial: String, rsrp: Int, now: Date = .now) -> WatchEvent? {
+        let short = AdbClient.shortId(serial)
+        if let last = rsrpLast[serial] {
+            let delta = rsrp - last
+            let active = rsrpAlertActive[serial] ?? false
+            if !active, delta <= -6 {
+                if let at = rsrpEnterAt[serial], now.timeIntervalSince(at) < rsrpCooldown {
+                    rsrpLast[serial] = rsrp
+                    return nil
+                }
+                rsrpAlertActive[serial] = true
+                rsrpEnterAt[serial] = now
+                rsrpLast[serial] = rsrp
+                return WatchEvent(
+                    kind: .signalDrop,
+                    severity: .warning,
+                    serial: serial,
+                    title: L10n.string("event.signal.drop"),
+                    detail: String(format: "%@ · %d → %d dBm", short, last, rsrp),
+                    at: now
+                )
+            }
+            if active, delta >= 6 {
+                rsrpAlertActive[serial] = false
+                rsrpLast[serial] = rsrp
+                return WatchEvent(
+                    kind: .signalDrop,
+                    severity: .info,
+                    serial: serial,
+                    title: L10n.string("event.signal.clear"),
+                    detail: String(format: "%@ · %d dBm", short, rsrp),
+                    at: now,
+                    isClear: true
+                )
+            }
+        }
+        rsrpLast[serial] = rsrp
+        return nil
+    }
+
+    /// 기기 분리 시 상태 정리 + 미해결 활성 gate의 synthetic clear 반환
+    @discardableResult
+    func forget(serial: String) -> [WatchEvent] {
+        let short = AdbClient.shortId(serial)
+        let now = Date()
+        var clears: [WatchEvent] = []
+
+        if let g = thermalGates[serial], g.active {
+            clears.append(.init(
+                kind: .throttling, severity: .info, serial: serial,
+                title: L10n.string("event.throttling.clear"),
+                detail: "\(short) · disconnect", at: now, isClear: true
+            ))
+        }
+        if let g = protectionGates[serial], g.problemActive {
+            clears.append(.init(
+                kind: .protectionChanged, severity: .info, serial: serial,
+                title: L10n.string("event.protection.off"),
+                detail: "\(short) · disconnect", at: now, isClear: true
+            ))
+        }
+        if let g = lowPowerGates[serial], g.problemActive {
+            clears.append(.init(
+                kind: .lowPowerChanged, severity: .info, serial: serial,
+                title: L10n.string("event.lowPower.off"),
+                detail: "\(short) · disconnect", at: now, isClear: true
+            ))
+        }
+        if let g = psiGates[serial], g.active {
+            clears.append(.init(
+                kind: .psiPressure, severity: .info, serial: serial,
+                title: L10n.string("event.psi.clear"),
+                detail: "\(short) · disconnect", at: now, isClear: true
+            ))
+        }
+        if let g = loadGates[serial], g.active {
+            clears.append(.init(
+                kind: .loadSpike, severity: .info, serial: serial,
+                title: L10n.string("event.load.clear"),
+                detail: "\(short) · disconnect", at: now, isClear: true
+            ))
+        }
+        if let g = memGates[serial], g.active {
+            clears.append(.init(
+                kind: .memoryLow, severity: .info, serial: serial,
+                title: L10n.string("event.memory.clear"),
+                detail: "\(short) · disconnect", at: now, isClear: true
+            ))
+        }
+        if rsrpAlertActive[serial] == true {
+            clears.append(.init(
+                kind: .signalDrop, severity: .info, serial: serial,
+                title: L10n.string("event.signal.clear"),
+                detail: "\(short) · disconnect", at: now, isClear: true
+            ))
+        }
+        if batteryAlertActive[serial] == true {
+            clears.append(.init(
+                kind: .batteryThreshold, severity: .info, serial: serial,
+                title: L10n.string("event.battery.clear"),
+                detail: "\(short) · disconnect", at: now, isClear: true
+            ))
+        }
+        if bsohAlertActive[serial] == true {
+            clears.append(.init(
+                kind: .bsohDrop, severity: .info, serial: serial,
+                title: L10n.string("event.bsoh.clear"),
+                detail: "\(short) · disconnect", at: now, isClear: true
+            ))
+        }
+
         thermalGates.removeValue(forKey: serial)
         chargeGates.removeValue(forKey: serial)
         protectionGates.removeValue(forKey: serial)
         lowPowerGates.removeValue(forKey: serial)
         batteryArmed.removeValue(forKey: serial)
+        batteryAlertActive[serial] = nil
         psiGates.removeValue(forKey: serial)
         loadGates.removeValue(forKey: serial)
         memGates.removeValue(forKey: serial)
+        bsohBaseline.removeValue(forKey: serial)
+        bsohPreDrop[serial] = nil
+        bsohAlertActive[serial] = nil
+        rsrpLast.removeValue(forKey: serial)
+        rsrpAlertActive[serial] = nil
+        rsrpEnterAt.removeValue(forKey: serial)
+        return clears
     }
 
     func resetAll() {
@@ -266,8 +447,15 @@ final class WatchEngine {
         protectionGates.removeAll()
         lowPowerGates.removeAll()
         batteryArmed.removeAll()
+        batteryAlertActive.removeAll()
         psiGates.removeAll()
         loadGates.removeAll()
         memGates.removeAll()
+        bsohBaseline.removeAll()
+        bsohPreDrop.removeAll()
+        bsohAlertActive.removeAll()
+        rsrpLast.removeAll()
+        rsrpAlertActive.removeAll()
+        rsrpEnterAt.removeAll()
     }
 }
