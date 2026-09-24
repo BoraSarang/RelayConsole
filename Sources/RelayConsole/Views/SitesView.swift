@@ -10,8 +10,11 @@ struct SitesView: View {
     @State private var interval = 60
     @State private var failThreshold = 2
     @State private var assertBody = ""
+    @State private var tagsRaw = ""
     @State private var formError: String?
     @State private var rangeDays = 7
+    @State private var selectedTags: Set<String> = []
+    @State private var showCalendar = false
 
     private enum SiteSheetMode: Identifiable {
         case add
@@ -29,6 +32,14 @@ struct SitesView: View {
         store.sites.filter { $0.enabled && $0.effectiveUp() == false }
     }
 
+    private var filteredSites: [Site] {
+        SitesCalendarLogic.filter(store.sites, selectedTags: selectedTags)
+    }
+
+    private var allTags: [String] {
+        SitesCalendarLogic.allTags(store.sites)
+    }
+
     var body: some View {
         ZStack {
             Color(hex: 0x0F111A).ignoresSafeArea()
@@ -38,19 +49,26 @@ struct SitesView: View {
                 if store.sites.isEmpty {
                     emptyState
                 } else {
+                    if !allTags.isEmpty {
+                        tagFilterRow
+                    }
                     legend
                     if !downSites.isEmpty {
                         activeIncidents
                     }
-                    ScrollView {
-                        LazyVStack(spacing: OPSpace.sm) {
-                            ForEach(store.sites) { site in
-                                siteRow(site)
+                    if showCalendar {
+                        calendarSection
+                    } else {
+                        ScrollView {
+                            LazyVStack(spacing: OPSpace.sm) {
+                                ForEach(filteredSites) { site in
+                                    siteRow(site)
+                                }
                             }
+                            .padding(.horizontal, OPSpace.md)
+                            .padding(.top, OPSpace.xs)
+                            .padding(.bottom, OPSpace.md)
                         }
-                        .padding(.horizontal, OPSpace.md)
-                        .padding(.top, OPSpace.xs)
-                        .padding(.bottom, OPSpace.md)
                     }
                 }
             }
@@ -65,17 +83,26 @@ struct SitesView: View {
 
     private var header: some View {
         HStack(spacing: 8) {
-            Text(L10n.format("sites.count", store.sites.count))
+            Text(L10n.format("sites.count", filteredSites.count))
                 .font(OPFont.body(12))
                 .foregroundStyle(OPColor.inkDim)
             Spacer()
-            Picker("", selection: $rangeDays) {
-                Text(L10n.string("sites.range.7d")).tag(7)
-                Text(L10n.string("sites.range.30d")).tag(30)
+            if !showCalendar {
+                Picker("", selection: $rangeDays) {
+                    Text(L10n.string("sites.range.7d")).tag(7)
+                    Text(L10n.string("sites.range.30d")).tag(30)
+                }
+                .pickerStyle(.segmented)
+                .frame(width: 120)
+                .labelsHidden()
             }
-            .pickerStyle(.segmented)
-            .frame(width: 120)
-            .labelsHidden()
+            Button(L10n.string(showCalendar ? "sites.cal.list" : "sites.cal.calendar")) {
+                showCalendar.toggle()
+            }
+            .buttonStyle(.plain)
+            .font(OPFont.body(12))
+            .foregroundStyle(OPColor.sites)
+            .help(L10n.string("sites.cal.help"))
             Button(L10n.string("sites.add")) {
                 openAdd()
             }
@@ -84,6 +111,112 @@ struct SitesView: View {
             .foregroundStyle(OPColor.sites)
         }
         .padding(OPSpace.md)
+    }
+
+    /// 태그 필터 칩 — 다중 선택 AND · 전체 토글
+    private var tagFilterRow: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                tagChip(
+                    title: L10n.string("sites.tag.all"),
+                    active: selectedTags.isEmpty
+                ) {
+                    selectedTags.removeAll()
+                }
+                ForEach(allTags, id: \.self) { tag in
+                    tagChip(title: tag, active: selectedTags.contains(tag)) {
+                        if selectedTags.contains(tag) {
+                            selectedTags.remove(tag)
+                        } else {
+                            selectedTags.insert(tag)
+                        }
+                    }
+                }
+            }
+            .padding(.horizontal, OPSpace.md)
+            .padding(.vertical, OPSpace.xs)
+        }
+    }
+
+    private func tagChip(title: String, active: Bool, toggle: @escaping () -> Void) -> some View {
+        Button(action: toggle) {
+            Text(title)
+                .font(OPFont.body(10))
+                .foregroundStyle(active ? OPColor.ok : OPColor.inkDim)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(
+                    active ? OPColor.ok.opacity(0.15) : OPColor.card,
+                    in: Capsule()
+                )
+                .overlay(Capsule().stroke(active ? OPColor.ok : OPColor.border, lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+        .fixedSize(horizontal: true, vertical: false)
+    }
+
+    /// 90일 캘린더 — 주 7열 · 합산 상태 · 오늘 강조
+    private var calendarSection: some View {
+        let cal = Calendar.current
+        let days = SitesCalendarLogic.calendarDays(now: .now, calendar: cal)
+        let pad = SitesCalendarLogic.leadingPad(now: .now, calendar: cal)
+        let sites = filteredSites
+        return ScrollView {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 4) {
+                    ForEach(Array(SitesCalendarLogic.weekdayHeaders(calendar: cal).enumerated()), id: \.offset) { _, d in
+                        Text(d)
+                            .font(OPFont.number(9))
+                            .foregroundStyle(OPColor.inkDim)
+                            .frame(maxWidth: .infinity)
+                    }
+                }
+                let totalCells = pad + days.count
+                let weeks = stride(from: 0, to: totalCells, by: 7).map { start -> [Date?] in
+                    var row: [Date?] = []
+                    for i in 0..<7 {
+                        let idx = start + i
+                        if idx < pad {
+                            row.append(nil)
+                        } else {
+                            let dayIdx = idx - pad
+                            row.append(dayIdx < days.count ? days[dayIdx] : nil)
+                        }
+                    }
+                    return row
+                }
+                LazyVStack(spacing: 3) {
+                    ForEach(Array(weeks.enumerated()), id: \.offset) { _, week in
+                        HStack(spacing: 3) {
+                            ForEach(Array(week.enumerated()), id: \.offset) { _, day in
+                                if let day {
+                                    calendarCell(day: day, sites: sites, calendar: cal)
+                                } else {
+                                    Color.clear.frame(height: 28)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            .padding(OPSpace.md)
+        }
+    }
+
+    private func calendarCell(day: Date, sites: [Site], calendar: Calendar) -> some View {
+        let statuses = sites.map { SitesCalendarLogic.combinedStatus(site: $0, day: day, calendar: calendar) }
+        let agg = SitesCalendarLogic.aggregate(statuses)
+        let isToday = calendar.isDateInToday(day)
+        return RoundedRectangle(cornerRadius: 3)
+            .fill(color(for: agg))
+            .frame(height: 28)
+            .overlay {
+                if isToday {
+                    RoundedRectangle(cornerRadius: 3)
+                        .stroke(OPColor.ink, lineWidth: 1)
+                }
+            }
+            .help(day.formatted(date: .abbreviated, time: .omitted))
     }
 
     /// Google식 범례 — 카드 좌우와 동일 수평 패딩 · 도트/라벨 수직 정렬
@@ -280,6 +413,19 @@ struct SitesView: View {
                 }
             }
 
+            if !site.tags.isEmpty {
+                HStack(spacing: 4) {
+                    ForEach(site.tags, id: \.self) { tag in
+                        Text(tag)
+                            .font(OPFont.number(9))
+                            .foregroundStyle(OPColor.sites)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 2)
+                            .background(OPColor.sites.opacity(0.12), in: Capsule())
+                    }
+                }
+            }
+
             dayStatusBar(site)
         }
         .padding(OPSpace.sm)
@@ -336,6 +482,7 @@ struct SitesView: View {
         probe = .http
         interval = 60
         failThreshold = 2
+        tagsRaw = ""
         formError = nil
         sheetMode = .add
     }
@@ -347,6 +494,7 @@ struct SitesView: View {
         interval = site.intervalSec
         failThreshold = site.failThreshold
         assertBody = site.assertBody ?? ""
+        tagsRaw = SitesCalendarLogic.formatTags(site.tags)
         formError = nil
         sheetMode = .edit(site)
     }
@@ -445,6 +593,22 @@ struct SitesView: View {
                     }
                 }
 
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(L10n.string("sites.field.tags"))
+                        .font(OPFont.body(11))
+                        .foregroundStyle(OPColor.inkDim)
+                    TextField("", text: $tagsRaw, prompt: Text(L10n.string("sites.field.tags.placeholder")))
+                        .textFieldStyle(.plain)
+                        .font(OPFont.body(13))
+                        .foregroundStyle(OPColor.ink)
+                        .padding(8)
+                        .background(OPColor.popBG, in: RoundedRectangle(cornerRadius: 8))
+                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(OPColor.border, lineWidth: 1))
+                    Text(L10n.string("sites.field.tags.help"))
+                        .font(OPFont.body(9))
+                        .foregroundStyle(OPColor.inkDim.opacity(0.7))
+                }
+
                 if let formError {
                     Text(formError)
                         .font(OPFont.body(11))
@@ -482,6 +646,7 @@ struct SitesView: View {
         }
         formError = nil
         let assertion = probe == .http ? assertBody.trimmingCharacters(in: .whitespaces) : ""
+        let tags = SitesCalendarLogic.parseTags(tagsRaw)
         switch mode {
         case .add:
             store.addSite(
@@ -490,7 +655,8 @@ struct SitesView: View {
                 probe: probe,
                 intervalSec: interval,
                 failThreshold: failThreshold,
-                assertBody: assertion
+                assertBody: assertion,
+                tags: tags
             )
         case .edit(let site):
             store.updateSite(
@@ -500,12 +666,14 @@ struct SitesView: View {
                 probe: probe,
                 intervalSec: interval,
                 failThreshold: failThreshold,
-                assertBody: assertion
+                assertBody: assertion,
+                tags: tags
             )
         }
         sheetMode = nil
         name = ""
         target = ""
         assertBody = ""
+        tagsRaw = ""
     }
 }

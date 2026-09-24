@@ -438,6 +438,9 @@
 "sidebar.soon" = "곧 제공됩니다";
 "sites.add" = "사이트 추가";
 "sites.add.title" = "사이트 추가";
+"sites.cal.calendar" = "캘린더";
+"sites.cal.help" = "90일 캘린더 전환";
+"sites.cal.list" = "목록";
 "sites.check.now" = "지금 체크";
 "sites.count" = "사이트 %d개";
 "sites.edit" = "수정";
@@ -455,6 +458,9 @@
 "sites.field.interval" = "주기";
 "sites.field.name" = "이름";
 "sites.field.probe" = "방식";
+"sites.field.tags" = "태그";
+"sites.field.tags.help" = "쉼표로 구분 · 필터 칩에 표시";
+"sites.field.tags.placeholder" = "api, prod";
 "sites.field.target" = "대상 (URL·host:port·host)";
 "sites.field.threshold" = "연속 실패";
 "sites.field.threshold.help" = "N회 연속 실패 시에만 장애 알림";
@@ -472,6 +478,7 @@
 "sites.state.down.for" = "장애 %@";
 "sites.state.up" = "정상";
 "sites.state.up.for" = "정상 %@";
+"sites.tag.all" = "전체";
 "ui.debug.clear" = "지우기";
 "ui.debug.inject.alertClear" = "Alert 해소 주입";
 "ui.debug.inject.alertCritical" = "Alert critical 주입";
