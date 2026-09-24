@@ -1,6 +1,6 @@
 # PLAN_briefing_relayconsole.md — 아침 브리핑 한 줄 (S1)
 
-> 생성일: 2026-09-24 | 상태: **구현 완료 — PR #22 머지 `c57d546` · 육안 대기**
+> 생성일: 2026-09-24 | 상태: **완료** (육안 ✓ · PR #22 머지 `c57d546` · `psh` closed)
 > 모체: `RESEARCH_competitive_v1.md` §5 TIER S · §8 P1-1
 > 앱: **Relay Console** | 목표 버전: **1.3.0** | 최소 OS: **macOS 26.0**
 > bd: `RelayConsole-psh`
@@ -109,7 +109,7 @@ i18n 키 후보:
 - [x] i18n 3처 동치 · `%s` 없음 — **411**
 - [x] 금지 grep 0 · `print(` 는 DebugLogger만
 - [x] `swift test` 통과 (XCTest 42 + swift-testing 156) · `./scripts/build-macos.sh debug` **1.3.0**
-- [ ] 사용자 육안 (팝오버 헤더 한 줄 + 설정 토글)
+- [x] 사용자 육안 (팝오버 헤더 한 줄 + 설정 토글) — **2026-09-24 확인 · `psh` closed**
 
 ---
 
