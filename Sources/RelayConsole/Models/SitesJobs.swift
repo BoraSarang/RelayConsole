@@ -372,6 +372,35 @@ enum SitesJobsLogic {
         return error?.localizedDescription ?? "unknown"
     }
 
+    /// 내부 체크 토큰 → 사용자 표시 문구 (AGENTS.local §4 [표시②] — 원시 토큰 노출 금지)
+    /// nil = 성공(표시 문구 없음) · 저장값은 원시 토큰 유지(언어 전환 대응), 표시 시점에만 번역
+    static func statusText(detail: String?) -> String? {
+        guard let detail, !detail.isEmpty else { return nil }
+        if detail.hasPrefix("HTTP "), let code = Int(detail.dropFirst(5).trimmingCharacters(in: .whitespaces)) {
+            return L10n.format("sites.fail.http", code)
+        }
+        switch detail {
+        case "bad-url": return L10n.string("sites.fail.badUrl")
+        case "bad-response": return L10n.string("sites.fail.badResponse")
+        case "assert-fail": return L10n.string("sites.fail.assertFail")
+        case "bad-host": return L10n.string("sites.fail.badHost")
+        case "bad-port": return L10n.string("sites.fail.badPort")
+        case "failed": return L10n.string("sites.fail.connect")
+        case "waiting": return L10n.string("sites.fail.waiting")
+        case "timeout": return L10n.string("sites.fail.timeout")
+        case "ping-fail": return L10n.string("sites.fail.pingFail")
+        case "ping-missing": return L10n.string("sites.fail.pingMissing")
+        case "dns": return L10n.string("sites.fail.dns")
+        case "connect": return L10n.string("sites.fail.connect")
+        case "offline": return L10n.string("sites.fail.offline")
+        case "unknown": return L10n.string("sites.fail.unknown")
+        default:
+            // 공백 포함 = OS/네트워크가 준 실제 문구 → 그대로 노출
+            if detail.contains(" ") { return detail }
+            return L10n.format("sites.fail.code", detail)
+        }
+    }
+
     /// 토큰 경로 매칭: /hb/{token}
     static func token(fromPath path: String) -> String? {
         let parts = path.split(separator: "/").map(String.init)

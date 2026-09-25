@@ -17,11 +17,11 @@ enum AdbClient {
         parseSettingValue(text)
     }
 
-    /// 표시용 기기 ID — deviceName 우선, 없으면 model, 그 외 shortId
+    /// 표시용 기기 이름 — deviceName 우선, 없으면 model, 그 외 serial 원문 (식별 가능해야 함)
     static func displayDeviceName(deviceName: String?, model: String?, serial: String) -> String {
         if let n = deviceName, !n.isEmpty { return n }
         if let m = model, !m.isEmpty { return m }
-        return shortId(serial)
+        return serial
     }
 
     // MARK: - Battery
@@ -477,19 +477,29 @@ enum AdbClient {
         keywords: [String] = DeviceMonitor.logcatKeywords,
         afterTimestamp: String? = nil
     ) -> Int {
-        guard !keywords.isEmpty else { return 0 }
-        var n = 0
+        logcatHitBreakdown(text, keywords: keywords, afterTimestamp: afterTimestamp)
+            .reduce(0) { $0 + $1.count }
+    }
+
+    /// 키워드별 적중 분해 — 탐지 detail에 원인(무슨 키워드가 몇 건) 노출용 (AGENTS.local §4 [표시②])
+    /// 한 줄은 **첫 매칭 키워드에만** 귀속 → 합계가 `countLogcatHits`와 일치
+    static func logcatHitBreakdown(
+        _ text: String,
+        keywords: [String] = DeviceMonitor.logcatKeywords,
+        afterTimestamp: String? = nil
+    ) -> [(keyword: String, count: Int)] {
+        guard !keywords.isEmpty else { return [] }
+        var hits: [String: Int] = [:]
         for line in text.split(separator: "\n", omittingEmptySubsequences: true) {
             let s = String(line)
             if let cutoff = afterTimestamp, let ts = logcatLineTimestamp(s), ts <= cutoff {
                 continue
             }
             let lower = s.lowercased()
-            if keywords.contains(where: { lower.contains($0.lowercased()) }) {
-                n += 1
-            }
+            guard let hit = keywords.first(where: { lower.contains($0.lowercased()) }) else { continue }
+            hits[hit, default: 0] += 1
         }
-        return n
+        return hits.sorted { $0.key < $1.key }.map { (keyword: $0.key, count: $0.value) }
     }
 
     // MARK: - Crash context extraction
@@ -1387,6 +1397,7 @@ enum AdbClient {
         return (read: read, write: write)
     }
 
+    /// 시리얼 마스킹 — **로그(DebugLogger·로그 파일) 전용**. 화면·알림·내보내기는 `identLabel` 사용 (AGENTS.local §4)
     static func shortId(_ serial: String) -> String {
         guard serial.count > 4 else { return serial }
         return "…" + serial.suffix(4)

@@ -350,7 +350,7 @@ struct MenuBarPopoverView: View {
     }
 
     private func adbValue(_ d: DeviceSnapshot) -> String {
-        d.connectionKind == .network ? (d.connectionLabel ?? d.serial) : AdbClient.shortId(d.serial)
+        d.identLabel
     }
 
     // MARK: - Watch event banner (상단 — thermalBanner와 동일 스타일)
@@ -637,40 +637,13 @@ struct MenuBarPopoverView: View {
                 .buttonStyle(.plain)
                 .help(L10n.string("float.toggle.help"))
             }
-            if store.cardCpu {
-                DroidCards.cpu(device: device, metrics: metrics)
-            }
-            if store.cardGpu {
-                DroidCards.gpu(device: device, metrics: metrics)
-            }
-            if store.cardMemory {
-                DroidCards.memory(device: device, metrics: metrics) {
-                    openProcesses()
+            // 카드 순서 = DashboardLayout (콘솔 대시보드와 동일 우선순위)
+            ForEach(DashboardCard.ordered, id: \.self) { card in
+                if store.cardEnabled(card) {
+                    popoverCardView(card)
                 }
             }
-            if store.cardSensors {
-                DroidCards.sensors(device: device, metrics: metrics)
-            }
-            if store.cardBattery {
-                DroidCards.battery(device: device, metrics: metrics)
-            }
-            if store.cardNetwork {
-                DroidCards.network(device: device, metrics: metrics) {
-                    openAppNetwork()
-                }
-            }
-            if store.cardThermal {
-                DroidCards.thermal(device: device, metrics: metrics)
-            }
-            if store.cardStorage {
-                DroidCards.storage(device: device, metrics: metrics)
-            }
-            if store.cardHealth {
-                DroidCards.health(device: device)
-            }
-            if !store.cardCpu && !store.cardGpu && !store.cardMemory && !store.cardSensors
-                && !store.cardBattery && !store.cardNetwork && !store.cardThermal && !store.cardStorage
-                && !store.cardHealth {
+            if DashboardCard.ordered.allSatisfy({ !store.cardEnabled($0) }) {
                 Text(L10n.string("cards.empty"))
                     .font(OPFont.body(12))
                     .foregroundStyle(OPColor.inkDim)
@@ -703,6 +676,37 @@ struct MenuBarPopoverView: View {
                 .padding(.top, 2)
         }
         .padding(.horizontal, OPSpace.xl)
+    }
+
+    // MARK: - Cards
+
+    /// 팝오버 카드 — DashboardLayout 순서용 뷰 매핑 (레이아웃은 1열 · 순서만 대시보드와 동일)
+    @ViewBuilder
+    private func popoverCardView(_ card: DashboardCard) -> some View {
+        switch card {
+        case .cpu:
+            DroidCards.cpu(device: device, metrics: metrics)
+        case .thermal:
+            DroidCards.thermal(device: device, metrics: metrics)
+        case .memory:
+            DroidCards.memory(device: device, metrics: metrics) {
+                openProcesses()
+            }
+        case .network:
+            DroidCards.network(device: device, metrics: metrics) {
+                openAppNetwork()
+            }
+        case .battery:
+            DroidCards.battery(device: device, metrics: metrics)
+        case .health:
+            DroidCards.health(device: device)
+        case .gpu:
+            DroidCards.gpu(device: device, metrics: metrics)
+        case .storage:
+            DroidCards.storage(device: device, metrics: metrics)
+        case .sensors:
+            DroidCards.sensors(device: device, metrics: metrics)
+        }
     }
 
     // MARK: - Detail rows

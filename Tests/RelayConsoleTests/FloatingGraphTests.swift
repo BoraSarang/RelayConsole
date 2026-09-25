@@ -2,30 +2,179 @@ import XCTest
 @testable import RelayConsole
 
 final class FloatingGraphTests: XCTestCase {
-    func testAllOffForcesNetwork() {
-        let r = FloatingGraphLogic.resolve(network: false, cpu: false, gpu: false, memory: false)
-        XCTAssertTrue(r.network)
-        XCTAssertFalse(r.cpu)
-        XCTAssertFalse(r.gpu)
-        XCTAssertFalse(r.memory)
+    typealias Metric = FloatingGraphLogic.Metric
+    typealias FloatWin = FloatingGraphLogic.FloatWin
+
+    // MARK: - 창 리스트 저장/마이그레이션
+
+    func testDecodeWinsRoundTrip() {
+        let wins = [
+            FloatWin(id: UUID(), metric: .network, serial: "SER1", frame: "20,1082,300,220"),
+            FloatWin(id: UUID(), metric: .memory, serial: "SER2", frame: "340,700,300,180")
+        ]
+        let json = FloatingGraphLogic.encodeWins(wins)
+        let back = FloatingGraphLogic.decodeWins(json)
+        XCTAssertEqual(back, wins)
     }
 
-    func testKeepsValidSelection() {
-        let r = FloatingGraphLogic.resolve(network: true, cpu: true, gpu: false, memory: false)
-        XCTAssertEqual(r, .init(network: true, cpu: true, gpu: false, memory: false))
+    func testDecodeWinsCorruptReturnsEmpty() {
+        XCTAssertTrue(FloatingGraphLogic.decodeWins(nil).isEmpty)
+        XCTAssertTrue(FloatingGraphLogic.decodeWins("").isEmpty)
+        XCTAssertTrue(FloatingGraphLogic.decodeWins("not json").isEmpty)
+        XCTAssertTrue(FloatingGraphLogic.decodeWins("[]").isEmpty)
     }
 
-    func testNetworkOnlyStillValid() {
-        let r = FloatingGraphLogic.resolve(network: true, cpu: false, gpu: false, memory: false)
-        XCTAssertTrue(r.network)
-        XCTAssertFalse(r.cpu)
+    func testDecodeWinsCapsAtMax() {
+        let many = (0..<10).map {
+            FloatWin(id: UUID(), metric: .network, serial: "S\($0)", frame: "")
+        }
+        let back = FloatingGraphLogic.decodeWins(FloatingGraphLogic.encodeWins(many))
+        XCTAssertEqual(back.count, FloatingGraphLogic.maxWindows)
     }
 
-    func testCPUWithoutNetworkStays() {
-        // 사용자가 network를 끄고 cpu만 켠 경우 — network always-on이 아님(PLAN: 전부 off만 방지)
-        let r = FloatingGraphLogic.resolve(network: false, cpu: true, gpu: false, memory: false)
-        XCTAssertFalse(r.network)
-        XCTAssertTrue(r.cpu)
+    func testMigrateWinsFromLegacyOriginAndToggles() {
+        let wins = FloatingGraphLogic.migrateWins(
+            origin: "20,1082,300,220",
+            network: true, cpu: true, gpu: false, memory: false,
+            serial: "SER1"
+        )
+        XCTAssertEqual(wins.count, 2)
+        XCTAssertEqual(wins.map(\.metric), [.network, .cpu])
+        XCTAssertEqual(wins.map(\.serial), ["SER1", "SER1"])
+        XCTAssertEqual(wins[0].frame, "20,1082,300,220")
+        XCTAssertEqual(wins[1].frame, "20,1082,300,220")
+    }
+
+    func testMigrateWinsAllOffForcesNetwork() {
+        let wins = FloatingGraphLogic.migrateWins(
+            origin: nil,
+            network: false, cpu: false, gpu: false, memory: false,
+            serial: ""
+        )
+        XCTAssertEqual(wins.count, 1)
+        XCTAssertEqual(wins[0].metric, .network)
+        XCTAssertEqual(wins[0].frame, "")
+    }
+
+    // MARK: - 창 조작
+
+    func testOpenWindowRejectsAtCapacity() {
+        var wins: [FloatWin] = []
+        for _ in 0..<FloatingGraphLogic.maxWindows {
+            XCTAssertTrue(FloatingGraphLogic.openWindow(metric: .network, serial: "S", wins: &wins))
+        }
+        XCTAssertEqual(wins.count, FloatingGraphLogic.maxWindows)
+        XCTAssertFalse(FloatingGraphLogic.openWindow(metric: .cpu, serial: "S", wins: &wins))
+        XCTAssertEqual(wins.count, FloatingGraphLogic.maxWindows)
+    }
+
+    func testToggleMetricOpensThenClosesAllOfThatMetric() {
+        var wins: [FloatWin] = []
+        XCTAssertTrue(FloatingGraphLogic.toggleMetric(.cpu, serial: "S", wins: &wins))
+        XCTAssertEqual(wins.count, 1)
+        XCTAssertEqual(wins[0].metric, .cpu)
+        // 같은 지표가 이미 있으면 전부 닫힘
+        XCTAssertFalse(FloatingGraphLogic.toggleMetric(.cpu, serial: "S", wins: &wins))
+        XCTAssertTrue(wins.isEmpty)
+        XCTAssertFalse(FloatingGraphLogic.isOpen(.cpu, wins: wins))
+    }
+
+    func testSetMetricKeepsIdAndFrame() {
+        let id = UUID()
+        var wins = [FloatWin(id: id, metric: .network, serial: "SER1", frame: "10,20,300,220")]
+        FloatingGraphLogic.setMetric(id: id, metric: .gpu, wins: &wins)
+        XCTAssertEqual(wins[0].id, id)
+        XCTAssertEqual(wins[0].metric, .gpu)
+        XCTAssertEqual(wins[0].frame, "10,20,300,220")
+    }
+
+    func testSetSerialKeepsIdAndFrame() {
+        let id = UUID()
+        var wins = [FloatWin(id: id, metric: .network, serial: "SER1", frame: "10,20,300,220")]
+        FloatingGraphLogic.setSerial(id: id, serial: "SER2", wins: &wins)
+        XCTAssertEqual(wins[0].id, id)
+        XCTAssertEqual(wins[0].serial, "SER2")
+        XCTAssertEqual(wins[0].frame, "10,20,300,220")
+        // 알 수 없는 id는 무시
+        FloatingGraphLogic.setSerial(id: UUID(), serial: "SER3", wins: &wins)
+        XCTAssertEqual(wins[0].serial, "SER2")
+    }
+
+    func testCloseWindowRemovesOnlyThatWindow() {
+        let keep = FloatWin(id: UUID(), metric: .network, serial: "S", frame: "")
+        let drop = FloatWin(id: UUID(), metric: .cpu, serial: "S", frame: "")
+        var wins = [keep, drop]
+        FloatingGraphLogic.closeWindow(id: drop.id, wins: &wins)
+        XCTAssertEqual(wins, [keep])
+    }
+
+    // MARK: - Arrange / Cascade
+
+    func testArrangeStacksVerticallyFromTopLeft() {
+        var wins = (0..<3).map {
+            FloatWin(id: UUID(), metric: .network, serial: "S", frame: "\($0),0,300,200")
+        }
+        let area = NSRect(x: 0, y: 0, width: 1000, height: 800)
+        FloatingGraphLogic.arrange(wins: &wins, in: area, gap: 10)
+
+        let a = FloatingGraphLogic.parseFrame(wins[0].frame)!.topLeft
+        let b = FloatingGraphLogic.parseFrame(wins[1].frame)!.topLeft
+        let c = FloatingGraphLogic.parseFrame(wins[2].frame)!.topLeft
+        XCTAssertEqual(a.x, 16, accuracy: 0.01)
+        XCTAssertEqual(a.y, 600, accuracy: 0.01)
+        XCTAssertEqual(b.x, a.x, accuracy: 0.01)
+        XCTAssertEqual(b.y, 390, accuracy: 0.01)
+        XCTAssertEqual(c.x, a.x, accuracy: 0.01)
+        XCTAssertEqual(c.y, 200, accuracy: 0.01)
+    }
+
+    func testArrangeWrapsToNextColumnWhenFull() {
+        var wins = (0..<3).map { _ in
+            FloatWin(id: UUID(), metric: .network, serial: "S", frame: "0,0,300,200")
+        }
+        let area = NSRect(x: 0, y: 0, width: 1000, height: 450)
+        FloatingGraphLogic.arrange(wins: &wins, in: area, gap: 10)
+
+        let a = FloatingGraphLogic.parseFrame(wins[0].frame)!.topLeft
+        let c = FloatingGraphLogic.parseFrame(wins[2].frame)!.topLeft
+        XCTAssertEqual(a.x, 16, accuracy: 0.01)
+        XCTAssertEqual(a.y, 250, accuracy: 0.01)
+        // 3번째는 다음 열로
+        XCTAssertEqual(c.x, 326, accuracy: 0.01)
+        XCTAssertEqual(c.y, 250, accuracy: 0.01)
+    }
+
+    func testArrangeEmptyIsNoop() {
+        var wins: [FloatWin] = []
+        FloatingGraphLogic.arrange(wins: &wins, in: NSRect(x: 0, y: 0, width: 1000, height: 800))
+        XCTAssertTrue(wins.isEmpty)
+    }
+
+    func testCascadeTopLeftNoOccupationKeepsPosition() {
+        let p = NSPoint(x: 10, y: 500)
+        let size = NSSize(width: 300, height: 200)
+        let out = FloatingGraphLogic.cascadeTopLeft(
+            p, size: size, occupied: [], in: NSRect(x: 0, y: 0, width: 1000, height: 800)
+        )
+        XCTAssertEqual(out.x, 10, accuracy: 0.01)
+        XCTAssertEqual(out.y, 500, accuracy: 0.01)
+    }
+
+    func testCascadeTopLeftShiftsDownWhenOverlapping() {
+        let p = NSPoint(x: 10, y: 500)
+        let size = NSSize(width: 300, height: 200)
+        let occupied = [
+            NSRect(x: 10, y: 300, width: 300, height: 200)   // topLeft(10,500)와 겹침
+        ]
+        let out = FloatingGraphLogic.cascadeTopLeft(
+            p, size: size, occupied: occupied, in: NSRect(x: 0, y: 0, width: 1000, height: 800)
+        )
+        XCTAssertEqual(out.x, 10, accuracy: 0.01)
+        XCTAssertEqual(out.y, 288, accuracy: 0.01)
+        let rect = NSRect(
+            x: out.x, y: out.y - size.height, width: size.width, height: size.height
+        )
+        XCTAssertFalse(rect.intersects(occupied[0]))
     }
 
     func testParseOriginValid() {

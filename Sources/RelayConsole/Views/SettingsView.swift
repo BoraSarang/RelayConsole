@@ -33,12 +33,8 @@ struct SettingsView: View {
     @ObservedObject private var theme = ThemeManager.shared
     @AppStorage("relay.menubarMetrics") private var menubarMetrics = true
     @AppStorage("relay.alerts.defaultPeriod") private var alertsPeriod = "24h"
-    @AppStorage("relay.float.showNetwork") private var showFloatNetwork = true
-    @AppStorage("relay.float.showCPU") private var showFloatCPU = true
-    @AppStorage("relay.float.showGPU") private var showFloatGPU = false
-    @AppStorage("relay.float.showMemory") private var showFloatMemory = false
     @AppStorage(FloatingGraphLogic.opacityKey) private var floatOpacity = FloatingGraphLogic.defaultOpacity
-    /// On/Off 단일 진실원천 — FloatingGraphController.isEnabled (AppStorage 분리 기록 금지)
+    /// On/Off·창 리스트 단일 진실원천 — FloatingGraphController (AppStorage 분리 기록 금지)
     @ObservedObject private var float = FloatingGraphController.shared
     @AppStorage(LoginItemLogic.headlessKey) private var headless = LoginItemLogic.defaultHeadless()
     @ObservedObject private var login = LoginItemController.shared
@@ -134,10 +130,11 @@ struct SettingsView: View {
                 .foregroundStyle(.secondary)
                 .lineLimit(2)
             if let key = login.messageKey {
-                Text(L10n.string(key))
+                Text(loginMessage(key))
                     .font(OPFont.body(11))
-                    .foregroundStyle(OPColor.cta)
-                    .lineLimit(2)
+                    .foregroundStyle(login.messageDetail == nil ? OPColor.cta : OPColor.bad)
+                    .lineLimit(3)
+                    .fixedSize(horizontal: false, vertical: true)
             } else {
                 Text(L10n.string(login.statusKey))
                     .font(OPFont.body(11))
@@ -145,6 +142,13 @@ struct SettingsView: View {
                     .lineLimit(2)
             }
         }
+    }
+
+    /// 로그인 항목 결과 문구 — 키 + 실제 실패 원인 (AGENTS.local §4 [표시②])
+    private func loginMessage(_ key: String) -> String {
+        let base = L10n.string(key)
+        guard let detail = login.messageDetail, !detail.isEmpty else { return base }
+        return "\(base) — \(detail)"
     }
 
     // MARK: - 플로팅 그래프 (PLAN_floating_graphs)
@@ -156,10 +160,14 @@ struct SettingsView: View {
                 get: { float.isEnabled },
                 set: { float.setEnabled($0) }
             ))
-            Toggle(L10n.string("settings.float.network"), isOn: $showFloatNetwork)
-            Toggle(L10n.string("settings.float.cpu"), isOn: $showFloatCPU)
-            Toggle(L10n.string("settings.float.gpu"), isOn: $showFloatGPU)
-            Toggle(L10n.string("settings.float.memory"), isOn: $showFloatMemory)
+            Toggle(L10n.string("settings.float.network"), isOn: metricBinding(.network))
+            Toggle(L10n.string("settings.float.cpu"), isOn: metricBinding(.cpu))
+            Toggle(L10n.string("settings.float.gpu"), isOn: metricBinding(.gpu))
+            Toggle(L10n.string("settings.float.memory"), isOn: metricBinding(.memory))
+            Text(L10n.string("float.limit"))
+                .font(OPFont.body(10))
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
                     Text(L10n.string("settings.float.opacity"))
@@ -179,6 +187,14 @@ struct SettingsView: View {
                 .foregroundStyle(.secondary)
                 .lineLimit(2)
         }
+    }
+
+    /// 카드 토글 → **창 열림/닫힘** (한 지표에 최소 1개 창이 있으면 On)
+    private func metricBinding(_ metric: FloatingGraphLogic.Metric) -> Binding<Bool> {
+        Binding(
+            get: { FloatingGraphLogic.isOpen(metric, wins: float.wins) },
+            set: { float.setMetricOpen(metric, $0) }
+        )
     }
 
     @ViewBuilder
@@ -218,15 +234,24 @@ struct SettingsView: View {
     @ViewBuilder
     private var cardsSection: some View {
         Section(L10n.string("settings.section.cards")) {
-            Toggle(L10n.string("settings.cards.cpu"), isOn: $store.cardCpu)
-            Toggle(L10n.string("settings.cards.gpu"), isOn: $store.cardGpu)
-            Toggle(L10n.string("settings.cards.memory"), isOn: $store.cardMemory)
-            Toggle(L10n.string("settings.cards.sensors"), isOn: $store.cardSensors)
-            Toggle(L10n.string("settings.cards.battery"), isOn: $store.cardBattery)
-            Toggle(L10n.string("settings.cards.network"), isOn: $store.cardNetwork)
-            Toggle(L10n.string("settings.cards.thermal"), isOn: $store.cardThermal)
-            Toggle(L10n.string("settings.cards.storage"), isOn: $store.cardStorage)
-            Toggle(L10n.string("settings.cards.health"), isOn: $store.cardHealth)
+            // 순서 = DashboardLayout (대시보드·팝오버와 동일 우선순위)
+            ForEach(DashboardCard.ordered, id: \.self) { card in
+                Toggle(L10n.string(card.settingsLabelKey), isOn: cardToggleBinding(card))
+            }
+        }
+    }
+
+    private func cardToggleBinding(_ card: DashboardCard) -> Binding<Bool> {
+        switch card {
+        case .cpu: return $store.cardCpu
+        case .gpu: return $store.cardGpu
+        case .memory: return $store.cardMemory
+        case .sensors: return $store.cardSensors
+        case .battery: return $store.cardBattery
+        case .network: return $store.cardNetwork
+        case .thermal: return $store.cardThermal
+        case .storage: return $store.cardStorage
+        case .health: return $store.cardHealth
         }
     }
 
@@ -380,6 +405,14 @@ struct SettingsView: View {
                 .font(OPFont.body(11))
                 .foregroundStyle(OPColor.cta)
                 Spacer()
+            }
+            if let result = store.notifyTestResult {
+                Text(result)
+                    .font(OPFont.body(10))
+                    .foregroundStyle(store.notifyTestIsError ? OPColor.bad : OPColor.ok)
+                    .lineLimit(3)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
             Text(L10n.string("settings.notify.hint"))
                 .font(OPFont.body(10))

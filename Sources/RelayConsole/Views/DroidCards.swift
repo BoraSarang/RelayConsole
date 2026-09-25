@@ -2,15 +2,19 @@ import SwiftUI
 
 /// Shared metric cards — Droid dashboard + menubar popover (same format)
 enum DroidCards {
+    /// 카드 내부 차트 슬롯 높이 — 전 카드 동일 (그래프 리듬 통일)
+    static let chartHeight: CGFloat = 24
+
     static func shell(
         _ title: String,
         accent: Color = OPColor.inkDim,
         backgroundOpacity: Double = 1,
         trailing: AnyView? = nil,
+        fillsRow: Bool = false,
         @ViewBuilder content: () -> some View
     ) -> some View {
         let bgAlpha = min(max(backgroundOpacity, 0), 1)
-        return VStack(alignment: .leading, spacing: 8) {
+        let card = VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
                 Text(title)
                     .font(OPFont.body(11))
@@ -25,6 +29,14 @@ enum DroidCards {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(OPSpace.lg)
+        return Group {
+            // 같은 Grid 행의 카드 바닥까지 배경·테두리 확장 → 행 높이 동기화 (콘솔 대시보드만)
+            if fillsRow {
+                card.frame(maxHeight: .infinity, alignment: .top)
+            } else {
+                card
+            }
+        }
         // 배경·테두리만 투명도 반영 — 텍스트는 선명 유지 (TetherLens 동일)
         .background(
             OPColor.card.opacity(bgAlpha),
@@ -41,12 +53,14 @@ enum DroidCards {
     static func cpu(
         device: DeviceSnapshot?,
         metrics: DroidMetrics?,
-        backgroundOpacity: Double = 1
+        backgroundOpacity: Double = 1,
+        fillsRow: Bool = false
     ) -> some View {
         shell(
             L10n.string("droid.card.cpu.title"),
             accent: OPColor.inkDim,
-            backgroundOpacity: backgroundOpacity
+            backgroundOpacity: backgroundOpacity,
+            fillsRow: fillsRow
         ) {
             Text(cpuValue(device))
                 .font(OPFont.number(16))
@@ -68,8 +82,8 @@ enum DroidCards {
                     .font(OPFont.number(10))
                     .foregroundStyle(OPColor.inkDim)
             }
-            OPSparkline(points: metrics?.cpuHistory ?? [], color: OPColor.cta, height: 24)
-                .frame(height: 24)
+            OPSparkline(points: metrics?.cpuHistory ?? [], color: OPColor.cta, height: chartHeight)
+                .frame(height: chartHeight)
         }
     }
 
@@ -102,11 +116,13 @@ enum DroidCards {
     static func gpu(
         device: DeviceSnapshot?,
         metrics: DroidMetrics?,
-        backgroundOpacity: Double = 1
+        backgroundOpacity: Double = 1,
+        fillsRow: Bool = false
     ) -> some View {
         shell(
             L10n.string("droid.card.gpu.title"),
-            backgroundOpacity: backgroundOpacity
+            backgroundOpacity: backgroundOpacity,
+            fillsRow: fillsRow
         ) {
             Text(gpuValue(device))
                 .font(OPFont.number(16))
@@ -133,8 +149,8 @@ enum DroidCards {
                     .tint(OPColor.cta)
                     .frame(height: 4)
             }
-            OPSparkline(points: metrics?.gpuHistory ?? [], color: OPColor.cta, height: 24)
-                .frame(height: 24)
+            OPSparkline(points: metrics?.gpuHistory ?? [], color: OPColor.cta, height: chartHeight)
+                .frame(height: chartHeight)
         }
     }
 
@@ -144,11 +160,13 @@ enum DroidCards {
         device: DeviceSnapshot?,
         metrics: DroidMetrics?,
         backgroundOpacity: Double = 1,
+        fillsRow: Bool = false,
         onMore: (() -> Void)? = nil
     ) -> some View {
         shell(
             L10n.string("droid.card.memory.title"),
-            backgroundOpacity: backgroundOpacity
+            backgroundOpacity: backgroundOpacity,
+            fillsRow: fillsRow
         ) {
             Text(memoryValue(device))
                 .font(OPFont.number(16))
@@ -209,8 +227,12 @@ enum DroidCards {
 
     // MARK: - Sensors
 
-    static func sensors(device: DeviceSnapshot?, metrics: DroidMetrics?) -> some View {
-        shell(L10n.string("droid.card.sensors.title")) {
+    static func sensors(
+        device: DeviceSnapshot?,
+        metrics: DroidMetrics?,
+        fillsRow: Bool = false
+    ) -> some View {
+        shell(L10n.string("droid.card.sensors.title"), fillsRow: fillsRow) {
             Text(sensorsValue(device))
                 .font(OPFont.number(16))
                 .foregroundStyle(OPColor.ink)
@@ -261,16 +283,20 @@ enum DroidCards {
 
     // MARK: - Battery
 
-    static func battery(device: DeviceSnapshot?, metrics: DroidMetrics?) -> some View {
-        shell(L10n.string("droid.card.battery.title")) {
+    static func battery(
+        device: DeviceSnapshot?,
+        metrics: DroidMetrics?,
+        fillsRow: Bool = false
+    ) -> some View {
+        shell(L10n.string("droid.card.battery.title"), fillsRow: fillsRow) {
             Text(batteryValue(device))
                 .font(OPFont.number(16))
                 .foregroundStyle(OPColor.ink)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
             batteryGrid(device)
-            OPSparkline(points: metrics?.levelHistory ?? [], color: OPColor.ok, height: 24)
-                .frame(height: 24)
+            OPSparkline(points: metrics?.levelHistory ?? [], color: OPColor.ok, height: chartHeight)
+                .frame(height: chartHeight)
         }
     }
 
@@ -316,6 +342,7 @@ enum DroidCards {
         device: DeviceSnapshot?,
         metrics: DroidMetrics?,
         backgroundOpacity: Double = 1,
+        fillsRow: Bool = false,
         onMore: (() -> Void)? = nil
     ) -> some View {
         let up = device?.netUpMBps
@@ -325,7 +352,8 @@ enum DroidCards {
         return shell(
             L10n.string("droid.card.network.title"),
             backgroundOpacity: backgroundOpacity,
-            trailing: AnyView(SignalGradeChip(device: device))
+            trailing: AnyView(SignalGradeChip(device: device)),
+            fillsRow: fillsRow
         ) {
             HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 2) {
@@ -360,11 +388,6 @@ enum DroidCards {
                     .truncationMode(.tail)
                     .minimumScaleFactor(0.9)
             }
-            OPDualSparkline(
-                up: metrics?.netUpHistory ?? [],
-                down: metrics?.netDownHistory ?? []
-            )
-            .frame(height: 24)
             if let top = device?.appNetRates?.prefix(3), !top.isEmpty {
                 VStack(alignment: .leading, spacing: 2) {
                     ForEach(Array(top)) { r in
@@ -384,6 +407,13 @@ enum DroidCards {
                     }
                 }
             }
+            // 차트는 더보기 직전(카드 하단 고정) — 전 카드 위치·높이 규칙 통일
+            OPDualSparkline(
+                up: metrics?.netUpHistory ?? [],
+                down: metrics?.netDownHistory ?? [],
+                height: chartHeight
+            )
+            .frame(height: chartHeight)
             if let onMore {
                 Button(action: onMore) {
                     Text(L10n.string("droid.process.more"))
@@ -401,8 +431,16 @@ enum DroidCards {
 
     // MARK: - Thermal
 
-    static func thermal(device: DeviceSnapshot?, metrics: DroidMetrics?) -> some View {
-        shell(L10n.string("droid.card.thermal.title"), accent: OPColor.thermal) {
+    static func thermal(
+        device: DeviceSnapshot?,
+        metrics: DroidMetrics?,
+        fillsRow: Bool = false
+    ) -> some View {
+        shell(
+            L10n.string("droid.card.thermal.title"),
+            accent: OPColor.thermal,
+            fillsRow: fillsRow
+        ) {
             HStack(spacing: 8) {
                 Text(thermalValue(device))
                     .font(OPFont.number(16))
@@ -453,15 +491,19 @@ enum DroidCards {
                     }
                 }
             }
-            OPSparkline(points: metrics?.tempHistory ?? [], color: OPColor.thermal, height: 24)
-                .frame(height: 24)
+            OPSparkline(points: metrics?.tempHistory ?? [], color: OPColor.thermal, height: chartHeight)
+                .frame(height: chartHeight)
         }
     }
 
     // MARK: - Storage
 
-    static func storage(device: DeviceSnapshot?, metrics: DroidMetrics?) -> some View {
-        shell(L10n.string("droid.card.storage.title")) {
+    static func storage(
+        device: DeviceSnapshot?,
+        metrics: DroidMetrics?,
+        fillsRow: Bool = false
+    ) -> some View {
+        shell(L10n.string("droid.card.storage.title"), fillsRow: fillsRow) {
             Text(storageValue(device))
                 .font(OPFont.number(16))
                 .foregroundStyle(OPColor.ink)
@@ -483,11 +525,8 @@ enum DroidCards {
             diskRWRow(device)
             if let r = metrics?.diskReadHistory, !r.isEmpty,
                let w = metrics?.diskWriteHistory, !w.isEmpty {
-                HStack(spacing: 8) {
-                    OPSparkline(points: r, color: OPColor.cta, height: 16)
-                    OPSparkline(points: w, color: OPColor.thermalSoft, height: 16)
-                }
-                .frame(height: 16)
+                OPDualSparkline(up: r, down: w, height: chartHeight)
+                    .frame(height: chartHeight)
             }
         }
     }
@@ -522,8 +561,12 @@ enum DroidCards {
 
     // MARK: - Health
 
-    static func health(device: DeviceSnapshot?) -> some View {
-        shell(L10n.string("droid.card.health.title"), accent: OPColor.cta) {
+    static func health(device: DeviceSnapshot?, fillsRow: Bool = false) -> some View {
+        shell(
+            L10n.string("droid.card.health.title"),
+            accent: OPColor.cta,
+            fillsRow: fillsRow
+        ) {
             if let s = HealthScoreLogic.score(from: device ?? DeviceSnapshot()) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text("\(s.total)")
@@ -550,16 +593,24 @@ enum DroidCards {
         }
     }
 
-    private static func healthRow(label: String, value: Int) -> some View {
+    private static func healthRow(label: String, value: Int?) -> some View {
         HStack(spacing: 8) {
             Text(label)
                 .font(OPFont.body(10))
                 .foregroundStyle(OPColor.inkDim)
                 .frame(width: 48, alignment: .leading)
-            ProgressView(value: Double(value), total: 100)
-                .progressViewStyle(.linear)
-                .tint(bandColor(HealthScoreLogic.bandKey(total: value)))
-            Text("\(value)")
+            Group {
+                if let value {
+                    ProgressView(value: Double(value), total: 100)
+                        .progressViewStyle(.linear)
+                        .tint(bandColor(HealthScoreLogic.bandKey(total: value)))
+                } else {
+                    ProgressView(value: 0, total: 100)
+                        .progressViewStyle(.linear)
+                        .tint(OPColor.inkDim.opacity(0.4))
+                }
+            }
+            Text(value.map(String.init) ?? L10n.na)
                 .font(OPFont.number(10))
                 .foregroundStyle(OPColor.inkDim)
                 .frame(width: 24, alignment: .trailing)

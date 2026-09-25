@@ -32,6 +32,36 @@ enum WatchKind: String, Sendable, Equatable, CaseIterable, Codable {
     case jobRecovered
     /// HTTPS 인증서 만료 임박 (A5)
     case sslExpiring
+    /// 설정 값 변경 감지 (SettingWatch — `settings get` 값 전이)
+    case settingsChanged
+    /// logcat 키워드 적중 (LogcatWatch — 회전/설정/온도 로그 라인)
+    case logcatHits
+}
+
+extension WatchKind {
+    /// 대시보드 탐지 타임라인 대상 (설정 변경 · logcat)
+    var isDetectKind: Bool { self == .settingsChanged || self == .logcatHits }
+}
+
+extension WatchEvent {
+    /// 설정 변경·logcat 감지 이벤트 — **severity .info 고정**
+    /// (시스템 알림·일일 경고 집계 제외, Alerts·대시보드 타임라인에만 노출)
+    static func detect(
+        kind: WatchKind,
+        serial: String,
+        title: String,
+        detail: String,
+        at: Date = .now
+    ) -> WatchEvent {
+        WatchEvent(
+            kind: kind,
+            severity: .info,
+            serial: serial,
+            title: title,
+            detail: detail,
+            at: at
+        )
+    }
 }
 
 /// 심각도 — 시스템 알림 interruptionLevel 매핑
@@ -67,7 +97,7 @@ struct WatchEvent: Identifiable, Sendable, Equatable, Codable {
     let id: UUID
     let kind: WatchKind
     let severity: WatchSeverity
-    /// adb serial (raw) 또는 Apple udid — shortId는 UI에서
+    /// adb serial (raw) 또는 Apple udid — 표시용 라벨은 UI에서 `identLabel`로 해석
     let serial: String
     let title: String
     let detail: String

@@ -9,6 +9,7 @@ struct InsightsView: View {
     @State private var selectedDay: Date = Calendar.current.startOfDay(for: .now)
     @State private var serialFilter: String? = nil
     @State private var exportMessage: String?
+    @State private var exportFailed = false
 
     private var calendar: Calendar { .current }
     private var todayKey: String { InsightLogic.dayKey(for: .now, calendar: calendar) }
@@ -89,7 +90,7 @@ struct InsightsView: View {
         .preferredColorScheme(ThemeManager.shared.mode.preferred)
         .navigationTitle(L10n.string("sidebar.insights"))
         .alert(
-            L10n.string("alerts.export.done"),
+            L10n.string(exportFailed ? "alerts.export.failed" : "alerts.export.done"),
             isPresented: Binding(
                 get: { exportMessage != nil },
                 set: { if !$0 { exportMessage = nil } }
@@ -126,12 +127,12 @@ struct InsightsView: View {
                 Button(L10n.string("insights.serial.all")) { serialFilter = nil }
                 Divider()
                 ForEach(serials, id: \.self) { s in
-                    Button("\(AdbClient.shortId(s)) — \(s)") { serialFilter = s }
+                    Button(store.identLabel(for: s)) { serialFilter = s }
                 }
             } label: {
                 chip(
                     L10n.string("insights.serial"),
-                    value: serialFilter.map { AdbClient.shortId($0) }
+                    value: serialFilter.map { store.identLabel(for: $0) }
                 )
             }
             .menuStyle(.borderlessButton)
@@ -504,7 +505,11 @@ struct InsightsView: View {
             patterns: patterns,
             thresholds: store.patternThresholds()
         )
-        guard let data = InsightReportLogic.exportJSON(report) else { return }
+        guard let data = InsightReportLogic.exportJSON(report) else {
+            exportFailed = true
+            exportMessage = L10n.string("alerts.export.failed.convert")
+            return
+        }
         exportMessage = writeExport(data, ext: "json", prefix: "insight-report-\(selectedKey)")
     }
 
@@ -526,9 +531,11 @@ struct InsightsView: View {
         guard panel.runModal() == .OK, let url = panel.url else { return nil }
         do {
             try data.write(to: url)
-            return L10n.string("alerts.export.done")
+            exportFailed = false
+            return L10n.format("alerts.export.path", url.lastPathComponent)
         } catch {
-            return error.localizedDescription
+            exportFailed = true
+            return L10n.format("alerts.export.failed.detail", error.localizedDescription)
         }
     }
 }

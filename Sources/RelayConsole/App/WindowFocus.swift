@@ -16,7 +16,8 @@ enum WindowFocus {
         for window in NSApp.windows {
             guard let panel = window as? NSPanel else { continue }
             if panel.identifier?.rawValue == alertBannerWindowID { continue }
-            if panel.identifier?.rawValue == floatingGraphWindowID { continue }
+            // 플로팅은 창 id별 복수 — "RelayFloatingGraph.<uuid>" 접두로 전체 제외
+            if panel.identifier?.rawValue.hasPrefix(floatingGraphWindowID) == true { continue }
             if panel.level == .statusBar || panel.level == .popUpMenu {
                 panel.perform(#selector(NSWindow.orderOut(_:)), with: nil)
             }

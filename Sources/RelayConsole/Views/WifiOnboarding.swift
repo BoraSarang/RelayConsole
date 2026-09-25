@@ -80,7 +80,7 @@ struct WifiOnboardingSheet: View {
                                 Text(displayName(d)).tag(d.serial)
                             }
                             if let p = presetSerial, !usbDevices.contains(where: { $0.serial == p }) {
-                                Text(AdbClient.shortId(p)).tag(p)
+                                Text(store.identLabel(for: p)).tag(p)
                             }
                         }
                         .labelsHidden()
@@ -159,6 +159,9 @@ struct WifiOnboardingSheet: View {
         .frame(minWidth: 420, minHeight: 380)
         .preferredColorScheme(ThemeManager.shared.mode.preferred)
         .onAppear {
+            // 재오픈 시 지난 성공/실패 메시지가 새 상태처럼 보이지 않도록 초기화 (AGENTS.local §4 [표시②])
+            wifi.statusMessage = nil
+            wifi.statusIsError = false
             if selectedUsbSerial.isEmpty {
                 if let p = presetSerial, usbDevices.contains(where: { $0.serial == p }) {
                     selectedUsbSerial = p
@@ -186,13 +189,10 @@ struct WifiOnboardingSheet: View {
     }
 
     private func displayName(_ d: DeviceSnapshot) -> String {
-        AdbClient.displayDeviceName(deviceName: d.deviceName, model: d.model, serial: d.serial)
+        d.identLabel
     }
 
     private func displayNameById(_ serial: String) -> String {
-        if let d = store.inventory.device(serial: serial) {
-            return displayName(d)
-        }
-        return AdbClient.shortId(serial)
+        store.identLabel(for: serial)
     }
 }

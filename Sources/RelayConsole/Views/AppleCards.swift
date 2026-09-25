@@ -68,7 +68,7 @@ enum AppleCards {
         DroidCards.shell(L10n.string("apple.card.info.title"), accent: OPColor.apple) {
             infoRow(L10n.string("apple.card.info.model"), device?.productType ?? L10n.na)
             infoRow(L10n.string("apple.card.info.os"), device?.productVersion ?? L10n.na)
-            infoRow(L10n.string("apple.card.info.udid"), device.map { IdeviceClient.shortUdid($0.udid) } ?? L10n.na)
+            infoRow(L10n.string("apple.card.info.udid"), device?.udid ?? L10n.na)
         }
     }
 

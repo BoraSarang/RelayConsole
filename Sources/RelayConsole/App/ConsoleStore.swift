@@ -25,8 +25,9 @@ final class ConsoleStore: ObservableObject {
     /// Sites·Jobs (PLAN_sites_jobs)
     @Published private(set) var sites: [Site] = []
     @Published private(set) var jobs: [Job] = []
-    /// 하트비트 서버 오류 (E-MAC-JOB-0001)
+    /// 하트비트 서버 오류 (E-MAC-JOB-0001) + 실제 원인 (AGENTS.local §4 [표시②])
     @Published var heartbeatLastError: String?
+    @Published var heartbeatErrorDetail: String?
     @Published private(set) var heartbeatPort: UInt16 = 8787
 
     private let selectedKey = "relay.selectedSerial"
@@ -78,6 +79,9 @@ final class ConsoleStore: ObservableObject {
     /// `warning` | `critical`
     @AppStorage("relay.notify.minSeverity") var notifyMinSeverity = "warning"
     @AppStorage("relay.notify.recovery") var notifyRecovery = false
+    /// 설정 → 연동 · 테스트 전송 결과 (nil = 미실행) — 성공/실패 원인을 UI에 노출 (AGENTS.local §4 [표시②])
+    @Published var notifyTestResult: String?
+    @Published var notifyTestIsError = false
     /// Phase v0.9 — 카드 On/Off (대시보드·팝오버 공통, 기본 전체 ON)
     @AppStorage("relay.cards.cpu") var cardCpu = true
     @AppStorage("relay.cards.gpu") var cardGpu = true
@@ -107,9 +111,29 @@ final class ConsoleStore: ObservableObject {
     private var lastDailyIngestAt: [String: Date] = [:]
     private let dailyIngestDebounce: TimeInterval = 60
 
+    /// 카드 On/Off 조회 — DashboardLayout 표시 순서와 1:1 (대시보드·팝오버 공용)
+    func cardEnabled(_ card: DashboardCard) -> Bool {
+        switch card {
+        case .cpu: return cardCpu
+        case .gpu: return cardGpu
+        case .memory: return cardMemory
+        case .sensors: return cardSensors
+        case .battery: return cardBattery
+        case .network: return cardNetwork
+        case .thermal: return cardThermal
+        case .storage: return cardStorage
+        case .health: return cardHealth
+        }
+    }
+
     private init() {
         selectedSerial = UserDefaults.standard.string(forKey: selectedKey)
         selectedAppleUdid = UserDefaults.standard.string(forKey: selectedAppleKey)
+        // 기기 식별 라벨 해석기 주입 — WatchEngine 알림 detail이 인벤토리 기반으로 표시되도록 (AGENTS.local §4)
+        let identResolver: @MainActor (String) -> String = { [weak self] serial in
+            self?.identLabel(for: serial) ?? serial
+        }
+        WatchEngine.shared.ident = identResolver
         // EventStore 1차 — 앱 시작 시 이력 복원 (JSON 영구화)
         recentWatchEvents = EventStore.shared.load()
         sites = SitesJobsStore.shared.loadSites()
@@ -240,10 +264,17 @@ final class ConsoleStore: ObservableObject {
                     self?.handleHeartbeat(token: token)
                 }
             },
-            onBindError: { [weak self] code in
+            onBindError: { [weak self] code, detail in
                 Task { @MainActor in
                     self?.heartbeatLastError = code
-                    DebugLogger.shared.error("HB", "[ERROR] \(code) 하트비트 서버 시작 실패")
+                    self?.heartbeatErrorDetail = detail
+                    DebugLogger.shared.error("HB", "[ERROR] \(code) 하트비트 서버 시작 실패: \(detail)")
+                }
+            },
+            onReady: { [weak self] in
+                Task { @MainActor in
+                    self?.heartbeatLastError = nil
+                    self?.heartbeatErrorDetail = nil
                 }
             }
         )
@@ -310,7 +341,7 @@ final class ConsoleStore: ObservableObject {
                 severity: .critical,
                 serial: site.serialKey,
                 title: site.name,
-                detail: check.detail ?? L10n.string("event.site.down"),
+                detail: SitesJobsLogic.statusText(detail: check.detail) ?? L10n.string("event.site.down"),
                 source: nil
             )
         case .up:
@@ -551,6 +582,7 @@ final class ConsoleStore: ObservableObject {
         heartbeatPort = port
         UserDefaults.standard.set(port, forKey: "relay.hb.port")
         heartbeatLastError = nil
+        heartbeatErrorDetail = nil
         HeartbeatServer.shared.start(
             port: port,
             onBeat: { [weak self] token in
@@ -558,9 +590,16 @@ final class ConsoleStore: ObservableObject {
                     self?.handleHeartbeat(token: token)
                 }
             },
-            onBindError: { [weak self] code in
+            onBindError: { [weak self] code, detail in
                 Task { @MainActor in
                     self?.heartbeatLastError = code
+                    self?.heartbeatErrorDetail = detail
+                }
+            },
+            onReady: { [weak self] in
+                Task { @MainActor in
+                    self?.heartbeatLastError = nil
+                    self?.heartbeatErrorDetail = nil
                 }
             }
         )
@@ -761,6 +800,14 @@ final class ConsoleStore: ObservableObject {
         inventory.device(serial: serial)
     }
 
+    /// 기기 식별 라벨 — 화면·알림·내보내기 공통 진입점 (마스킹 금지 · AGENTS.local §4)
+    func identLabel(for serial: String) -> String {
+        guard !serial.isEmpty else { return serial }
+        if let d = inventory.device(serial: serial) { return d.identLabel }
+        if let a = appleDevices.first(where: { $0.udid == serial }) { return a.identLabel }
+        return serial
+    }
+
     /// 기기 선택 후 콘솔 열기 — openConsole 콜백이 App 측 주입
     func openConsoleAfterSelect(serial: String, open: () -> Void) {
         select(serial)
@@ -904,18 +951,10 @@ final class ConsoleStore: ObservableObject {
         let config = notifyConfig()
         guard force || Self.shouldSendExternal(event, config: config) else { return }
         if config.ntfyReady, let req = NotifyChannel.ntfyRequest(event: event, config: config) {
-            performNotify(req, channel: "ntfy")
-            IssueLog.append(
-                IssueLog.Entry(kind: IssueLog.Kind.notifyNtfy, detail: event.summary, serial: event.serial, ok: true),
-                name: "notify"
-            )
+            performNotify(req, channel: "ntfy", event: event)
         }
         if config.slackReady, let req = NotifyChannel.slackRequest(event: event, config: config) {
-            performNotify(req, channel: "slack")
-            IssueLog.append(
-                IssueLog.Entry(kind: IssueLog.Kind.notifySlack, detail: event.summary, serial: event.serial, ok: true),
-                name: "notify"
-            )
+            performNotify(req, channel: "slack", event: event)
         }
     }
 
@@ -924,30 +963,46 @@ final class ConsoleStore: ObservableObject {
         NotifyChannel.shouldSend(event, config: config)
     }
 
-    private func performNotify(_ request: URLRequest, channel: String) {
+    /// 전송 실측 결과 — IssueLog에 ok/실패 원인을 **응답 후** 기록 (AGENTS.local §4 [표시②])
+    private func performNotify(_ request: URLRequest, channel: String, event: WatchEvent) {
+        let kind = channel == "slack" ? IssueLog.Kind.notifySlack : IssueLog.Kind.notifyNtfy
         let task = URLSession.shared.dataTask(with: request) { _, response, error in
             Task { @MainActor in
                 if let error {
+                    let reason = "\(channel) \(error.localizedDescription)"
                     DebugLogger.shared.error(
                         "Notify",
-                        "[ERROR] \(ErrorCode.notifyPublishFailed.rawValue) \(channel) 전송 실패: \(error.localizedDescription)"
+                        "[ERROR] \(ErrorCode.notifyPublishFailed.rawValue) \(reason)"
+                    )
+                    IssueLog.append(
+                        IssueLog.Entry(kind: kind, detail: "\(event.summary) — \(reason)", serial: event.serial, ok: false),
+                        name: "notify"
                     )
                     return
                 }
                 if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
+                    let reason = "\(channel) HTTP \(http.statusCode)"
                     DebugLogger.shared.error(
                         "Notify",
-                        "[ERROR] \(ErrorCode.notifyPublishFailed.rawValue) \(channel) HTTP \(http.statusCode)"
+                        "[ERROR] \(ErrorCode.notifyPublishFailed.rawValue) \(reason)"
+                    )
+                    IssueLog.append(
+                        IssueLog.Entry(kind: kind, detail: "\(event.summary) — \(reason)", serial: event.serial, ok: false),
+                        name: "notify"
                     )
                 } else {
                     DebugLogger.shared.info("Notify", "[INFO] \(channel) 외부 알림 전송 완료")
+                    IssueLog.append(
+                        IssueLog.Entry(kind: kind, detail: event.summary, serial: event.serial, ok: true),
+                        name: "notify"
+                    )
                 }
             }
         }
         task.resume()
     }
 
-    /// 설정 → 연동 · 테스트 전송 (성공/실패 로그)
+    /// 설정 → 연동 · 테스트 전송 — 발송 요청·응답 전부 `notifyTestResult`에 노출
     func sendNotifyTest() {
         let config = notifyConfig()
         let event = WatchEvent(
@@ -957,12 +1012,43 @@ final class ConsoleStore: ObservableObject {
             title: L10n.string("notify.test.title"),
             detail: L10n.string("notify.test.detail")
         )
-        guard config.anyReady else {
+        var requests: [(request: URLRequest, channel: String)] = []
+        if config.ntfyReady, let r = NotifyChannel.ntfyRequest(event: event, config: config) {
+            requests.append((r, "ntfy"))
+        }
+        if config.slackReady, let r = NotifyChannel.slackRequest(event: event, config: config) {
+            requests.append((r, "slack"))
+        }
+        guard !requests.isEmpty else {
+            notifyTestIsError = true
+            notifyTestResult = L10n.string("notify.test.noChannel")
             DebugLogger.shared.warn("Notify", "[WARN] 테스트 전송 불가 — 채널이 비활성입니다")
             return
         }
-        sendExternalNotify(for: event, force: true)
+        notifyTestIsError = false
+        notifyTestResult = L10n.string("notify.test.sending")
         DebugLogger.shared.action("Notify", "[ACTION] 외부 알림 테스트 전송 요청")
+        Task { @MainActor [weak self] in
+            var failures: [String] = []
+            for item in requests {
+                do {
+                    let (_, resp) = try await URLSession.shared.data(for: item.request)
+                    let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
+                    if !(200...299).contains(code) {
+                        failures.append("\(item.channel) HTTP \(code)")
+                    }
+                } catch {
+                    failures.append("\(item.channel) \(error.localizedDescription)")
+                }
+            }
+            if failures.isEmpty {
+                self?.notifyTestIsError = false
+                self?.notifyTestResult = L10n.string("notify.test.sent")
+            } else {
+                self?.notifyTestIsError = true
+                self?.notifyTestResult = L10n.format("notify.test.failed", failures.joined(separator: ", "))
+            }
+        }
     }
 
     private func watchEnabled(for kind: WatchKind) -> Bool {
@@ -983,6 +1069,8 @@ final class ConsoleStore: ObservableObject {
         case .androidConnected, .androidDisconnected: return watchNotifications
         case .siteDown, .siteUp, .jobOverdue, .jobRecovered: return watchNotifications
         case .sslExpiring: return watchNotifications
+        // 탐지(설정 변경·logcat) — severity .info라 시스템 알림은 자동 차단, 이력·표시만 유지
+        case .settingsChanged, .logcatHits: return watchNotifications
         }
     }
 

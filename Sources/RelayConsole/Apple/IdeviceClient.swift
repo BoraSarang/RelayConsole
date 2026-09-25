@@ -23,7 +23,15 @@ struct AppleSnapshot: Sendable, Equatable, Identifiable {
     var displayName: String {
         if let n = deviceName, !n.isEmpty { return n }
         if let m = productType, !m.isEmpty { return m }
-        return IdeviceClient.shortUdid(udid)
+        return udid
+    }
+
+    /// 기기 식별 라벨 — 화면·알림·내보내기 공통 진입점 (마스킹 금지 · AGENTS.local §4)
+    var identLabel: String {
+        if udid.isEmpty { return displayName }
+        let name = displayName
+        if name.isEmpty || name == udid { return udid }
+        return "\(name) · \(udid)"
     }
 }
 
@@ -103,12 +111,6 @@ enum IdeviceClient {
     /// bytes → GB (소수 1자리 반올림 없이 double)
     static func bytesToGB(_ bytes: Double) -> Double {
         bytes / 1_000_000_000
-    }
-
-    /// 표시용 UDID — 뒤 4자리만 (로그 마스킹)
-    static func shortUdid(_ udid: String) -> String {
-        guard udid.count > 4 else { return udid }
-        return "…" + udid.suffix(4)
     }
 
     /// lockdown info 딕셔너리 → AppleSnapshot (disk_usage 병합 가능)

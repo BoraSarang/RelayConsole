@@ -9,10 +9,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         HeadlessLaunch.apply()
         LoginItemController.shared.refreshStatus()
         ConsoleStore.shared.start()
-        // 플로팅 창 enabled 복원 — 재기동 후 설정 ON이면 즉시 표시 (이슈 5)
-        if UserDefaults.standard.bool(forKey: "relay.float.enabled") {
-            FloatingGraphController.shared.show()
-        }
+        // 플로팅 창 복원 — 재기동 후 설정 ON이면 저장된 창 리스트 전체 재생성 (이슈 5)
+        FloatingGraphController.shared.restoreAll()
         // 감시 알림 권한 (PLAN_v0.5) — 최초 1회
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
     }

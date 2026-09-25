@@ -161,7 +161,7 @@ final class WifiAdbController: ObservableObject {
                 statusMessage = L10n.format("wifi.status.connected", endpoint)
                 DebugLogger.shared.info("WifiAdb", "[INFO] [FEATURE] Wi-Fi 연결 \(endpoint)")
             } catch {
-                fail("wifi.error.connectFailed")
+                failDetail("wifi.error.connectFailed", detail: cause(error))
             }
         }
     }
@@ -188,7 +188,7 @@ final class WifiAdbController: ObservableObject {
                 statusMessage = L10n.format("wifi.status.connected", clean)
                 DebugLogger.shared.info("WifiAdb", "[INFO] [FEATURE] Wi-Fi 연결 \(clean)")
             } catch {
-                fail("wifi.error.connectFailed")
+                failDetail("wifi.error.connectFailed", detail: cause(error))
             }
         }
     }
@@ -207,7 +207,7 @@ final class WifiAdbController: ObservableObject {
                 statusMessage = L10n.string("wifi.status.disconnected")
                 DebugLogger.shared.info("WifiAdb", "[INFO] [FEATURE] Wi-Fi 해제 \(serial)")
             } catch {
-                fail("wifi.error.connectFailed")
+                failDetail("wifi.error.disconnectFailed", detail: cause(error))
             }
         }
     }
@@ -242,10 +242,27 @@ final class WifiAdbController: ObservableObject {
     }
 
     private func fail(_ key: String) {
-        statusIsError = true
-        statusMessage = L10n.string(key)
-        DebugLogger.shared.warn("WifiAdb", "[WARN] \(key)")
+        failDetail(key, detail: nil)
     }
+
+    /// 실패 표시 — 원문(adb stderr 등)을 함께 노출 (AGENTS.local §4 [표시②])
+    private func failDetail(_ key: String, detail: String?) {
+        statusIsError = true
+        let base = L10n.string(key)
+        statusMessage = (detail?.isEmpty == false) ? "\(base) — \(detail!)" : base
+        DebugLogger.shared.warn("WifiAdb", "[WARN] \(key)\(detail.map { " \($0)" } ?? "")")
+    }
+
+    /// 외부 명령 실패 원인 — WifiAdbError.cause 우선, 없으면 빈 문자열 (내부 코드 노출 금지)
+    private func cause(_ error: Error) -> String {
+        (error as? WifiAdbError)?.cause ?? ""
+    }
+}
+
+/// adb 실행 실패 — 실제 stderr 원인을 보존 (AGENTS.local §4 [표시②])
+struct WifiAdbError: LocalizedError, Sendable {
+    let cause: String
+    var errorDescription: String? { cause.isEmpty ? nil : cause }
 }
 
 /// adb 프로세스 실행 (Controller에서만)
@@ -260,20 +277,24 @@ enum WifiAdbRunner {
         proc.executableURL = URL(fileURLWithPath: path)
         proc.arguments = args
         let out = Pipe()
+        let err = Pipe()
         proc.standardOutput = out
-        proc.standardError = Pipe()
+        proc.standardError = err
         try proc.run()
         let data = out.fileHandleForReading.readDataToEndOfFile()
+        let errData = err.fileHandleForReading.readDataToEndOfFile()
         proc.waitUntilExit()
         // connect/tcpip는 출력으로 성공 판별 — exit 0 외 already connected 등 허용
         let text = String(data: data, encoding: .utf8) ?? ""
+        let errText = String(data: errData, encoding: .utf8) ?? ""
         if proc.terminationStatus != 0 {
             // "already connected" 등은 성공으로 간주
-            let lower = text.lowercased()
-            if lower.contains("already connected") || lower.contains("connected to") {
+            let haystack = "\(text)\n\(errText)".lowercased()
+            if haystack.contains("already connected") || haystack.contains("connected to") {
                 return text
             }
-            throw ErrorCode.adbConnectFailed
+            let cause = errText.trimmingCharacters(in: .whitespacesAndNewlines)
+            throw WifiAdbError(cause: cause.isEmpty ? text.trimmingCharacters(in: .whitespacesAndNewlines) : cause)
         }
         return text
     }

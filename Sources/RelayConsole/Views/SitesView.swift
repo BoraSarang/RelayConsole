@@ -400,7 +400,7 @@ struct SitesView: View {
                     .textSelection(.enabled)
                 Spacer(minLength: 8)
                 if let last, let detail = last.detail, !detail.isEmpty, last.ok == false {
-                    Text(detail)
+                    Text(SitesJobsLogic.statusText(detail: detail) ?? detail)
                         .font(OPFont.body(10))
                         .foregroundStyle(OPColor.bad.opacity(0.9))
                         .lineLimit(1)

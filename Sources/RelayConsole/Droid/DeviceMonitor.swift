@@ -9,6 +9,8 @@ actor DeviceMonitor {
     /// v0.8 — ANR / 크래시 감지 (대소문자 무시 부분 매칭)
     static let anrKeywords = ["anr in", "am_anr", "application not responding", "input dispatching timed out"]
     static let crashKeywords = ["fatal exception", "fatal signal", "has died", "force finishing"]
+    /// logcat 적중 이벤트 집계 윈도우 — 5s 폴링 폭주 방지 (최소 간격)
+    static let logcatEventInterval: TimeInterval = 300
 
     /// 기기별 폴링 상태 (다중 serial)
     private struct DeviceState {
@@ -43,6 +45,10 @@ actor DeviceMonitor {
         var logcatCursor: String?
         var logcatHitCount: Int = 0
         var logcatPrimed = false
+        /// logcat 감지 집계 윈도우 (5s 폴링 폭주 방지)
+        var logcatHitsPending: Int = 0
+        var logcatBreakdown: [String: Int] = [:]
+        var logcatEventAt: Date?
         var metaPrimed = false
         /// /proc/stat 코어 수 (load 임계용) — 첫 틱 후 캐시
         var coreCount: Int?
@@ -69,6 +75,8 @@ actor DeviceMonitor {
     private var serials: [String] = []
     private var states: [String: DeviceState] = [:]
     private var knownSerials: Set<String> = []
+    /// serial → adb 비정상 상태 (unauthorized/offline/…) — 상태 변화 시 1회 통지용
+    private var adbBadState: [String: String] = [:]
     private var tickCount: Int = 0
     private var lastErrorLogged: String?
 
@@ -599,19 +607,29 @@ actor DeviceMonitor {
 
         if let prevA = state.prevAccelRotation, let auto, prevA != auto {
             state.settingsChangedCount += 1
-            await notifyEvent(L10n.format(
-                "event.settingsChanged",
-                "accelerometer_rotation",
-                "\(prevA)→\(auto)"
-            ))
+            await emitDetect(
+                kind: .settingsChanged,
+                serial: serial,
+                title: L10n.format(
+                    "event.settingsChanged",
+                    "accelerometer_rotation",
+                    "\(prevA)→\(auto)"
+                ),
+                detail: L10n.string("event.settingsChanged.src")
+            )
         }
         if let prevU = state.prevUserRotation, let user, prevU != user {
             state.settingsChangedCount += 1
-            await notifyEvent(L10n.format(
-                "event.settingsChanged",
-                "user_rotation",
-                "\(prevU)→\(user)"
-            ))
+            await emitDetect(
+                kind: .settingsChanged,
+                serial: serial,
+                title: L10n.format(
+                    "event.settingsChanged",
+                    "user_rotation",
+                    "\(prevU)→\(user)"
+                ),
+                detail: L10n.string("event.settingsChanged.src")
+            )
         }
         if auto != nil { state.prevAccelRotation = auto }
         if user != nil { state.prevUserRotation = user }
@@ -634,14 +652,37 @@ actor DeviceMonitor {
             return
         }
 
-        let hits = AdbClient.countLogcatHits(
+        let breakdown = AdbClient.logcatHitBreakdown(
             output,
             keywords: Self.logcatKeywords,
             afterTimestamp: prevCursor
         )
+        let hits = breakdown.reduce(0) { $0 + $1.count }
         if hits > 0 {
             state.logcatHitCount += hits
-            await notifyEvent(L10n.format("event.logcatHits", hits))
+            // 5s 폴링 폭주 방지 — 최소 간격까지 적중을 모아 1건으로 발행 (원인은 키워드 분해로 노출)
+            state.logcatHitsPending += hits
+            for hit in breakdown {
+                state.logcatBreakdown[hit.keyword, default: 0] += hit.count
+            }
+            let now = Date()
+            let sinceLast = state.logcatEventAt.map { now.timeIntervalSince($0) }
+            if sinceLast.map({ $0 >= Self.logcatEventInterval }) ?? true {
+                let detail = state.logcatBreakdown
+                    .sorted { $0.key < $1.key }
+                    .map { "\($0.key) ×\($0.value)" }
+                    .joined(separator: " · ")
+                let windowMin = sinceLast.map { max(1, Int($0 / 60)) } ?? 1
+                await emitDetect(
+                    kind: .logcatHits,
+                    serial: serial,
+                    title: L10n.format("event.logcatHits", state.logcatHitsPending),
+                    detail: L10n.format("event.logcatHits.window", detail, windowMin)
+                )
+                state.logcatHitsPending = 0
+                state.logcatBreakdown = [:]
+                state.logcatEventAt = now
+            }
         }
         // v0.8 ANR / 크래시 — 적중 시 WatchEngine 1회성 피드 (상세 컨텍스트 포함)
         let anrHits = AdbClient.countLogcatHits(
@@ -776,6 +817,17 @@ actor DeviceMonitor {
         }
     }
 
+    /// 설정 변경·logcat 감지 → 구조화 이벤트 (severity .info — 시스템 알림·일일 경고 집계 제외,
+    /// Alerts·대시보드 타임라인에만 노출)
+    private func emitDetect(kind: WatchKind, serial: String, title: String, detail: String) async {
+        await emitWatch(WatchEvent.detect(
+            kind: kind,
+            serial: serial,
+            title: title,
+            detail: detail
+        ))
+    }
+
     // MARK: - Device list
 
     private func resolveDevices() async {
@@ -798,31 +850,50 @@ actor DeviceMonitor {
         }
         guard let adb = adbPath else { return }
 
-        let list = (try? run(adb, ["devices"])) ?? ""
-        let found = list.split(separator: "\n")
-            .map(String.init)
-            .filter { $0.contains("\tdevice") }
-            .compactMap { line -> String? in
-                line.split(whereSeparator: \.isWhitespace).first.map(String.init)
-            }
-
+        // adb 실행 실패 시 빈 목록으로 해석해 전 기기를 '연결 끊김'으로 위장하지 않음 (AGENTS.local §4 [표시②])
+        guard let list = try? run(adb, ["devices"]) else {
+            await log(.error, "[ERROR] [ADB] adb devices 실행 실패")
+            return
+        }
+        var adbStates: [String: String] = [:]
+        for rawLine in list.split(separator: "\n") {
+            let line = String(rawLine)
+            guard let idx = line.firstIndex(where: { $0.isWhitespace }) else { continue }
+            let name = String(line[..<idx])
+            let st = line[line.index(after: idx)...].trimmingCharacters(in: .whitespaces)
+            guard !name.isEmpty, name != "List", name != "adb", !name.hasPrefix("*"), !st.isEmpty else { continue }
+            adbStates[name] = st
+        }
+        let found = adbStates.filter { $0.value.hasPrefix("device") }.map(\.key)
         let foundSet = Set(found)
+
+        // unauthorized/offline 등 비정상 상태 — 사유를 그대로 통지 (필터로 사유 소멸 방지)
+        for (name, st) in adbStates where !st.hasPrefix("device") {
+            if adbBadState[name] == st { continue }
+            adbBadState[name] = st
+            let ident = await MainActor.run { ConsoleStore.shared.identLabel(for: name) }
+            let reason = Self.adbStateReason(st)
+            await notifyEvent(L10n.format("event.deviceState", ident, reason))
+        }
+        for name in Array(adbBadState.keys) where adbStates[name] == nil || adbStates[name] == "device" {
+            adbBadState.removeValue(forKey: name)
+        }
 
         // 신규 연결
         for s in found where !knownSerials.contains(s) {
             if states[s] == nil { states[s] = DeviceState() }
             knownSerials.insert(s)
             let conn = AdbClient.parseConnection(s)
-            let short = conn.kind == .network ? s : AdbClient.shortId(s)
-            await notifyEvent(L10n.format("event.deviceConnected", short))
-            await log(.info, "[INFO] [ADB] 기기 연결 meta=\(short) kind=\(conn.kind.rawValue)")
+            let ident = await MainActor.run { ConsoleStore.shared.identLabel(for: s) }
+            await notifyEvent(L10n.format("event.deviceConnected", ident))
+            await log(.info, "[INFO] [ADB] 기기 연결 meta=\(AdbClient.shortId(s)) kind=\(conn.kind.rawValue)")
             // Phase1 — Android 연결 WatchEvent (영구화 + 세션)
             let connectEvent = WatchEvent(
                 kind: .androidConnected,
                 severity: .info,
                 serial: s,
                 title: L10n.string("event.androidConnected"),
-                detail: "\(short) · \(conn.kind.rawValue)"
+                detail: "\(ident) · \(conn.kind.rawValue)"
             )
             await emitWatch(connectEvent)
             // 연결 직후 썸네일 1회 (상시 폴링 아님)
@@ -842,15 +913,15 @@ actor DeviceMonitor {
                     ConsoleStore.shared.ingestWatch(e, forceNotify: false)
                 }
             }
-            let short = AdbClient.parseConnection(s).kind == .network ? s : AdbClient.shortId(s)
-            await notifyEvent(L10n.format("event.deviceDisconnected", short))
+            let ident = await MainActor.run { ConsoleStore.shared.identLabel(for: s) }
+            await notifyEvent(L10n.format("event.deviceDisconnected", ident))
             // Phase1 — Android 해제 WatchEvent (세션 close)
             let disconnectEvent = WatchEvent(
                 kind: .androidDisconnected,
                 severity: .info,
                 serial: s,
                 title: L10n.string("event.androidDisconnected"),
-                detail: short,
+                detail: ident,
                 isClear: true
             )
             await emitWatch(disconnectEvent)
@@ -891,6 +962,21 @@ actor DeviceMonitor {
             throw ErrorCode.adbBinaryMissing
         }
         return try run(adb, ["-s", serial, "shell"] + args)
+    }
+
+    /// adb devices 상태 → 사용자 사유 문구 (AGENTS.local §4 [표시②])
+    private nonisolated static func adbStateReason(_ state: String) -> String {
+        switch state {
+        case "unauthorized": return L10n.string("adb.state.unauthorized")
+        case "offline": return L10n.string("adb.state.offline")
+        case "recovery": return L10n.string("adb.state.recovery")
+        case "sideload": return L10n.string("adb.state.sideload")
+        case "bootloader": return L10n.string("adb.state.bootloader")
+        default:
+            if state.hasPrefix("no permissions") { return L10n.string("adb.state.noPermissions") }
+            let token = state.split(separator: " ").first.map(String.init) ?? state
+            return L10n.format("adb.state.other", token)
+        }
     }
 
     private func run(_ path: String, _ args: [String]) throws -> String {
