@@ -4,17 +4,25 @@
 ## 진행 중 (bd ready)
 - (없음 — 리서치 §8 백로그 P1~P3 전수 완료)
 
-## 다음 스프린트 (사용자 선택 대기 · 리서치 §8)
-- 보류: A9 Apple Phase 2 (기기 확보 시)
-- **사용자 일괄 검토**: A5·A2·S4·A3·A8·A10·S2·A4·A6
+## 다음 스프린트 (리서치 §8 잔여 · 미착수)
+- [ ] **S3 관제 규칙 Rules as Code (로컬 YAML)** — TIER S 중 유일 미착수
+- [ ] **A7** 라이브액티비티 / Dock 배지 / 그룹화
+- **TIER A**: Things·캘린더 연동 · 스샷 스크랩북 · 멀티 스냅샷 그리드 · Prometheus/JSON export · cron 기기 태그 · 충전 방치 리포트
 
-## 보류 (기기 확보 시)
+## 보류
+### 육안/실측 대기 (사용자 지시 — 뒤로 미룸)
+- [ ] **Wi-Fi 실측 검증** — 사용자 지시: "검증은 추후 실제 테스트 하는걸로 하고 킵 해둬"
+- [ ] **A1 ntfy/Slack 실제 채널 테스트 전송** — RESEARCH §8 `148` · 설정→연동 테스트 (사용자)
+
+### 기기 확보 시
 - [ ] **Apple 실기 Trust 육안** — iPad USB 데이터 불량(안드로이드 동일 케이블 OK·복구도 미인식). 기기 확보 후 `brew install libimobiledevice` → 배터리/스토리지 카드
-- [ ] **Apple Phase 2** — Developer Mode·sysmon 등 — 위 기기 확보 후 착수
+- [ ] **Apple Phase 2** — Developer Mode·sysmon 등 — 위 기기 확보 후 착수 (A9)
 - [ ] **Apple 크래시 리포트 수집 (반드시 해야 할 작업)** — `idevicecrashreport`로 iOS `.ips` crash/ANR를 IncidentBundle에 첨부. 기기 확보 시 1순위. Trust USB + `idevicecrashreport -u <udid> copy` 패턴. Android `logcat -b crash`/dropbox 대응 Apple 쪽 원재료 — **기기 확보 전 구현 불가, 반드시 기억할 것**
 
-## 진행 중
-- [x] **인사이트 리모델링 Phase1 저장 계층** — WatchEvent 구조화(package/exception/fingerprint) · androidConnected/Disconnected · ConnectionSessionStore · DeviceDailyStore(1분 롤업) · retention/pattern 설정화 · ANR/dropbox/포그라운드/AppHub 액션 로그 수집 · InsightLogic/PatternLogic + 테스트
+## 완료 (2026-09-25)
+- [x] **신규 4건 (네트워크/플로팅)** — ① 업/다운 분리 그래프(`netUpHistory`/`netDownHistory` 분리 · `OPDualSparkline`) ② 플로팅 헤더 대시보드 진입 버튼(프로세스/앱네트워크/콘솔) ③ 앱(UID) 네트워크 사용량(`netstats` UID stats 합산 + `pm list -U` 매핑 → `ProcessListSheet` NET 열 · `AppNetworkView` 창/시트) ④ 신호 진단(RSRP/RSRQ/SINR·RAT/BAND/CA → `SignalGrade` 등급칩 + 진단 팝오버 · 서브라인 IP 제외) · 플로팅 `isEnabled` 단일 진실원처 + 위치 `x,y,w,h` 저장/복원 + 다중화면 clamp · scrcpy popover+에러 팝오버 · i18n **641** · 테스트 **302** · **1.14.0** · **PR #40 머지 `73e9bd4`** · **사용자 육안 확인 ✓ (4건 전수)**
+- [x] **신규 기능 육안 확인 (2026-09-25)** — 업/다운 분리 그래프 · 앱(UID) 네트워크 창 · 신호 등급칩/진단 팝오버 · 플로팅 진입 버튼 **사용자 확인 완료**
+- [x] **인사이트 리모델링 Phase1~4 일괄 머지** — 저장 계층(WatchEvent 패키지/지문·ConnectionSessionStore·DeviceDailyStore) · InsightLogic/PatternLogic · InsightsView UI · Phase4 반복/해소 리포트 export · 설정/테마/플로팅/창 크롬 흡수 · **PR #39 머지 `399842c`**
   - [x] Phase1 저장 계층 + Phase2 InsightLogic/PatternLogic + 테스트 275 통과
   - [x] Phase3 UI — InsightsView(캘린더·패턴·전일대비·export) · Alerts 오늘/어제 칩 · Dashboard 오늘 요약 · Settings retention/pattern · i18n 610키 3처 정합 · `swift build`/`swift test` 통과
   - [x] Phase4 반복/해소 리포트 export 마감 — `InsightReportExport`/`InsightReportLogic` · 패턴 CSV 전체 컬럼 · `IssuePattern` Codable · 테스트 +3 · i18n 612 3처 · `swift test`/`build-macos` 통과
