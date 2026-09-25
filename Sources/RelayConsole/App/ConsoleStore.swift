@@ -17,6 +17,8 @@ final class ConsoleStore: ObservableObject {
     @Published private(set) var metricsHistory: [String: DroidMetrics] = [:]
     /// 현재 선택 기기 (팝오버/대시보드 기준) — PLAN_v0.3
     @Published var selectedSerial: String?
+    /// 위젯 딥링크가 요청한 콘솔 탭 — ConsoleView가 수신 후 nil로 회수 (PLAN_widget)
+    @Published var pendingConsoleSection: ConsoleSection?
     /// Apple Phase1 — Trust-only 기기 목록·선택
     @Published private(set) var appleDevices: [AppleSnapshot] = []
     @Published var selectedAppleUdid: String?

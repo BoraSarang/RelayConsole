@@ -5,21 +5,16 @@
 
 - **플랫폼**: macOS 26.0+ (SwiftUI `MenuBarExtra`)
 - **번들 ID**: `com.borasarang.relayconsole`
-- **버전**: 1.14.0
+- **버전**: 1.15.0
 - **언어**: 한국어 · English
 
 ---
 
 ## 왜 Relay Console인가
 
-| | Relay Console | Uptime Kuma류 | ADB GUI·메뉴바 유틸 |
-|--|---------------|---------------|---------------------|
-| 메뉴바 상주 관제 | ✅ | ❌ | 일부 |
-| 안드로이드 실시간 카드 | ✅ | ❌ | 스냅샷 위주 |
-| 사이트 + 크론 하트비트 | ✅ | 사이트만 | ❌ |
-| 감시·ack·무음·메모 | ✅ | 임계 알림 | ❌ |
-| ntfy / Slack 외부 알림 | ✅ | ✅ | ❌ |
-| 설치·운영 부담 | **낮음** | 서버 필요 | 낮음 |
+- **서버 없음** — 맥 메뉴바에 상주하는 개인 관제탑: 폰(USB·Wi-Fi)·URL·크론 하트비트를 한 배지와 한 알림 폭으로 감시
+- **로컬 전용** — 데이터는 이 기기에서만, 외부 전송은 사용자가 연결한 알림 채널(ntfy/Slack)에만
+- **설치·운영 부담 낮음** — 빌드 한 번으로 메뉴바 상주, 별도 서버 불필요
 
 **한 줄**: *메뉴바에서 끝나는 관제 — 폰·사이트·작업을 한 배지로.*
 
@@ -32,6 +27,12 @@
 - 팝오버: **아침 브리핑 한 줄**(사이트·지연 작업·폰·critical), 사이트 요약, Jobs overdue, 발열 배너, 권장 후속 조치 체크리스트
 - 종료 버튼 + 확인 알림
 - 설정 → 일반에서 브리핑 표시 on/off
+
+### 위젯 (macOS WidgetKit · 1.15.0)
+- 데스크톱/알림센터용 **Relay 상태** 위젯 3종: small(선택 기기 배터리·발열) / medium(브리핑+사이트+작업) / large(기기·사이트·최근 이벤트 전체)
+- 메뉴바 앱이 **60초 간격**으로 스냅샷을 App Group에 기록 — 위젯은 "마지막 업데이트" 시각을 항상 표시
+- 위젯 탭 → 콘솔/Alerts 등 해당 화면으로 바로 이동 (`relayconsole://` 딥링크)
+- 추가: *데스크톱 우클릭 → "위젯 편집" → 검색 **Relay***
 
 ### 기기 관제 (Android · Apple Phase1)
 - 8카드: CPU / GPU / MEM / SENSORS / BATTERY / NETWORK / THERMAL / STORAGE
@@ -61,6 +62,7 @@
 
 ### 요구
 - macOS **26.0** 이상
+- **xcodegen** — 위젯 extension 빌드 필수 (`brew install xcodegen`)
 - (선택) Android **platform-tools** — `adb` PATH 또는 brew
 - (선택) **scrcpy** — 미러링 (`brew install scrcpy`)
 - (선택) **libimobiledevice** — Apple 기기 (`brew install libimobiledevice`)

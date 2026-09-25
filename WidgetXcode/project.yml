@@ -1,0 +1,33 @@
+# WidgetKit extension — 반드시 xcodegen + xcodebuild로 빌드 (SPM appex는 WidgetKit bootstrap 크래시 — 가이드 §2.3/§4.1)
+name: RelayWidgetXcode
+options:
+  bundleIdPrefix: com.borasarang
+  deploymentTarget:
+    macOS: "26.0"
+settings:
+  base:
+    MACOSX_DEPLOYMENT_TARGET: "26.0"
+    SWIFT_VERSION: "6.0"
+    DEVELOPMENT_TEAM: 6GPJQ7BQC9
+    CODE_SIGN_STYLE: Manual
+    CODE_SIGN_IDENTITY: "Apple Development"
+targets:
+  RelayWidget:
+    type: app-extension
+    platform: macOS
+    sources:
+      - path: ../Sources/RelayWidget
+      - path: ../Sources/RelayWidgetCore
+      # 앱과 동일 Localizable.strings 공유 (ko/en — widget.* 포함 707키)
+      - path: ../Sources/RelayConsole/Resources
+        buildPhase: resources
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.borasarang.relayconsole.widget
+        PRODUCT_NAME: RelayWidget
+        GENERATE_INFOPLIST_FILE: "NO"
+        INFOPLIST_FILE: ../WidgetXcode/Info-Widget.plist
+        CODE_SIGN_ENTITLEMENTS: ../Entitlements/RelayWidget.entitlements
+        ENABLE_HARDENED_RUNTIME: "YES"
+        SWIFT_VERSION: "6.0"
+        MACOSX_DEPLOYMENT_TARGET: "26.0"

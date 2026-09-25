@@ -13,3 +13,6 @@ env
 .agent/
 *.log
 RelayConsole_src_clean.zip
+
+# xcodegen 생성물 — 스크립트가 부재 시 자동 재생성 (build-macos.sh)
+WidgetXcode/*.xcodeproj/
