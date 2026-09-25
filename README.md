@@ -5,7 +5,7 @@
 
 - **플랫폼**: macOS 26.0+ (SwiftUI `MenuBarExtra`)
 - **번들 ID**: `com.borasarang.relayconsole`
-- **버전**: 1.15.0
+- **버전**: 1.16.0
 - **언어**: 한국어 · English
 
 ---

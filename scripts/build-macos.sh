@@ -1,5 +1,5 @@
 #!/bin/bash
-# macOS 빌드 — Relay Console 1.15.0
+# macOS 빌드 — Relay Console 1.16.0
 set -eo pipefail
 
 APP_NAME="RelayConsole"
@@ -33,7 +33,7 @@ mkdir -p "$DEST_DIR"
 CONFIG_FLAG=""
 [ "$MODE" = "release" ] && CONFIG_FLAG="-c release"
 
-log "빌드 시작 (mode: $MODE, version: 1.15.0)"
+log "빌드 시작 (mode: $MODE, version: 1.16.0)"
 swift build $CONFIG_FLAG
 
 BUILD_MODE_DIR="debug"
@@ -156,5 +156,5 @@ if ! codesign --verify --deep --strict "$APP_BUNDLE" 2>&1; then
 fi
 log "서명 검증 통과 (app + appex 동일 팀 $DEVELOPMENT_TEAM)"
 
-log "완료: $APP_BUNDLE ($BUNDLE_ID, 1.15.0)"
+log "완료: $APP_BUNDLE ($BUNDLE_ID, 1.16.0)"
 open "$APP_BUNDLE" 2>/dev/null || true

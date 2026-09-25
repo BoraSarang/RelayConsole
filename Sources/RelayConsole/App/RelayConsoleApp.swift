@@ -23,6 +23,8 @@ struct RelayConsoleApp: App {
                 openLogs()
             }, openAppNetwork: {
                 openAppNetwork()
+            }, openFiles: {
+                openFiles()
             })
             .frame(width: 360, height: 560)
             .preferredColorScheme(theme.mode.preferred)
@@ -100,6 +102,14 @@ struct RelayConsoleApp: App {
         }
         .defaultSize(width: 620, height: 460)
 
+        Window(L10n.string("files.title"), id: "files") {
+            FileBrowserWindowView(store: store)
+                .frame(minWidth: 760, minHeight: 480)
+                .preferredColorScheme(theme.mode.preferred)
+                .background(OPColor.popBG)
+        }
+        .defaultSize(width: 960, height: 640)
+
         Settings {
             SettingsView(store: store)
                 .frame(minWidth: 560, maxWidth: 640, minHeight: 400, maxHeight: 720)
@@ -172,6 +182,16 @@ struct RelayConsoleApp: App {
         WindowFocus.dismissMenuBarPanels()
         openWindow(id: "appnetwork")
         WindowFocus.present(sceneID: "appnetwork")
+    }
+
+    private func openFiles() {
+        NSApp.activate(ignoringOtherApps: true)
+        WindowFocus.dismissMenuBarPanels()
+        if let serial = store.selectedSerial {
+            FileBrowserController.shared.open(serial: serial)
+        }
+        openWindow(id: "files")
+        WindowFocus.present(sceneID: "files")
     }
 
     /// 기기 0대 → Off(흰 안테나) · 1대+ → Online(흰 Android + 초록점)
