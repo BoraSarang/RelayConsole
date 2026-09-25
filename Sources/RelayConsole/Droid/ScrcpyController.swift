@@ -311,6 +311,11 @@ final class ScrcpyController: ObservableObject {
         runningSerial == serial && process?.isRunning == true
     }
 
+    /// 오류 표시 해제 — 사용자가 오류 팝오버를 닫은 뒤 재시도할 때
+    func clearError() {
+        lastError = nil
+    }
+
     func buttonState(serial: String) -> ScrcpyButtonState {
         if isInstalling { return .installing }
         if isRunning(serial: serial) { return .running }

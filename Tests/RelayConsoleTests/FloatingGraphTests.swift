@@ -135,4 +135,84 @@ final class FloatingGraphTests: XCTestCase {
         d.set(9.9, forKey: FloatingGraphLogic.opacityKey)
         XCTAssertEqual(FloatingGraphLogic.storedOpacity(d), FloatingGraphLogic.maxOpacity)
     }
+
+    // MARK: - frame 저장 포맷 (x,y,w,h) + 하위호환
+
+    func testParseFrameLegacyPointOnly() {
+        let f = FloatingGraphLogic.parseFrame("120.5,-40.25")
+        XCTAssertEqual(f?.topLeft.x, 120.5)
+        XCTAssertEqual(f?.topLeft.y, -40.25)
+        XCTAssertEqual(f?.size.width, 300)
+        XCTAssertEqual(f?.size.height, 200)
+    }
+
+    func testParseFrameWithSize() {
+        let f = FloatingGraphLogic.parseFrame("10, 20, 640, 480")
+        XCTAssertEqual(f?.topLeft.x, 10)
+        XCTAssertEqual(f?.topLeft.y, 20)
+        XCTAssertEqual(f?.size.width, 640)
+        XCTAssertEqual(f?.size.height, 480)
+    }
+
+    func testParseFrameRejectsNilAndGarbage() {
+        XCTAssertNil(FloatingGraphLogic.parseFrame(nil))
+        XCTAssertNil(FloatingGraphLogic.parseFrame(""))
+        XCTAssertNil(FloatingGraphLogic.parseFrame("a,b"))
+        XCTAssertNil(FloatingGraphLogic.parseFrame(","))
+        XCTAssertNil(FloatingGraphLogic.parseFrame("100"))
+    }
+
+    func testParseFrameNonPositiveSizeFallsBackToDefault() {
+        let f = FloatingGraphLogic.parseFrame("10,20,0,480")
+        XCTAssertEqual(f?.size.width, 300)
+        XCTAssertEqual(f?.size.height, 200)
+    }
+
+    func testFormatFrameRoundTrip() {
+        let p = NSPoint(x: 42, y: 777)
+        let s = NSSize(width: 640, height: 460)
+        let str = FloatingGraphLogic.formatFrame(topLeft: p, size: s)
+        let back = FloatingGraphLogic.parseFrame(str)
+        XCTAssertEqual(back?.topLeft, p)
+        XCTAssertEqual(back?.size, s)
+    }
+
+    func testClampOriginKeepsWindowInsideUnion() {
+        let union = NSRect(x: -1000, y: 0, width: 3000, height: 900)
+        let size = NSSize(width: 300, height: 200)
+        // 왼쪽 밖
+        let left = FloatingGraphLogic.clampOrigin(NSPoint(x: -5000, y: 400), size: size, in: union)
+        XCTAssertEqual(left.x, union.minX)
+        // 오른쪽 밖
+        let right = FloatingGraphLogic.clampOrigin(NSPoint(x: 99999, y: 400), size: size, in: union)
+        XCTAssertEqual(right.x, union.maxX - size.width)
+        // 위 밖
+        let top = FloatingGraphLogic.clampOrigin(NSPoint(x: 0, y: 99999), size: size, in: union)
+        XCTAssertEqual(top.y, union.maxY - size.height)
+        // 아래 밖
+        let bottom = FloatingGraphLogic.clampOrigin(NSPoint(x: 0, y: -99999), size: size, in: union)
+        XCTAssertEqual(bottom.y, union.minY)
+    }
+
+    func testClampOriginWhenWindowTallerThanScreen() {
+        let rect = NSRect(x: 0, y: 0, width: 1000, height: 800)
+        let size = NSSize(width: 300, height: 1200)
+        let p = FloatingGraphLogic.clampOrigin(NSPoint(x: 50, y: 400), size: size, in: rect)
+        XCTAssertEqual(p.x, 50)
+        XCTAssertEqual(p.y, 0, "창이 화면보다 크면 minY에 고정되어 상단이 벗어나지 않도록")
+    }
+
+    func testScreenFrameNeverDegenerate() {
+        let f = FloatingGraphLogic.screenFrame(containing: NSPoint(x: -99999, y: -99999))
+        XCTAssertGreaterThan(f.width, 0)
+        XCTAssertGreaterThan(f.height, 0)
+    }
+
+    func testUnionFrameCoversAllScreens() {
+        let u = FloatingGraphLogic.unionFrame()
+        XCTAssertGreaterThan(u.width, 0)
+        for s in NSScreen.screens {
+            XCTAssertTrue(u.contains(s.frame), "합집합이 모든 화면을 포함해야 함")
+        }
+    }
 }

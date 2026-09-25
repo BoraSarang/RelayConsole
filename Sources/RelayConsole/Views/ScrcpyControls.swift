@@ -7,6 +7,7 @@ struct ScrcpyHeaderButton: View {
     let serial: String
     @ObservedObject private var scrcpy = ScrcpyController.shared
     @State private var showInstall = false
+    @State private var showError = false
     @State private var tick = Date()
 
     var body: some View {
@@ -40,7 +41,8 @@ struct ScrcpyHeaderButton: View {
         .onReceive(ScrcpyController.shared.objectWillChange) { _ in
             tick = Date()
         }
-        .sheet(isPresented: $showInstall) {
+        // borderless NSPanel(.nonactivating)에선 .sheet가 붙지 않음 — 팝오버로 통일
+        .popover(isPresented: $showInstall, arrowEdge: .bottom) {
             ScrcpyInstallSheet(onDone: {
                 showInstall = false
                 scrcpy.refresh()
@@ -48,6 +50,28 @@ struct ScrcpyHeaderButton: View {
                     scrcpy.launch(serial: serial)
                 }
             })
+        }
+        .popover(isPresented: $showError, arrowEdge: .bottom) {
+            VStack(alignment: .leading, spacing: 10) {
+                Text(L10n.string("scrcpy.error.title"))
+                    .font(OPFont.body(12))
+                    .foregroundStyle(OPColor.ink)
+                Text(scrcpy.lastError ?? "")
+                    .font(OPFont.body(11))
+                    .foregroundStyle(OPColor.bad)
+                    .fixedSize(horizontal: false, vertical: true)
+                Button(L10n.string("scrcpy.error.dismiss")) {
+                    scrcpy.clearError()
+                    showError = false
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(OPColor.cta)
+            }
+            .padding(14)
+            .frame(width: 260, alignment: .leading)
+            .background(OPColor.popBG)
+            .preferredColorScheme(ThemeManager.shared.mode.preferred)
+            .onDisappear { scrcpy.clearError() }
         }
         .onReceive(NotificationCenter.default.publisher(for: .scrcpyInstalled)) { _ in
             scrcpy.refresh()
@@ -57,6 +81,14 @@ struct ScrcpyHeaderButton: View {
                 showInstall = false
                 if !serial.isEmpty { scrcpy.launch(serial: serial) }
             }
+        }
+        // launch/toggle 실패(미설치·프로세스 기동 실패) 시 오류를 그대로 방치하지 않음
+        .onChange(of: scrcpy.lastError) { _, err in
+            guard let err, !err.isEmpty,
+                  state != .missing,
+                  !scrcpy.isInstalling,
+                  !showInstall else { return }
+            showError = true
         }
     }
 

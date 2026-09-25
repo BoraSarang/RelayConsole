@@ -114,3 +114,63 @@ struct OPSparkline: View {
         }
     }
 }
+
+/// 업/다운 분리 스파크라인 — 한 박스 위 2줄 겹침, 각 스케일 독립 정규화
+/// (업·다운 폭이 1~2자리 차이라도 한 축에 넣으면 작은 쪽이 눌려서 안 보임)
+struct OPDualSparkline: View {
+    var up: [Double]
+    var down: [Double]
+    var upColor: Color = OPColor.cta
+    var downColor: Color = OPColor.thermalSoft
+    var height: CGFloat = 24
+    var lineWidth: CGFloat = 1.5
+
+    private var hasData: Bool { max(up.count, down.count) >= 2 }
+
+    var body: some View {
+        Group {
+            if hasData {
+                GeometryReader { geo in
+                    ZStack {
+                        Rectangle()
+                            .fill(upColor.opacity(0.2))
+                            .frame(height: 1)
+                        path(for: down, in: geo)
+                            .stroke(downColor, lineWidth: lineWidth)
+                        path(for: up, in: geo)
+                            .stroke(upColor, lineWidth: lineWidth)
+                    }
+                }
+                .frame(height: height)
+                .clipped()
+            } else {
+                Rectangle()
+                    .fill(upColor.opacity(0.25))
+                    .frame(height: 2)
+                    .frame(height: height)
+            }
+        }
+    }
+
+    private func path(for points: [Double], in geo: GeometryProxy) -> Path {
+        var p = Path()
+        guard points.count >= 2 else { return p }
+        let minV = points.min() ?? 0
+        let maxV = points.max() ?? 1
+        let rawRange = maxV - minV
+        let flat = rawRange < 0.0001
+        let n = points.count - 1
+        for (i, v) in points.enumerated() {
+            let x = geo.size.width * CGFloat(i) / CGFloat(n)
+            let y: CGFloat = flat
+                ? geo.size.height * 0.5
+                : geo.size.height * (1 - CGFloat((v - minV) / rawRange))
+            if i == 0 {
+                p.move(to: CGPoint(x: x, y: y))
+            } else {
+                p.addLine(to: CGPoint(x: x, y: y))
+            }
+        }
+        return p
+    }
+}

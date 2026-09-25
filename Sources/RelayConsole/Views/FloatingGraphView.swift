@@ -5,6 +5,8 @@ import SwiftUI
 struct FloatingGraphView: View {
     @ObservedObject var store: ConsoleStore
     var onOpenProcesses: () -> Void = {}
+    var onOpenAppNetwork: () -> Void = {}
+    var onOpenConsole: () -> Void = {}
 
     @AppStorage("relay.float.showNetwork") private var showNetwork = true
     @AppStorage("relay.float.showCPU") private var showCPU = true
@@ -18,8 +20,8 @@ struct FloatingGraphView: View {
     private static let corner: CGFloat = 12
     private static let width: CGFloat = 300
     /// 헤더 우측 고정 슬롯 — hover 시 opacity만 변화 (삽입/삭제로 인한 출렁임 방지)
-    /// scrcpy(≈90) + menu/opacity/close(22×3) + spacing
-    private static let trailingSlotWidth: CGFloat = 176
+    /// dashboard(22) + scrcpy(≈90) + menu/opacity/close(22×3) + spacing(4×5)
+    private static let trailingSlotWidth: CGFloat = 200
 
     private var device: DeviceSnapshot? { store.selectedDevice }
     private var devices: [DeviceSnapshot] { store.inventory.devices }
@@ -53,7 +55,8 @@ struct FloatingGraphView: View {
                         DroidCards.network(
                             device: device,
                             metrics: metrics,
-                            backgroundOpacity: bg
+                            backgroundOpacity: bg,
+                            onMore: { onOpenAppNetwork() }
                         )
                         .environment(\.dynamicTypeSize, .xSmall)
                     }
@@ -124,11 +127,26 @@ struct FloatingGraphView: View {
             Spacer(minLength: 4)
             // 항상 레이아웃 점유 — 메뉴/닫기 아이콘이 생겨도 헤더 폭·높이 고정
             HStack(spacing: 4) {
+                // 대시보드(콘솔) 창 열기 — 플로팅에서 전체 화면으로 전환
+                Button {
+                    onOpenConsole()
+                } label: {
+                    Image(systemName: "macwindow.on.rectangle")
+                        .font(.system(size: 11))
+                        .foregroundStyle(OPColor.inkDim)
+                        .frame(width: 22, height: 22)
+                }
+                .buttonStyle(.plain)
+                .help(L10n.string("float.console"))
+
                 // 카드 선택만 — Menu 안 Slider는 macOS에서 깨짐(투명도는 전용 팝오버)
                 Menu {
                     Toggle(L10n.string("float.card.cpu"), isOn: $showCPU)
                     Toggle(L10n.string("float.card.gpu"), isOn: $showGPU)
                     Toggle(L10n.string("float.card.memory"), isOn: $showMemory)
+                    Divider()
+                    Button(L10n.string("float.processes")) { onOpenProcesses() }
+                    Button(L10n.string("float.appnet")) { onOpenAppNetwork() }
                 } label: {
                     Image(systemName: "slider.horizontal.3")
                         .font(.system(size: 11))

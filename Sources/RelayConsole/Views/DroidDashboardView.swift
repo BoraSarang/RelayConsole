@@ -1,7 +1,9 @@
 import SwiftUI
+import AppKit
 
 struct DroidDashboardView: View {
     @ObservedObject var store: ConsoleStore
+    @Environment(\.openWindow) private var openWindow
     @State private var showProcessList = false
     @State private var showLogs = false
     @State private var showScreenshot = false
@@ -58,7 +60,9 @@ struct DroidDashboardView: View {
                                 DroidCards.battery(device: device, metrics: metrics)
                             }
                             if store.cardNetwork {
-                                DroidCards.network(device: device, metrics: metrics)
+                                DroidCards.network(device: device, metrics: metrics) {
+                                    openAppNetwork()
+                                }
                             }
                             if store.cardThermal {
                                 DroidCards.thermal(device: device, metrics: metrics)
@@ -99,6 +103,14 @@ struct DroidDashboardView: View {
         .sheet(isPresented: $showGallery) {
             GallerySheet(serial: device?.serial)
         }
+    }
+
+    /// 앱 네트워크 사용량 독립 창 (네트워크 카드 더보기)
+    private func openAppNetwork() {
+        NSApp.activate(ignoringOtherApps: true)
+        WindowFocus.dismissMenuBarPanels()
+        openWindow(id: "appnetwork")
+        WindowFocus.present(sceneID: "appnetwork")
     }
 
     private var header: some View {

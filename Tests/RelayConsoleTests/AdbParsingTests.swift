@@ -723,4 +723,200 @@ struct AdbParsingTests {
         #expect(inv.devices[0].gpuUtilPercent == 12)
         #expect(inv.devices[0].diskReadMBps == 0.5)
     }
+
+    // MARK: - Signal 2차 지표 (RSRQ / SINR / RAT / BAND / CA)
+
+    @Test func parseSignalFullRadioFields() {
+        let sample = """
+        mServiceState=0 mDataRegState=0 DATA_CONNECTED ro=false -1 mVoiceRegState=0
+        mOperatorAlphaLong=KT,mOperatorAlphaShort=KT
+        CellIdentityLte:{mCi=123456789,mMcc=450,mMnc=58,mTac=4123,mEarfcn=1800,mBands=[3],mPci=101}
+        mBands=[3] getRilDataRadioTechnology=14(LTE) isUsingCarrierAggregation=true
+        mSignalStrength=CellSignalStrengthLte: rssi=-67 rsrp=-99 rsrq=-12 rssnr=4 level=2
+        """
+        let s = AdbClient.parseSignal(sample)
+        #expect(s.rsrp == -99)
+        #expect(s.rsrq == -12)
+        #expect(s.sinr == 4)
+        #expect(s.carrier == "KT")
+        #expect(s.rat == "LTE")
+        #expect(s.lteBands == ["3"])
+        #expect(s.nrBands.isEmpty)
+        #expect(s.ca == true)
+        #expect(AdbClient.bandSummary(lte: s.lteBands, nr: s.nrBands) == "B3")
+    }
+
+    @Test func parseSignalPrimaryNrUsesSsFields() {
+        let sample = """
+        mOperatorAlphaLong=KT
+        primary=CellSignalStrengthNr ssRsrp=-85 ssRsrq=-10 ssSinr=12
+        mSignalStrength=CellSignalStrengthLte: rssi=-67 rsrp=-110 rsrq=-16 rssnr=-2
+        getRilDataRadioTechnology=20(NR)
+        CellIdentityNr:{mNci=1,mBands=[78]}
+        """
+        let s = AdbClient.parseSignal(sample)
+        #expect(s.rsrp == -85)
+        #expect(s.rsrq == -10)
+        #expect(s.sinr == 12)
+        #expect(s.rat == "NR")
+        #expect(s.nrBands == ["78"])
+        #expect(AdbClient.bandSummary(lte: s.lteBands, nr: s.nrBands) == "n78")
+    }
+
+    @Test func parseSignalEmptyTextIsAllNil() {
+        let s = AdbClient.parseSignal("no signal info here")
+        #expect(s.rsrp == nil)
+        #expect(s.rsrq == nil)
+        #expect(s.sinr == nil)
+        #expect(s.rat == nil)
+        #expect(s.carrier == nil)
+        #expect(s.ca == nil)
+    }
+
+    // MARK: - 앱(UID) 네트워크 사용량
+
+    private static let netStatsSample = """
+    Active interfaces:
+      ident=DEFAULT uid=-4 set=DEFAULT tag=0x0
+    UID stats:
+      Pending bytes: 0
+      History since boot:
+      ident=[{type=DEFAULT, metered=false, roaming=false, defaultNetwork=true}] uid=1000 set=DEFAULT tag=0x0
+        NetworkStatsHistory: bucketDuration=7200
+          st=1789999200 rb=1000 rp=10 tb=2000 tp=20 op=0
+          st=1790006400 rb=500 rp=5 tb=300 tp=3 op=0
+      ident=[{type=DEFAULT, metered=false, roaming=false, defaultNetwork=true}] uid=1000 set=FOREGROUND tag=0x0
+        NetworkStatsHistory: bucketDuration=7200
+          st=1789999200 rb=7777 rp=7 tb=888 tp=8 op=0
+      ident=[{type=DEFAULT, metered=false, roaming=false, defaultNetwork=true}] uid=10277 set=DEFAULT tag=0x0
+        NetworkStatsHistory: bucketDuration=7200
+          st=1789999200 rb=4096 rp=1 tb=8192 tp=1 op=0
+    UID tag stats:
+      Pending bytes: 0
+      History since boot:
+      ident=[{type=DEFAULT, metered=false, roaming=false, defaultNetwork=true}] uid=1000 set=DEFAULT tag=0x123
+        NetworkStatsHistory: bucketDuration=7200
+          st=1789999200 rb=999999 rp=1 tb=999999 tp=1 op=0
+    """
+
+    @Test func parseUidNetStatsSumsDefaultAndForeground() {
+        let rows = AdbClient.parseUidNetStats(Self.netStatsSample)
+        let byUid = Dictionary(rows.map { ($0.uid, $0) }, uniquingKeysWith: { a, _ in a })
+        // DEFAULT(1500) + FOREGROUND(7777) 합산, tag 섹션은 제외
+        #expect(byUid[1000]?.rxBytes == 9277)
+        #expect(byUid[1000]?.txBytes == 3188)
+        #expect(byUid[10277]?.rxBytes == 4096)
+        #expect(byUid[10277]?.txBytes == 8192)
+        #expect(rows.count == 2)
+    }
+
+    @Test func parseUidNetStatsEmptyIsZeroRows() {
+        #expect(AdbClient.parseUidNetStats("nothing here").isEmpty)
+    }
+
+    @Test func parsePackageUidsMapsFirstUid() {
+        let sample = """
+        package:com.samsung.android.app  uid:10021
+        package:com.kakao.talk uid:10277
+        package:com.shared.app uid:10100,10101
+        """
+        let map = AdbClient.parsePackageUids(sample)
+        #expect(map[10277] == "com.kakao.talk")
+        #expect(map[10021] == "com.samsung.android.app")
+        #expect(map[10100] == "com.shared.app")
+        #expect(map[10101] == nil)
+    }
+
+    @Test func appNetRatesComputesPerSecondDelta() {
+        let prev = [
+            AppNetStat(uid: 1, packageName: "a.b", rxBytes: 1_048_576, txBytes: 0)
+        ]
+        let curr = [
+            AppNetStat(uid: 1, packageName: "a.b", rxBytes: 3_145_728, txBytes: 1_048_576)
+        ]
+        let rates = AdbClient.appNetRates(prev: prev, curr: curr, seconds: 1)
+        #expect(rates.count == 1)
+        #expect(abs(rates[0].downMBps - 2.0) < 0.001)
+        #expect(abs(rates[0].upMBps - 1.0) < 0.001)
+        #expect(rates[0].packageName == "a.b")
+    }
+
+    @Test func appNetRatesDropsRegressedOrIdleUids() {
+        let prev = [
+            AppNetStat(uid: 9, rxBytes: 10_000, txBytes: 10_000),
+            AppNetStat(uid: 1, rxBytes: 0, txBytes: 0)
+        ]
+        let curr = [
+            AppNetStat(uid: 9, rxBytes: 100, txBytes: 100),
+            AppNetStat(uid: 1, rxBytes: 2_097_152, txBytes: 0)
+        ]
+        let rates = AdbClient.appNetRates(prev: prev, curr: curr, seconds: 1)
+        // 역전(9)·무변동(1은 down만)은 total>0 인 것만 남음
+        #expect(rates.map(\.uid) == [1])
+        #expect(rates[0].upMBps == 0)
+        #expect(abs(rates[0].downMBps - 2.0) < 0.001)
+    }
+
+    @Test func formatBytesUnits() {
+        #expect(AdbClient.formatBytes(0) == "0 B")
+        #expect(AdbClient.formatBytes(1_536) == "1.5 KB")
+        #expect(AdbClient.formatBytes(5 * 1024 * 1024 * 1024) == "5.0 GB")
+        #expect(AdbClient.formatBytes(150 * 1024 * 1024) == "150 MB")
+    }
+
+    @Test func inventoryMergePreservesSignalAndAppNet() {
+        var inv = DeviceInventory()
+        var a = DeviceSnapshot(serial: "SER2", model: "SM", isOnline: true)
+        a.rsrq = -12
+        a.sinr = 4
+        a.signalRat = "LTE"
+        a.signalBands = "B3"
+        a.signalCA = true
+        a.appNetStats = [AppNetStat(uid: 10, rxBytes: 1, txBytes: 2)]
+        inv.merge(a)
+        var b = DeviceSnapshot(serial: "SER2", model: "SM", isOnline: true)
+        b.rsrp = -99
+        inv.merge(b)
+        #expect(inv.devices[0].rsrp == -99)
+        #expect(inv.devices[0].rsrq == -12)
+        #expect(inv.devices[0].sinr == 4)
+        #expect(inv.devices[0].signalRat == "LTE")
+        #expect(inv.devices[0].signalBands == "B3")
+        #expect(inv.devices[0].signalCA == true)
+        #expect(inv.devices[0].appNetStats?.count == 1)
+    }
+
+    // MARK: - 네트워크 서브라인
+
+    @Test func networkSublineCellularExcludesIp() {
+        var d = DeviceSnapshot(serial: "S")
+        d.networkType = "LTE"
+        d.signalOperator = "KT"
+        d.signalRat = "LTE"
+        d.rsrp = -99
+        d.rsrq = -12
+        d.sinr = 4
+        d.ipV4 = "10.0.0.5"
+        d.wifiSsid = ""
+        let sub = DroidCards.networkSubline(d)
+        #expect(sub == "KT · LTE · RSRP -99 · RSRQ -12 · SINR 4")
+        #expect(sub?.contains("10.0.0.5") == false)
+    }
+
+    @Test func networkSublineWifiShowsSsidAndRssi() {
+        var d = DeviceSnapshot(serial: "S")
+        d.networkType = "Wi-Fi"
+        d.wifiSsid = "KT_5G"
+        d.wifiRssi = -55
+        let sub = DroidCards.networkSubline(d)
+        #expect(sub == "KT_5G · Wi-Fi · RSSI -55 dBm")
+    }
+
+    @Test func networkSublineWifiMissingSsid() {
+        var d = DeviceSnapshot(serial: "S")
+        d.networkType = "Wi-Fi"
+        d.wifiSsid = ""
+        let sub = DroidCards.networkSubline(d)
+        #expect(sub == "\(L10n.string("droid.card.network.wifiOff")) · Wi-Fi")
+    }
 }

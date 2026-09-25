@@ -303,6 +303,134 @@ enum AdbClient {
         return "↑\(u.value) \(u.unit) ↓\(d.value) \(d.unit)"
     }
 
+    /// 누적 바이트 → 1024 기반 표시 (B/KB/MB/GB/TB)
+    static func formatBytes(_ bytes: UInt64) -> String {
+        let units = ["B", "KB", "MB", "GB", "TB"]
+        var value = Double(bytes)
+        var idx = 0
+        while value >= 1024, idx < units.count - 1 {
+            value /= 1024
+            idx += 1
+        }
+        guard idx > 0 else { return "\(bytes) \(units[0])" }
+        let num = value >= 100 ? String(format: "%.0f", value) : String(format: "%.1f", value)
+        return "\(num) \(units[idx])"
+    }
+
+    // MARK: - Per-UID network stats (dumpsys netstats detail / pm list packages -U)
+
+    /// uid별 누적 트래픽 (RX/TX 바이트)
+    struct UidNetSample: Equatable, Sendable {
+        var uid: Int
+        var rxBytes: UInt64
+        var txBytes: UInt64
+    }
+
+    /// `dumpsys netstats detail`의 `UID stats:` 블록 파싱.
+    /// `set=DEFAULT` / `set=FOREGROUND` / `set=USER` 를 **모두 합산**해야 전체 트래픽이 맞음
+    /// (실측: DEFAULT만 ≈91GiB, TOTAL 124.5GiB → 누락 시 약 27% 과소계).
+    /// `UID tag stats:` 섹션은 별도라서 도달 즉시 중단.
+    static func parseUidNetStats(_ text: String) -> [UidNetSample] {
+        var sums: [Int: (rx: UInt64, tx: UInt64)] = [:]
+        var inSection = false
+        var currentUID: Int?
+        for rawLine in text.split(separator: "\n", omittingEmptySubsequences: false) {
+            let line = String(rawLine)
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if trimmed.hasPrefix("UID stats:") {
+                inSection = true
+                currentUID = nil
+                continue
+            }
+            if inSection, trimmed.hasPrefix("UID tag stats:") { break }
+            guard inSection else { continue }
+            if line.contains("uid="), line.contains("set=") {
+                currentUID = uidFromNetStatsHeader(line)
+                continue
+            }
+            guard let uid = currentUID,
+                  line.contains("st="), line.contains("rb="), line.contains("tb="),
+                  let rx = u64Field(line, key: "rb="),
+                  let tx = u64Field(line, key: "tb=") else { continue }
+            let prev = sums[uid] ?? (rx: 0, tx: 0)
+            sums[uid] = (prev.rx &+ rx, prev.tx &+ tx)
+        }
+        return sums
+            .map { UidNetSample(uid: $0.key, rxBytes: $0.value.rx, txBytes: $0.value.tx) }
+            .sorted { $0.uid < $1.uid }
+    }
+
+    /// `ident=[...] uid=10277 set=DEFAULT tag=0x0` → 10277 (tag!=0 이면 nil — 합산 대상 아님)
+    private static func uidFromNetStatsHeader(_ line: String) -> Int? {
+        guard let r = line.range(of: "uid=") else { return nil }
+        let digits = line[r.upperBound...].prefix { $0.isNumber || $0 == "-" }
+        guard let uid = Int(digits) else { return nil }
+        if let t = line.range(of: "tag=") {
+            let tag = line[t.upperBound...].prefix { !$0.isWhitespace }
+            if tag != "0x0" && tag != "0" && tag != "0X0" { return nil }
+        }
+        return uid
+    }
+
+    /// `pm list packages -U` — `package:com.foo uid:10277` → [10277: "com.foo"]
+    /// 동일 uid에 복수 패키지(shared uid)가 있으면 첫 패키지를 유지.
+    static func parsePackageUids(_ text: String) -> [Int: String] {
+        var map: [Int: String] = [:]
+        for rawLine in text.split(separator: "\n") {
+            let line = String(rawLine)
+            guard let colon = line.firstIndex(of: ":"),
+                  line[line.startIndex..<colon] == "package" else { continue }
+            guard let u = line.range(of: "uid:"), u.lowerBound > colon else { continue }
+            let digits = line[u.upperBound...].prefix { $0.isNumber || $0 == "-" }
+            guard let uid = Int(digits) else { continue }
+            // "package:com.foo uid:10277" → uid 앞까지만 패키지명으로 사용
+            let name = line[line.index(after: colon)..<u.lowerBound]
+                .trimmingCharacters(in: .whitespaces)
+            guard !name.isEmpty else { continue }
+            if map[uid] == nil { map[uid] = name }
+        }
+        return map
+    }
+
+    /// `rb=178732` / `tb=1465325` → UInt64
+    private static func u64Field(_ line: String, key: String) -> UInt64? {
+        guard let r = line.range(of: key) else { return nil }
+        let digits = line[r.upperBound...].prefix { $0.isNumber }
+        guard !digits.isEmpty else { return nil }
+        return UInt64(digits)
+    }
+
+    /// 두 netstats 스냅샷 사이 앱별 속도 (MB/s) — 누적량 역전은 0으로 클램프
+    static func appNetRates(
+        prev: [AppNetStat],
+        curr: [AppNetStat],
+        seconds: Double
+    ) -> [AppNetRate] {
+        guard seconds > 0 else { return [] }
+        let prevMap = Dictionary(prev.map { ($0.uid, $0) }, uniquingKeysWith: { a, _ in a })
+        let mb = 1024.0 * 1024.0
+        return curr.map { c in
+            let p = prevMap[c.uid]
+            let rx = delta(c.rxBytes, p?.rxBytes)
+            let tx = delta(c.txBytes, p?.txBytes)
+            let up = Double(tx) / seconds / mb
+            let down = Double(rx) / seconds / mb
+            return AppNetRate(
+                uid: c.uid,
+                packageName: c.packageName,
+                upMBps: max(0, up),
+                downMBps: max(0, down)
+            )
+        }
+        .filter { $0.totalMBps > 0 }
+        .sorted { $0.totalMBps > $1.totalMBps }
+    }
+
+    private static func delta(_ curr: UInt64, _ prev: UInt64?) -> UInt64 {
+        guard let prev, curr >= prev else { return 0 }
+        return curr - prev
+    }
+
     // MARK: - Settings watch (accelerometer_rotation / user_rotation)
 
     /// `settings get …` — "0"/"1"/"null" → trimmed value; null/empty → nil
@@ -885,33 +1013,96 @@ enum AdbClient {
 
     struct SignalSample: Equatable, Sendable {
         var rsrp: Int?
+        var rsrq: Int?
+        var sinr: Int?
         var carrier: String?
+        /// "LTE" | "NR" | "UMTS" | "Unknown" — `getRilDataRadioTechnology=14(LTE)`
         var rat: String?
+        /// LTE 밴드 번호 (예: ["3","8"])
+        var lteBands: [String] = []
+        /// NR 밴드 번호 (예: ["78"])
+        var nrBands: [String] = []
+        var ca: Bool?
     }
 
-    /// `CellSignalStrengthLte: … rsrp=-100 …` + `mOperatorAlphaLong=KT`
+    /// `dumpsys telephony.registry` grep 결과 — mServiceState + mSignalStrength 한 덩어리
+    /// RSRP/RSRQ/SINR/RAT/BAND/CA를 **추가 셸 명령 없이** 같은 텍스트에서 추출
     static func parseSignal(_ text: String) -> SignalSample {
         var sample = SignalSample()
-        for line in text.split(separator: "\n") {
-            let s = String(line)
-            if sample.rsrp == nil, let range = s.range(of: "rsrp=") {
-                let after = s[range.upperBound...]
-                let digits = after.prefix { $0.isNumber || $0 == "-" }
-                sample.rsrp = Int(digits)
-            }
-            if sample.carrier == nil, let range = s.range(of: "mOperatorAlphaLong=") {
-                let after = s[range.upperBound...]
-                let val = after.prefix { $0 != "," && $0 != " " && $0 != "}" }
-                if !val.isEmpty { sample.carrier = String(val) }
-            }
-            if sample.rat == nil {
-                if s.contains(" CellSignalStrengthLte") || s.contains("mServiceState=0") {
-                    sample.rat = "LTE"
-                }
-                if s.contains("CellSignalStrengthNr") { sample.rat = "NR" }
+
+        let nrPrimary = text.contains("primary=CellSignalStrengthNr")
+        let lteRsrp = intField(text, key: "rsrp=")
+        let lteRsrq = intField(text, key: "rsrq=")
+        let lteSinr = intField(text, key: "rssnr=")
+        let nrRsrp = intField(text, key: "ssRsrp=")
+        let nrRsrq = intField(text, key: "ssRsrq=")
+        let nrSinr = intField(text, key: "ssSinr=")
+
+        if nrPrimary, nrRsrp != nil || nrRsrq != nil || nrSinr != nil {
+            sample.rsrp = nrRsrp ?? lteRsrp
+            sample.rsrq = nrRsrq ?? lteRsrq
+            sample.sinr = nrSinr ?? lteSinr
+        } else {
+            sample.rsrp = lteRsrp
+            sample.rsrq = lteRsrq
+            sample.sinr = lteSinr
+        }
+
+        if let range = text.range(of: "mOperatorAlphaLong=") {
+            let after = text[range.upperBound...]
+            let val = after.prefix { $0 != "," && $0 != " " && $0 != "}" && !$0.isNewline }
+            if !val.isEmpty, val != "null" { sample.carrier = String(val) }
+        }
+
+        if let range = text.range(of: "getRilDataRadioTechnology=") {
+            let after = text[range.upperBound...]
+            if let open = after.firstIndex(of: "("), let close = after.firstIndex(of: ")"),
+               open < close {
+                let v = after[after.index(after: open)..<close]
+                if !v.isEmpty { sample.rat = String(v) }
             }
         }
+
+        sample.lteBands = cellBands(in: text, block: "CellIdentityLte:{")
+        sample.nrBands = cellBands(in: text, block: "CellIdentityNr:{")
+
+        if let range = text.range(of: "isUsingCarrierAggregation=") {
+            let after = text[range.upperBound...]
+            let val = after.prefix { $0 != "," && $0 != " " && $0 != "}" && !$0.isNewline }
+            sample.ca = (val == "true") ? true : (val == "false" ? false : nil)
+        }
         return sample
+    }
+
+    /// 표시용 밴드 요약 — "B3" / "B3+B8" / "B3+n78"
+    static func bandSummary(lte: [String], nr: [String]) -> String? {
+        var parts: [String] = []
+        parts += lte.map { "B\($0)" }
+        parts += nr.map { "n\($0)" }
+        return parts.isEmpty ? nil : parts.joined(separator: "+")
+    }
+
+    /// `CellIdentityLte:{ … mBands=[3] … }` 블록에서 밴드 번호 추출 (Int32.max 센티넬 스킵)
+    private static func cellBands(in text: String, block: String) -> [String] {
+        guard let start = text.range(of: block) else { return [] }
+        guard let end = text[start.upperBound...].firstIndex(of: "}") else { return [] }
+        let body = text[start.upperBound..<end]
+        guard let bRange = body.range(of: "mBands=[") else { return [] }
+        let after = body[bRange.upperBound...]
+        guard let close = after.firstIndex(of: "]") else { return [] }
+        return after[..<close]
+            .split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty && $0 != "2147483647" }
+    }
+
+    /// `rsrp=-99` / `ssRsrp=-85` → Int (첫 번호열만, 부호 포함)
+    private static func intField(_ text: String, key: String) -> Int? {
+        guard let range = text.range(of: key) else { return nil }
+        let after = text[range.upperBound...]
+        let digits = after.prefix { $0.isNumber || $0 == "-" }
+        guard !digits.isEmpty else { return nil }
+        return Int(digits)
     }
 
     // MARK: - Wi-Fi status (cmd wifi status)

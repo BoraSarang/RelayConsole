@@ -50,6 +50,13 @@ actor DeviceMonitor {
         var memAvailablePct: Double?
         /// 포그라운드 앱 패키지 (15s)
         var cacheForegroundPackage: String?
+        /// uid별 앱 네트워크 누적량 이전 샘플 (15s delta)
+        var prevAppNet: [AppNetStat]?
+        var prevAppNetAt: Date?
+        /// uid → 패키지명 (1회 조회 후 캐시)
+        var packageUids: [Int: String]?
+        /// 15s 앱 네트워크 속도 캐시 (5s 틱이 상속)
+        var cacheAppNetRates: [AppNetRate]?
     }
 
     private var timer: Task<Void, Never>?
@@ -341,17 +348,73 @@ actor DeviceMonitor {
                 }
             }
 
+            // ── 앱(UID) 네트워크 사용량 — 15s, 추가 셸 최대 2회 (netstats + pm list)
+            if let statsText = try? shell(serial, "dumpsys", "netstats", "detail") {
+                let parsed = AdbClient.parseUidNetStats(statsText)
+                if !parsed.isEmpty {
+                    if state.packageUids == nil,
+                       let pkgText = try? shell(serial, "pm", "list", "packages", "-U") {
+                        state.packageUids = AdbClient.parsePackageUids(pkgText)
+                    }
+                    let uidToPkg = state.packageUids ?? [:]
+                    let rows: [AppNetStat] = parsed.map {
+                        AppNetStat(
+                            uid: $0.uid,
+                            packageName: uidToPkg[$0.uid],
+                            rxBytes: $0.rxBytes,
+                            txBytes: $0.txBytes
+                        )
+                    }
+                    snap.appNetStats = rows
+                    if let prev = state.prevAppNet, let at = state.prevAppNetAt {
+                        let secs = Date().timeIntervalSince(at)
+                        let rates = AdbClient.appNetRates(prev: prev, curr: rows, seconds: secs)
+                        if !rates.isEmpty {
+                            snap.appNetRates = rates
+                            state.cacheAppNetRates = rates
+                        }
+                    }
+                    state.prevAppNet = rows
+                    state.prevAppNetAt = Date()
+                }
+            }
+            if snap.appNetRates == nil { snap.appNetRates = state.cacheAppNetRates }
+
+            // 프로세스 NET 열 — 패키지명 == 프로세스명 매핑
+            if let rates = snap.appNetRates, var procRows = snap.processList {
+                var speed: [String: Double] = [:]
+                for r in rates {
+                    if let name = r.packageName, speed[name] == nil {
+                        speed[name] = r.totalMBps
+                    }
+                }
+                for i in procRows.indices {
+                    procRows[i].netMBps = speed[procRows[i].name]
+                }
+                snap.processList = procRows
+            }
+
             if let connText = try? shell(serial, "dumpsys", "connectivity") {
                 if let type = AdbClient.parseNetworkType(connText) {
                     state.cacheNetworkType = type
                 }
             }
 
-            // Signal (기기内 grep — 단일 shell 문자열)
-            if let sigText = try? shell(serial, "dumpsys telephony.registry | grep -E 'mSignalStrength|mOperatorAlphaLong'") {
+            // Signal (기기内 grep — 단일 shell 문자열, 추가 셸 명령 0)
+            // mServiceState(mBands/getRilDataRadioTechnology/isUsingCarrierAggregation) + mSignalStrength
+            let sigPattern = "mSignalStrength|mOperatorAlphaLong|mServiceState|mDataConnectionState"
+            if let sigText = try? shell(
+                serial,
+                "dumpsys telephony.registry | grep -E '\(sigPattern)'"
+            ) {
                 let sig = AdbClient.parseSignal(sigText)
                 snap.rsrp = sig.rsrp
                 snap.signalOperator = sig.carrier
+                snap.rsrq = sig.rsrq
+                snap.sinr = sig.sinr
+                snap.signalRat = sig.rat
+                snap.signalCA = sig.ca
+                snap.signalBands = AdbClient.bandSummary(lte: sig.lteBands, nr: sig.nrBands)
                 // ── 감시: RSRP 급락
                 if let rsrp = sig.rsrp {
                     await emitWatch(
@@ -370,11 +433,20 @@ actor DeviceMonitor {
                 snap.foregroundPackage = state.cacheForegroundPackage
             }
 
-            // Wi-Fi
-            if let wifiText = try? shell(serial, "cmd", "wifi", "status") {
-                let w = AdbClient.parseWifiStatus(wifiText)
-                snap.wifiSsid = w.ssid
-                snap.wifiRssi = w.rssi
+            // Wi-Fi — `cmd wifi status`는 on/off 2줄만 출력해 SSID가 항상 nil이라
+            // "Wi-Fi 꺼짐" 오출력. Wi-Fi 활성일 때만 `dumpsys wifi`에서 SSID/RSSI 조회.
+            if state.cacheNetworkType == "Wi-Fi" {
+                if let wifiText = try? shell(
+                    serial,
+                    "dumpsys wifi | grep -m3 -E 'mWifiInfo|Wi-Fi is'"
+                ) {
+                    let w = AdbClient.parseWifiStatus(wifiText)
+                    snap.wifiSsid = w.ssid
+                    snap.wifiRssi = w.rssi
+                }
+            } else {
+                snap.wifiSsid = ""
+                snap.wifiRssi = nil
             }
 
             // IP
