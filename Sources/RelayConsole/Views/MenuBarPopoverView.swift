@@ -9,6 +9,7 @@ struct MenuBarPopoverView: View {
     var openProcesses: () -> Void = {}
     var openLogs: () -> Void = {}
     var openAppNetwork: () -> Void = {}
+    var openFiles: () -> Void = {}
 
     @State private var showDeviceDetail = false
     @State private var showEvents = false
@@ -141,7 +142,7 @@ struct MenuBarPopoverView: View {
                         .font(OPFont.number(11))
                         .foregroundStyle(chip.1)
                 }
-                Text("1.14.0")
+                Text("1.16.0")
                     .font(OPFont.number(10))
                     .foregroundStyle(OPColor.inkDim)
             }
@@ -941,25 +942,17 @@ struct MenuBarPopoverView: View {
 
     private var footer: some View {
         HStack(spacing: OPSpace.sm) {
+            // 아이콘 통일 — 한/영 라벨 길이 차이로 줄바꿈 깨짐 방지 (tooltip = L10n)
             if device != nil {
-                OPPrimaryButton(title: L10n.string("menubar.button.openConsole"), action: openConsole)
-                OPSecondaryButton(title: L10n.string("droid.logs.button"), action: openLogs)
+                footerIcon("macwindow", help: L10n.string("menubar.button.openConsole"), primary: true, action: openConsole)
+                footerIcon("doc.text", help: L10n.string("droid.logs.button"), action: openLogs)
             }
-            OPSecondaryButton(title: L10n.string("menubar.button.debug"), action: openDebug)
+            footerIcon("ladybug", help: L10n.string("menubar.button.debug"), action: openDebug)
+            if device != nil {
+                footerIcon("folder", help: L10n.string("menubar.button.files"), action: openFiles)
+            }
             Spacer()
-            Button(action: openSettings) {
-                Image(systemName: "gearshape")
-                    .foregroundStyle(OPColor.inkDim)
-                    .frame(width: 32, height: 32)
-                    .background(OPColor.card, in: RoundedRectangle(cornerRadius: 8))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(OPColor.border, lineWidth: 1)
-                    )
-            }
-            .buttonStyle(.plain)
-            .help(L10n.string("settings.section.general"))
-
+            footerIcon("gearshape", help: L10n.string("settings.section.general"), action: openSettings)
             Button {
                 showQuitConfirm = true
             } label: {
@@ -987,5 +980,26 @@ struct MenuBarPopoverView: View {
                 Text(L10n.string("menubar.quit.body"))
             }
         }
+    }
+
+    private func footerIcon(
+        _ symbol: String,
+        help: String,
+        primary: Bool = false,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(primary ? Color.white : OPColor.inkDim)
+                .frame(width: 32, height: 32)
+                .background(primary ? OPColor.cta : OPColor.card, in: RoundedRectangle(cornerRadius: 8))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(primary ? OPColor.cta : OPColor.border, lineWidth: 1)
+                )
+        }
+        .buttonStyle(.plain)
+        .help(help)
     }
 }
