@@ -40,6 +40,13 @@ struct RelayConsoleApp: App {
                         FloatingGraphController.shared.openProcesses = { openProcesses() }
                         FloatingGraphController.shared.openAppNetwork = { openAppNetwork() }
                         FloatingGraphController.shared.openConsole = { openConsole() }
+                        // 위젯 딥링크 라우팅 — 클로저 주입 완료 후 보류 URL 플러시
+                        WidgetDeepLink.shared.openProcesses = { openProcesses() }
+                        WidgetDeepLink.shared.openLogs = { openLogs() }
+                        WidgetDeepLink.shared.openAppNetwork = { openAppNetwork() }
+                        WidgetDeepLink.shared.openSettings = { openSettingsWindow() }
+                        WidgetDeepLink.shared.openConsole = { openConsole() }
+                        WidgetDeepLink.shared.flush()
                     }
                 if store.hasActiveCritical {
                     Circle()

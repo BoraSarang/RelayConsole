@@ -1,29 +1,6 @@
 import SwiftUI
 
-private enum ConsoleSection: String, CaseIterable, Identifiable {
-    case devices, sites, jobs, alerts, insights
-    var id: String { rawValue }
-
-    var label: String {
-        switch self {
-        case .devices: return L10n.string("sidebar.devices")
-        case .sites: return L10n.string("sidebar.sites")
-        case .jobs: return L10n.string("sidebar.jobs")
-        case .alerts: return L10n.string("sidebar.alerts")
-        case .insights: return L10n.string("sidebar.insights")
-        }
-    }
-
-    var icon: String {
-        switch self {
-        case .devices: return "iphone"
-        case .sites: return "globe"
-        case .jobs: return "clock"
-        case .alerts: return "bell"
-        case .insights: return "chart.bar.xaxis"
-        }
-    }
-}
+/// 섹션 enum은 ConsoleSection.swift (위젯 딥링크 공용)
 
 /// Devices 하위 플랫폼 — Android 실구현 · Apple 예정
 private enum DevicePlatform: String, CaseIterable, Identifiable {
@@ -54,6 +31,18 @@ struct ConsoleView: View {
         .frame(minWidth: 760, minHeight: 520)
         .background(OPColor.popBG)
         .preferredColorScheme(ThemeManager.shared.mode.preferred)
+        // 위젯 딥링크 — 창이 열릴 때/열린 후 탭 이동 ([표시②] pending 신호 수신)
+        .onAppear { applyPendingSection() }
+        .onReceive(store.$pendingConsoleSection) { pending in
+            guard pending != nil else { return }
+            applyPendingSection()
+        }
+    }
+
+    private func applyPendingSection() {
+        guard let pending = store.pendingConsoleSection else { return }
+        selection = pending
+        store.pendingConsoleSection = nil
     }
 
     private var sidebar: some View {
