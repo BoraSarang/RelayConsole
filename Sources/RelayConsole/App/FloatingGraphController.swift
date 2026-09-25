@@ -37,6 +37,62 @@ enum FloatingGraphLogic {
         "\(p.x),\(p.y)"
     }
 
+    /// `"x,y"` (구버전) 또는 `"x,y,w,h"` → (좌상단, 크기). 실패 시 nil
+    static func parseFrame(_ raw: String?) -> (topLeft: NSPoint, size: NSSize)? {
+        guard let raw else { return nil }
+        let parts = raw.split(separator: ",")
+            .map { Double($0.trimmingCharacters(in: .whitespaces)) }
+            .compactMap { $0 }
+        guard parts.count >= 2, parts[0].isFinite, parts[1].isFinite else { return nil }
+        let size = parts.count >= 4 && parts[2].isFinite && parts[3].isFinite
+            && parts[2] > 0 && parts[3] > 0
+            ? NSSize(width: parts[2], height: parts[3])
+            : NSSize(width: 300, height: 200)
+        return (NSPoint(x: parts[0], y: parts[1]), size)
+    }
+
+    /// 저장 포맷 = 왼쪽 위 꼭지점 + 크기 (스케일/해상도 변경 시 복원 정확도)
+    static func formatFrame(topLeft: NSPoint, size: NSSize) -> String {
+        "\(topLeft.x),\(topLeft.y),\(size.width),\(size.height)"
+    }
+
+    /// 점을 포함하는 화면 visibleFrame — 해당 없으면 메인(없으면 1440×900)
+    static func screenFrame(
+        containing point: NSPoint,
+        screens: [NSScreen] = NSScreen.screens
+    ) -> NSRect {
+        for s in screens {
+            let f = s.visibleFrame
+            if point.x >= f.minX && point.x <= f.maxX
+                && point.y >= f.minY && point.y <= f.maxY {
+                return f
+            }
+        }
+        return NSScreen.main?.visibleFrame
+            ?? screens.first?.visibleFrame
+            ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
+    }
+
+    /// 전체 화면 frame 합집합 — 드래그 시 창이 소실 영역으로 벗어나지 않도록
+    static func unionFrame(screens: [NSScreen] = NSScreen.screens) -> NSRect {
+        guard let first = screens.first else {
+            return NSRect(x: 0, y: 0, width: 1440, height: 900)
+        }
+        var r = first.frame
+        for s in screens.dropFirst() { r = r.union(s.frame) }
+        return r
+    }
+
+    /// 드래그 원점 clamp — 창 전체가 합집합 화면 안에 들어오도록
+    static func clampOrigin(_ p: NSPoint, size: NSSize, in screen: NSRect) -> NSPoint {
+        NSPoint(
+            x: min(max(p.x, screen.minX), max(screen.maxX - size.width, screen.minX)),
+            y: min(max(p.y, screen.minY), max(screen.maxY - size.height, screen.minY))
+        )
+    }
+
+    static func originKey() -> String { "relay.float.origin" }
+
     /// frame이 유한한 크기인지 (저장 전 가드)
     static func isSavableFrame(_ frame: NSRect) -> Bool {
         frame.height >= 80
@@ -83,11 +139,12 @@ enum FloatingGraphLogic {
 /// 기기 그래프 플로팅 창 — TetherLens FloatingWindowController 패턴
 /// borderless NSPanel · .nonactivatingPanel · .floating · 위치/카드 설정 유지
 @MainActor
-final class FloatingGraphController {
+final class FloatingGraphController: ObservableObject {
     static let shared = FloatingGraphController()
 
     static let windowID = WindowFocus.floatingGraphWindowID
     private static let originKey = "relay.float.origin"
+    static let enabledKey = "relay.float.enabled"
 
     private var panel: NSPanel?
     private var moveObserver: NSObjectProtocol?
@@ -100,8 +157,16 @@ final class FloatingGraphController {
     private let store = ConsoleStore.shared
     private var storeCancellable: Any?
 
+    /// On/Off 단일 진실원천 — Settings 토글·메뉴바 버튼·창 X 모두 이 값으로 동기화
+    @Published private(set) var isEnabled: Bool =
+        UserDefaults.standard.bool(forKey: FloatingGraphController.enabledKey)
+
     /// App 라벨 onAppear에서 주입 — 플로팅에서 프로세스 창 열기 (openWindow Environment 재사용)
     var openProcesses: (() -> Void)?
+    /// 플로팅에서 앱 네트워크 창 열기
+    var openAppNetwork: (() -> Void)?
+    /// 플로팅에서 대시보드(콘솔) 창 열기
+    var openConsole: (() -> Void)?
 
     var isVisible: Bool { panel?.isVisible == true }
 
@@ -116,10 +181,12 @@ final class FloatingGraphController {
 
     func toggle() {
         if isVisible { hide() } else { show() }
+        // 토글 직후 메뉴바 팝오버가 플로팅을 가림 — 팝오버 닫기(플로팅은 제외 대상)
+        WindowFocus.dismissMenuBarPanels()
     }
 
     func show() {
-        UserDefaults.standard.set(true, forKey: "relay.float.enabled")
+        setEnabledFlag(true)
         if let panel, panel.isVisible {
             panel.orderFront(nil)
             fitToContent()
@@ -134,12 +201,18 @@ final class FloatingGraphController {
     }
 
     func hide() {
-        UserDefaults.standard.set(false, forKey: "relay.float.enabled")
+        setEnabledFlag(false)
         guard let panel, panel.isVisible else { return }
         // 위치 저장 — 재오픈/재시작 시 복원 (이슈 4)
         saveOrigin(panel.frame)
         panel.orderOut(nil)
         DebugLogger.shared.action("FloatGraph", "플로팅 창 숨김")
+    }
+
+    /// 단일 진실원천 갱신 — 플리시 값과 UserDefaults를 한 곳에서만 기록
+    private func setEnabledFlag(_ value: Bool) {
+        if isEnabled != value { isEnabled = value }
+        UserDefaults.standard.set(value, forKey: Self.enabledKey)
     }
 
     /// 앱 종료 직전 현재 프레임 저장 (didMove 없이 종료해도 위치 유지)
@@ -149,7 +222,31 @@ final class FloatingGraphController {
     }
 
     func requestOpenProcesses() {
-        openProcesses?()
+        guard let openProcesses else {
+            DebugLogger.shared.warn("FloatGraph", "[WARN] openProcesses 미주입 — App 라벨 onAppear 미호출")
+            return
+        }
+        // LSUIElement + .nonactivatingPanel — 미활성 상태에선 openWindow가 조용히 무시됨
+        NSApp.activate(ignoringOtherApps: true)
+        openProcesses()
+    }
+
+    func requestOpenAppNetwork() {
+        guard let openAppNetwork else {
+            requestOpenProcesses()
+            return
+        }
+        NSApp.activate(ignoringOtherApps: true)
+        openAppNetwork()
+    }
+
+    func requestOpenConsole() {
+        guard let openConsole else {
+            DebugLogger.shared.warn("FloatGraph", "[WARN] openConsole 미주입 — App 라벨 onAppear 미호출")
+            return
+        }
+        NSApp.activate(ignoringOtherApps: true)
+        openConsole()
     }
 
     private func createPanel() {
@@ -158,28 +255,37 @@ final class FloatingGraphController {
                 store: store,
                 onOpenProcesses: { [weak self] in
                     self?.requestOpenProcesses()
+                },
+                onOpenAppNetwork: { [weak self] in
+                    self?.requestOpenAppNetwork()
+                },
+                onOpenConsole: { [weak self] in
+                    self?.requestOpenConsole()
                 }
             )
         )
         let size = NSSize(width: 300, height: 200)
-        let screenFrame = (NSScreen.main ?? NSScreen.screens.first)?.visibleFrame
-            ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
-        // 저장값 = 왼쪽 위 꼭지점 1점 — 없으면 좌상단 고정 (오른쪽 기본값 금지)
-        let savedTopLeft = FloatingGraphLogic.parseOrigin(
+        // 저장값 = (좌상단, 크기) — 구버전 "x,y"도 하위호환. 화면 역조회로 소실 방지
+        let stored = FloatingGraphLogic.parseFrame(
             UserDefaults.standard.string(forKey: Self.originKey)
+        )
+        let savedTopLeft = stored?.topLeft
+        let savedSize = stored?.size ?? size
+        let screenFrame = FloatingGraphLogic.screenFrame(
+            containing: savedTopLeft ?? NSPoint(x: 0, y: CGFloat.greatestFiniteMagnitude)
         )
         let topLeft = FloatingGraphLogic.clampTopLeft(
             savedTopLeft ?? NSPoint(
                 x: screenFrame.minX + 20,
                 y: screenFrame.maxY - 48
             ),
-            size: size,
+            size: savedSize,
             in: screenFrame
         )
-        let origin = FloatingGraphLogic.bottomLeft(fromTopLeft: topLeft, height: size.height)
+        let origin = FloatingGraphLogic.bottomLeft(fromTopLeft: topLeft, height: savedSize.height)
 
         let win = NSPanel(
-            contentRect: NSRect(origin: origin, size: size),
+            contentRect: NSRect(origin: origin, size: savedSize),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
@@ -195,7 +301,7 @@ final class FloatingGraphController {
         win.contentViewController = hosting
         panel = win
         // 생성 직후 content 크기 반영 전 frame을 못 맞추면 maxY가 깨져 저장됨 — 의도한 좌상단으로 고정
-        win.setFrame(NSRect(origin: origin, size: size), display: false)
+        win.setFrame(NSRect(origin: origin, size: savedSize), display: false)
         observeMove(win)
         installDragMonitor(for: win)
         DebugLogger.shared.action("FloatGraph", "창 생성 위치=\(origin)")
@@ -254,10 +360,17 @@ final class FloatingGraphController {
                       let press = self.dragPressScreen,
                       let origin = self.dragOriginAtPress else { return event }
                 let cur = NSEvent.mouseLocation
-                panel.setFrameOrigin(NSPoint(
+                let raw = NSPoint(
                     x: origin.x + cur.x - press.x,
                     y: origin.y + cur.y - press.y
-                ))
+                )
+                // 화면 밖으로 빠져 위치 소실 방지 — 전체 화면 합집합 안에서 clamp
+                let clamped = FloatingGraphLogic.clampOrigin(
+                    raw,
+                    size: panel.frame.size,
+                    in: FloatingGraphLogic.unionFrame()
+                )
+                panel.setFrameOrigin(clamped)
             case .leftMouseUp:
                 if self.dragPressScreen != nil {
                     self.saveOrigin(panel.frame)
@@ -287,10 +400,13 @@ final class FloatingGraphController {
     private func saveOrigin(_ frame: NSRect) {
         guard FloatingGraphLogic.isSavableFrame(frame) else { return }
         let topLeft = FloatingGraphLogic.topLeft(of: frame)
-        UserDefaults.standard.set(FloatingGraphLogic.formatOrigin(topLeft), forKey: Self.originKey)
+        UserDefaults.standard.set(
+            FloatingGraphLogic.formatFrame(topLeft: topLeft, size: frame.size),
+            forKey: Self.originKey
+        )
     }
 
-    /// Settings 토글 ↔ 패널 표시 동기화
+    /// Settings 토글 ↔ 패널 표시 동기화 — isEnabled가 단일 진실원천
     func setEnabled(_ enabled: Bool) {
         if enabled { show() } else { hide() }
     }

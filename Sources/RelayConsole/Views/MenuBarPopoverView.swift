@@ -8,6 +8,7 @@ struct MenuBarPopoverView: View {
     var openSettings: () -> Void = {}
     var openProcesses: () -> Void = {}
     var openLogs: () -> Void = {}
+    var openAppNetwork: () -> Void = {}
 
     @State private var showDeviceDetail = false
     @State private var showEvents = false
@@ -16,6 +17,8 @@ struct MenuBarPopoverView: View {
     @State private var now = Date()
     @AppStorage("relay.menubarMetrics") private var menubarMetrics = true
     @AppStorage("relay.briefing.enabled") private var briefingEnabled = true
+    /// 플로팅 On/Off 상태 표시 — 단일 진실원천(FloatingGraphController.isEnabled)
+    @ObservedObject private var floating = FloatingGraphController.shared
 
     /// 상단 배너 유지 시간 (초)
     private let topBannerTTL: TimeInterval = 300
@@ -616,16 +619,19 @@ struct MenuBarPopoverView: View {
                 } label: {
                     Label(
                         L10n.string("float.toggle"),
-                        systemImage: "chart.xyaxis.line"
+                        systemImage: floating.isEnabled ? "chart.xyaxis.line.fill" : "chart.xyaxis.line"
                     )
                     .font(OPFont.body(11))
-                    .foregroundStyle(OPColor.cta)
+                    .foregroundStyle(floating.isEnabled ? OPColor.ok : OPColor.cta)
                     .frame(height: 28)
                     .padding(.horizontal, 10)
-                    .background(OPColor.card, in: RoundedRectangle(cornerRadius: 8))
+                    .background(
+                        floating.isEnabled ? OPColor.ok.opacity(0.15) : OPColor.card,
+                        in: RoundedRectangle(cornerRadius: 8)
+                    )
                     .overlay(
                         RoundedRectangle(cornerRadius: 8)
-                            .stroke(OPColor.border, lineWidth: 1)
+                            .stroke(floating.isEnabled ? OPColor.ok.opacity(0.5) : OPColor.border, lineWidth: 1)
                     )
                 }
                 .buttonStyle(.plain)
@@ -649,7 +655,9 @@ struct MenuBarPopoverView: View {
                 DroidCards.battery(device: device, metrics: metrics)
             }
             if store.cardNetwork {
-                DroidCards.network(device: device, metrics: metrics)
+                DroidCards.network(device: device, metrics: metrics) {
+                    openAppNetwork()
+                }
             }
             if store.cardThermal {
                 DroidCards.thermal(device: device, metrics: metrics)

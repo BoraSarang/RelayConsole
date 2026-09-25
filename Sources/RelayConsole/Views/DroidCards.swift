@@ -6,15 +6,20 @@ enum DroidCards {
         _ title: String,
         accent: Color = OPColor.inkDim,
         backgroundOpacity: Double = 1,
+        trailing: AnyView? = nil,
         @ViewBuilder content: () -> some View
     ) -> some View {
         let bgAlpha = min(max(backgroundOpacity, 0), 1)
         return VStack(alignment: .leading, spacing: 8) {
-            Text(title)
-                .font(OPFont.body(11))
-                .foregroundStyle(accent)
-                .lineLimit(1)
-                .truncationMode(.tail)
+            HStack(spacing: 8) {
+                Text(title)
+                    .font(OPFont.body(11))
+                    .foregroundStyle(accent)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                Spacer(minLength: 0)
+                trailing
+            }
             content()
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -310,7 +315,8 @@ enum DroidCards {
     static func network(
         device: DeviceSnapshot?,
         metrics: DroidMetrics?,
-        backgroundOpacity: Double = 1
+        backgroundOpacity: Double = 1,
+        onMore: (() -> Void)? = nil
     ) -> some View {
         let up = device?.netUpMBps
         let down = device?.netDownMBps
@@ -318,7 +324,8 @@ enum DroidCards {
         let downFmt = down.map { AdbClient.formatNetRate($0) }
         return shell(
             L10n.string("droid.card.network.title"),
-            backgroundOpacity: backgroundOpacity
+            backgroundOpacity: backgroundOpacity,
+            trailing: AnyView(SignalGradeChip(device: device))
         ) {
             HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 2) {
@@ -351,9 +358,44 @@ enum DroidCards {
                     .foregroundStyle(OPColor.inkDim)
                     .lineLimit(1)
                     .truncationMode(.tail)
+                    .minimumScaleFactor(0.9)
             }
-            OPSparkline(points: metrics?.netHistory ?? [], color: OPColor.cta, height: 24)
-                .frame(height: 24)
+            OPDualSparkline(
+                up: metrics?.netUpHistory ?? [],
+                down: metrics?.netDownHistory ?? []
+            )
+            .frame(height: 24)
+            if let top = device?.appNetRates?.prefix(3), !top.isEmpty {
+                VStack(alignment: .leading, spacing: 2) {
+                    ForEach(Array(top)) { r in
+                        HStack(spacing: 6) {
+                            Text(r.packageName ?? "uid \(r.uid)")
+                                .font(OPFont.number(10))
+                                .foregroundStyle(OPColor.ink.opacity(0.75))
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                            Spacer(minLength: 0)
+                            Text(AdbClient.formatNetRatePair(up: r.upMBps, down: r.downMBps))
+                                .font(OPFont.number(10))
+                                .foregroundStyle(OPColor.inkDim)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.85)
+                        }
+                    }
+                }
+            }
+            if let onMore {
+                Button(action: onMore) {
+                    Text(L10n.string("droid.process.more"))
+                        .font(OPFont.body(11))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 5)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(OPColor.cta)
+                .frame(maxWidth: .infinity)
+            }
         }
     }
 
@@ -607,19 +649,27 @@ enum DroidCards {
         return L10n.na
     }
 
+    /// 서브라인 1줄 (IP 제외 — 40자 예산)
+    /// 셀룰러: `KT · LTE · RSRP -99 · RSRQ -12 · SINR 4`
+    /// Wi-Fi : `<SSID> · Wi-Fi · RSSI -55 dBm`
     static func networkSubline(_ device: DeviceSnapshot?) -> String? {
         guard let d = device else { return nil }
         var parts: [String] = []
-        if let ssid = d.wifiSsid {
-            parts.append(ssid)
-            if let rssi = d.wifiRssi { parts.append("\(rssi) dBm") }
-        } else if d.networkType == "Wi-Fi" {
-            parts.append(L10n.string("droid.card.network.wifiOff"))
-        } else if let op = d.signalOperator {
-            parts.append(op)
-            if let rsrp = d.rsrp { parts.append("RSRP \(rsrp)") }
+        if d.networkType == "Wi-Fi" {
+            if let ssid = d.wifiSsid, !ssid.isEmpty {
+                parts.append(ssid)
+            } else {
+                parts.append(L10n.string("droid.card.network.wifiOff"))
+            }
+            parts.append("Wi-Fi")
+            if let rssi = d.wifiRssi { parts.append("RSSI \(rssi) dBm") }
+        } else {
+            if let op = d.signalOperator, !op.isEmpty { parts.append(op) }
+            if let rat = d.signalRat, !rat.isEmpty { parts.append(rat) }
+            if let v = d.rsrp { parts.append("RSRP \(v)") }
+            if let v = d.rsrq { parts.append("RSRQ \(v)") }
+            if let v = d.sinr { parts.append("SINR \(v)") }
         }
-        if let ip = d.ipV4 { parts.append(ip) }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 

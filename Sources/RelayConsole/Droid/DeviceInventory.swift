@@ -20,6 +20,8 @@ struct ProcessRow: Sendable, Equatable, Hashable, Identifiable {
     var pid: Int?
     /// ARGS/cmdline — 실행 경로 (앱 APK 경로 또는 바이너리)
     var path: String?
+    /// 네트워크 속도 (MB/s) — uid별 netstats delta를 패키지명으로 매핑
+    var netMBps: Double?
     var id: String {
         if let pid { return "\(pid):\(name)" }
         return name
@@ -30,6 +32,26 @@ struct ProcessRow: Sendable, Equatable, Hashable, Identifiable {
 struct ThermalZone: Sendable, Equatable, Hashable {
     var name: String
     var tempC: Double
+}
+
+/// uid별 앱 네트워크 사용량 (누적량 스냅샷, `dumpsys netstats detail`)
+struct AppNetStat: Sendable, Equatable, Hashable, Identifiable {
+    var uid: Int
+    var packageName: String?
+    var rxBytes: UInt64
+    var txBytes: UInt64
+    var id: Int { uid }
+    var totalBytes: UInt64 { rxBytes &+ txBytes }
+}
+
+/// 두 스냅샷 사이의 앱별 속도 (MB/s)
+struct AppNetRate: Sendable, Equatable, Hashable, Identifiable {
+    var uid: Int
+    var packageName: String?
+    var upMBps: Double
+    var downMBps: Double
+    var totalMBps: Double { upMBps + downMBps }
+    var id: Int { uid }
 }
 
 struct DeviceSnapshot: Sendable, Equatable {
@@ -88,6 +110,20 @@ struct DeviceSnapshot: Sendable, Equatable {
     var wifiSsid: String?
     var wifiRssi: Int?
     var ipV4: String?
+    /// RSRQ (dB) — `dumpsys telephony.registry` rsrq=
+    var rsrq: Int?
+    /// SINR (dB) — rssnr= / ssSinr=
+    var sinr: Int?
+    /// "LTE" | "NR" | "UMTS" | … — getRilDataRadioTechnology=(RAT)
+    var signalRat: String?
+    /// 밴드 요약 — "B3" / "B3+B8" / "B3+n78"
+    var signalBands: String?
+    /// CA 사용 여부 — isUsingCarrierAggregation=
+    var signalCA: Bool?
+    /// uid별 앱 네트워크 누적량 (15s, `dumpsys netstats detail`)
+    var appNetStats: [AppNetStat]?
+    /// uid별 앱 네트워크 속도 (MB/s) — 15s delta
+    var appNetRates: [AppNetRate]?
     // ── P2 카드 필드 (PLAN_v0.4) ──
     /// SurfaceFlinger GLES 렌더러 (예: Adreno (TM) 730)
     var gpuRenderer: String?
@@ -194,6 +230,13 @@ struct DeviceInventory: Equatable {
                 merged.thermalZones = merged.thermalZones ?? prev.thermalZones
                 merged.rsrp = merged.rsrp ?? prev.rsrp
                 merged.signalOperator = merged.signalOperator ?? prev.signalOperator
+                merged.rsrq = merged.rsrq ?? prev.rsrq
+                merged.sinr = merged.sinr ?? prev.sinr
+                merged.signalRat = merged.signalRat ?? prev.signalRat
+                merged.signalBands = merged.signalBands ?? prev.signalBands
+                merged.signalCA = merged.signalCA ?? prev.signalCA
+                merged.appNetStats = merged.appNetStats ?? prev.appNetStats
+                merged.appNetRates = merged.appNetRates ?? prev.appNetRates
                 merged.wifiSsid = merged.wifiSsid ?? prev.wifiSsid
                 merged.wifiRssi = merged.wifiRssi ?? prev.wifiRssi
                 merged.ipV4 = merged.ipV4 ?? prev.ipV4

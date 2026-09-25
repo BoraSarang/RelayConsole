@@ -10,7 +10,7 @@ struct ProcessListContent: View {
     var windowMode: Bool = false
 
     private enum SortKey: String, CaseIterable {
-        case cpu, rss, name, pid, path
+        case cpu, rss, net, name, pid, path
     }
 
     @State private var sortKey: SortKey = .cpu
@@ -29,6 +29,8 @@ struct ProcessListContent: View {
             }
         case .rss:
             return rows.sorted { ($0.rssMB ?? 0) > ($1.rssMB ?? 0) }
+        case .net:
+            return rows.sorted { ($0.netMBps ?? 0) > ($1.netMBps ?? 0) }
         case .name:
             return rows.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
         case .pid:
@@ -68,7 +70,7 @@ struct ProcessListContent: View {
                 .foregroundStyle(OPColor.inkDim)
                 .padding(OPSpace.sm)
         }
-        .frame(minWidth: 560, minHeight: 480)
+        .frame(minWidth: 640, minHeight: 480)
         .background(OPColor.popBG)
         .preferredColorScheme(ThemeManager.shared.mode.preferred)
     }
@@ -106,6 +108,8 @@ struct ProcessListContent: View {
                 .frame(width: 52, alignment: .trailing)
             headerButton(L10n.string("droid.process.col.ram"), key: .rss)
                 .frame(width: 60, alignment: .trailing)
+            headerButton(L10n.string("droid.process.col.net"), key: .net)
+                .frame(width: 80, alignment: .trailing)
             headerButton(L10n.string("droid.process.col.path"), key: .path)
                 .frame(width: 200, alignment: .leading)
         }
@@ -133,6 +137,11 @@ struct ProcessListContent: View {
                 .font(OPFont.number(11))
                 .foregroundStyle(OPColor.inkDim)
                 .frame(width: 60, alignment: .trailing)
+            Text(netText(row.netMBps))
+                .font(OPFont.number(11))
+                .foregroundStyle(row.netMBps.map { $0 > 0 ? OPColor.ok : OPColor.inkDim } ?? OPColor.inkDim)
+                .frame(width: 80, alignment: .trailing)
+                .help(row.netMBps.map { String(format: "%.3f MB/s", $0) } ?? "")
             Text(displayCommand(row.path))
                 .font(OPFont.number(10))
                 .foregroundStyle(OPColor.inkDim)
@@ -151,6 +160,13 @@ struct ProcessListContent: View {
     private func displayCommand(_ raw: String?) -> String {
         guard let raw, !raw.isEmpty else { return L10n.na }
         return raw
+    }
+
+    /// NET 셀 — uid netstats가 없는 프로세스는 "—"
+    private func netText(_ mbps: Double?) -> String {
+        guard let mbps else { return L10n.na }
+        let f = AdbClient.formatNetRate(mbps)
+        return f.unit.isEmpty ? f.value : "\(f.value) \(f.unit)"
     }
 
     private func headerButton(_ title: String, key: SortKey) -> some View {
@@ -195,7 +211,7 @@ struct ProcessListWindowView: View {
 }
 
 /// 윈도우 identifier 보강 — WindowFocus.present(sceneID:) 매칭용
-private struct WindowAccessor: NSViewRepresentable {
+struct WindowAccessor: NSViewRepresentable {
     var configure: (NSWindow) -> Void
 
     func makeNSView(context: Context) -> NSView {

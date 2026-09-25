@@ -21,6 +21,8 @@ struct RelayConsoleApp: App {
                 openProcesses()
             }, openLogs: {
                 openLogs()
+            }, openAppNetwork: {
+                openAppNetwork()
             })
             .frame(width: 360, height: 560)
             .preferredColorScheme(theme.mode.preferred)
@@ -34,8 +36,10 @@ struct RelayConsoleApp: App {
                     .scaledToFit()
                     .frame(height: 18)
                     .onAppear {
-                        // 플로팅에서 프로세스 창 열기 — openWindow Environment 주입 (항상 메뉴바에 존재)
+                        // 플로팅에서 각 창 열기 — openWindow Environment 주입 (항상 메뉴바에 존재)
                         FloatingGraphController.shared.openProcesses = { openProcesses() }
+                        FloatingGraphController.shared.openAppNetwork = { openAppNetwork() }
+                        FloatingGraphController.shared.openConsole = { openConsole() }
                     }
                 if store.hasActiveCritical {
                     Circle()
@@ -67,11 +71,11 @@ struct RelayConsoleApp: App {
 
         Window(L10n.string("droid.process.titleShort"), id: "processes") {
             ProcessListWindowView(store: store)
-                .frame(minWidth: 560, minHeight: 480)
+                .frame(minWidth: 640, minHeight: 480)
                 .preferredColorScheme(theme.mode.preferred)
                 .background(OPColor.popBG)
         }
-        .defaultSize(width: 640, height: 520)
+        .defaultSize(width: 720, height: 560)
 
         Window(L10n.string("droid.logs.titleShort"), id: "logs") {
             LogViewerWindowView(store: store)
@@ -80,6 +84,14 @@ struct RelayConsoleApp: App {
                 .background(OPColor.popBG)
         }
         .defaultSize(width: 720, height: 480)
+
+        Window(L10n.string("droid.appnet.titleShort"), id: "appnetwork") {
+            AppNetworkWindowView(store: store)
+                .frame(minWidth: 520, minHeight: 420)
+                .preferredColorScheme(theme.mode.preferred)
+                .background(OPColor.popBG)
+        }
+        .defaultSize(width: 620, height: 460)
 
         Settings {
             SettingsView(store: store)
@@ -112,6 +124,7 @@ struct RelayConsoleApp: App {
     }
 
     private func openConsole() {
+        NSApp.activate(ignoringOtherApps: true)
         WindowFocus.dismissMenuBarPanels()
         openWindow(id: "console")
         WindowFocus.present(sceneID: "console")
@@ -119,6 +132,7 @@ struct RelayConsoleApp: App {
 
     private func openDebug() {
 #if DEBUG
+        NSApp.activate(ignoringOtherApps: true)
         WindowFocus.dismissMenuBarPanels()
         openWindow(id: "debug")
         WindowFocus.present(sceneID: "debug")
@@ -126,21 +140,31 @@ struct RelayConsoleApp: App {
     }
 
     private func openSettingsWindow() {
+        NSApp.activate(ignoringOtherApps: true)
         WindowFocus.dismissMenuBarPanels()
         openSettings()
         WindowFocus.presentSettings()
     }
 
     private func openProcesses() {
+        NSApp.activate(ignoringOtherApps: true)
         WindowFocus.dismissMenuBarPanels()
         openWindow(id: "processes")
         WindowFocus.present(sceneID: "processes")
     }
 
     private func openLogs() {
+        NSApp.activate(ignoringOtherApps: true)
         WindowFocus.dismissMenuBarPanels()
         openWindow(id: "logs")
         WindowFocus.present(sceneID: "logs")
+    }
+
+    private func openAppNetwork() {
+        NSApp.activate(ignoringOtherApps: true)
+        WindowFocus.dismissMenuBarPanels()
+        openWindow(id: "appnetwork")
+        WindowFocus.present(sceneID: "appnetwork")
     }
 
     /// 기기 0대 → Off(흰 안테나) · 1대+ → Online(흰 Android + 초록점)

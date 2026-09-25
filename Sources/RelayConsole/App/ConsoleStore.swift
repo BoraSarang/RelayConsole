@@ -669,11 +669,13 @@ final class ConsoleStore: ObservableObject {
         let level = snapshot.batteryLevel.map(Double.init)
         let cpu = snapshot.cpuUsePercent
 
-        var netPush: Double?
+        var netUpPush: Double?
+        var netDownPush: Double?
         if let up = snapshot.netUpMBps, let down = snapshot.netDownMBps {
             let key = snapshot.serial
             if lastNetPushAt[key] == nil || Date().timeIntervalSince(lastNetPushAt[key]!) >= 10 {
-                netPush = up + down
+                netUpPush = up
+                netDownPush = down
                 lastNetPushAt[key] = Date()
             }
         }
@@ -687,8 +689,17 @@ final class ConsoleStore: ObservableObject {
 
         let gpu = snapshot.gpuUtilPercent
 
-        if cpu != nil || temp != nil || level != nil || netPush != nil || diskRead != nil || diskWrite != nil || gpu != nil {
-            m.push(cpu: cpu, temp: temp, level: level, net: netPush, diskRead: diskRead, diskWrite: diskWrite, gpu: gpu)
+        if cpu != nil || temp != nil || level != nil || netUpPush != nil || diskRead != nil || diskWrite != nil || gpu != nil {
+            m.push(
+                cpu: cpu,
+                temp: temp,
+                level: level,
+                netUp: netUpPush,
+                netDown: netDownPush,
+                diskRead: diskRead,
+                diskWrite: diskWrite,
+                gpu: gpu
+            )
             metricsHistory[snapshot.serial] = m
         }
 

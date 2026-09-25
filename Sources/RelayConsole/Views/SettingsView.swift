@@ -38,7 +38,8 @@ struct SettingsView: View {
     @AppStorage("relay.float.showGPU") private var showFloatGPU = false
     @AppStorage("relay.float.showMemory") private var showFloatMemory = false
     @AppStorage(FloatingGraphLogic.opacityKey) private var floatOpacity = FloatingGraphLogic.defaultOpacity
-    @AppStorage("relay.float.enabled") private var floatEnabled = false
+    /// On/Off 단일 진실원천 — FloatingGraphController.isEnabled (AppStorage 분리 기록 금지)
+    @ObservedObject private var float = FloatingGraphController.shared
     @AppStorage(LoginItemLogic.headlessKey) private var headless = LoginItemLogic.defaultHeadless()
     @ObservedObject private var login = LoginItemController.shared
     @State private var selection: SettingsTab? = .general
@@ -151,10 +152,10 @@ struct SettingsView: View {
     @ViewBuilder
     private var floatSection: some View {
         Section(L10n.string("settings.float.section")) {
-            Toggle(L10n.string("settings.float.enabled"), isOn: $floatEnabled)
-                .onChange(of: floatEnabled) { _, enabled in
-                    FloatingGraphController.shared.setEnabled(enabled)
-                }
+            Toggle(L10n.string("settings.float.enabled"), isOn: Binding(
+                get: { float.isEnabled },
+                set: { float.setEnabled($0) }
+            ))
             Toggle(L10n.string("settings.float.network"), isOn: $showFloatNetwork)
             Toggle(L10n.string("settings.float.cpu"), isOn: $showFloatCPU)
             Toggle(L10n.string("settings.float.gpu"), isOn: $showFloatGPU)
