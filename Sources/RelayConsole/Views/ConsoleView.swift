@@ -1,7 +1,7 @@
 import SwiftUI
 
 private enum ConsoleSection: String, CaseIterable, Identifiable {
-    case devices, sites, jobs, alerts
+    case devices, sites, jobs, alerts, insights
     var id: String { rawValue }
 
     var label: String {
@@ -10,6 +10,7 @@ private enum ConsoleSection: String, CaseIterable, Identifiable {
         case .sites: return L10n.string("sidebar.sites")
         case .jobs: return L10n.string("sidebar.jobs")
         case .alerts: return L10n.string("sidebar.alerts")
+        case .insights: return L10n.string("sidebar.insights")
         }
     }
 
@@ -19,6 +20,7 @@ private enum ConsoleSection: String, CaseIterable, Identifiable {
         case .sites: return "globe"
         case .jobs: return "clock"
         case .alerts: return "bell"
+        case .insights: return "chart.bar.xaxis"
         }
     }
 }
@@ -42,31 +44,46 @@ struct ConsoleView: View {
     @State private var platform: DevicePlatform = .android
 
     var body: some View {
-        ZStack {
-            Color(hex: 0x0F111A).ignoresSafeArea()
-            NavigationSplitView {
-                List(ConsoleSection.allCases, selection: $selection) { section in
-                    Label(section.label, systemImage: section.icon)
-                        .tag(section)
-                }
-                .listStyle(.sidebar)
-                .navigationSplitViewColumnWidth(min: 160, ideal: 180, max: 220)
-            } detail: {
-                switch selection {
-                case .devices, .none:
-                    devicesDetail
-                case .sites:
-                    SitesView(store: store)
-                case .jobs:
-                    JobsView(store: store)
-                case .alerts:
-                    AlertsView(store: store)
-                }
-            }
-            .navigationTitle(L10n.string("droid.header.title"))
+        // 설정(SettingsView)과 동일 구조 — HStack 고정 사이드바 180 (NavigationSplitView 접기 버튼/폭 차이 제거)
+        HStack(spacing: 0) {
+            sidebar
+            Divider()
+                .overlay(OPColor.border)
+            detail
         }
-        .background(Color(hex: 0x0F111A))
-        .preferredColorScheme(.dark)
+        .frame(minWidth: 760, minHeight: 520)
+        .background(OPColor.popBG)
+        .preferredColorScheme(ThemeManager.shared.mode.preferred)
+    }
+
+    private var sidebar: some View {
+        List(ConsoleSection.allCases, selection: $selection) { section in
+            Label(section.label, systemImage: section.icon)
+                .tag(section)
+        }
+        .listStyle(.sidebar)
+        .scrollContentBackground(.hidden)
+        .frame(width: 180)
+        .background(OPColor.popBG)
+    }
+
+    private var detail: some View {
+        Group {
+            switch selection {
+            case .devices, .none:
+                devicesDetail
+            case .sites:
+                SitesView(store: store)
+            case .jobs:
+                JobsView(store: store)
+            case .alerts:
+                AlertsView(store: store)
+            case .insights:
+                InsightsView(store: store)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(OPColor.popBG)
     }
 
     /// Android / Apple 세그먼트 — Apple Trust-only Phase1
@@ -80,7 +97,7 @@ struct ConsoleView: View {
             .pickerStyle(.segmented)
             .labelsHidden()
             .padding(OPSpace.md)
-            .background(Color(hex: 0x0F111A))
+            .background(OPColor.popBG)
 
             switch platform {
             case .android:
@@ -93,7 +110,7 @@ struct ConsoleView: View {
 
     private func placeholder(_ title: String, systemImage: String) -> some View {
         ZStack {
-            Color(hex: 0x0F111A).ignoresSafeArea()
+            OPColor.popBG.ignoresSafeArea()
             VStack(spacing: 12) {
                 Image(systemName: systemImage)
                     .font(.system(size: 36, weight: .light))

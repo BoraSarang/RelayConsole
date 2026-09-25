@@ -44,8 +44,8 @@ struct AppHubSheet: View {
             statusLine
         }
         .frame(minWidth: 520, minHeight: 440)
-        .background(Color(hex: 0x0F111A))
-        .preferredColorScheme(.dark)
+        .background(OPColor.popBG)
+        .preferredColorScheme(ThemeManager.shared.mode.preferred)
         .onAppear { hub.refresh(serial: serial) }
         .onChange(of: hub.includeSystem) { _, _ in
             hub.refresh(serial: serial)

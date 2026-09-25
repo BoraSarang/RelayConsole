@@ -157,7 +157,7 @@ struct WifiOnboardingSheet: View {
         }
         .padding(OPSpace.xl)
         .frame(minWidth: 420, minHeight: 380)
-        .preferredColorScheme(.dark)
+        .preferredColorScheme(ThemeManager.shared.mode.preferred)
         .onAppear {
             if selectedUsbSerial.isEmpty {
                 if let p = presetSerial, usbDevices.contains(where: { $0.serial == p }) {

@@ -37,6 +37,33 @@ enum FloatingGraphLogic {
         "\(p.x),\(p.y)"
     }
 
+    /// frame이 유한한 크기인지 (저장 전 가드)
+    static func isSavableFrame(_ frame: NSRect) -> Bool {
+        frame.height >= 80
+            && frame.width > 0
+            && frame.origin.x.isFinite
+            && frame.origin.y.isFinite
+            && frame.width.isFinite
+            && frame.height.isFinite
+    }
+
+    /// 저장 기준 = 왼쪽 위 꼭지점 1점 (fitToContent 상단 고정과 동일 기준)
+    static func topLeft(of frame: NSRect) -> NSPoint {
+        NSPoint(x: frame.minX, y: frame.maxY)
+    }
+
+    static func bottomLeft(fromTopLeft topLeft: NSPoint, height: CGFloat) -> NSPoint {
+        NSPoint(x: topLeft.x, y: topLeft.y - height)
+    }
+
+    /// 화면 visibleFrame 안에 상단-좌표 창이 완전히 들어오도록 clamp
+    static func clampTopLeft(_ p: NSPoint, size: NSSize, in screen: NSRect) -> NSPoint {
+        NSPoint(
+            x: min(max(p.x, screen.minX), max(screen.maxX - size.width, screen.minX)),
+            y: min(max(p.y, screen.minY + size.height), screen.maxY)
+        )
+    }
+
     static let opacityKey = "relay.float.opacity"
     static let minOpacity = 0.35
     static let maxOpacity = 1.0
@@ -64,7 +91,6 @@ final class FloatingGraphController {
 
     private var panel: NSPanel?
     private var moveObserver: NSObjectProtocol?
-    private var opacityObserver: NSObjectProtocol?
     private var dragMonitor: Any?
     private var dragPressScreen: NSPoint?
     private var dragOriginAtPress: NSPoint?
@@ -73,6 +99,9 @@ final class FloatingGraphController {
 
     private let store = ConsoleStore.shared
     private var storeCancellable: Any?
+
+    /// App 라벨 onAppear에서 주입 — 플로팅에서 프로세스 창 열기 (openWindow Environment 재사용)
+    var openProcesses: (() -> Void)?
 
     var isVisible: Bool { panel?.isVisible == true }
 
@@ -83,14 +112,6 @@ final class FloatingGraphController {
             .sink { [weak self] _ in
                 self?.fitToContent()
             }
-        // 투명도(Settings/AppStorage) 변경 → 패널 alpha 즉시 반영
-        opacityObserver = NotificationCenter.default.addObserver(
-            forName: UserDefaults.didChangeNotification, object: nil, queue: .main
-        ) { [weak self] _ in
-            Task { @MainActor [weak self] in
-                self?.applyStoredOpacity()
-            }
-        }
     }
 
     func toggle() {
@@ -108,32 +129,54 @@ final class FloatingGraphController {
             createPanel()
         }
         panel?.orderFront(nil)
-        applyStoredOpacity()
         fitToContent()
         DebugLogger.shared.action("FloatGraph", "플로팅 창 표시")
     }
 
     func hide() {
         UserDefaults.standard.set(false, forKey: "relay.float.enabled")
-        guard isVisible else { return }
-        panel?.orderOut(nil)
+        guard let panel, panel.isVisible else { return }
+        // 위치 저장 — 재오픈/재시작 시 복원 (이슈 4)
+        saveOrigin(panel.frame)
+        panel.orderOut(nil)
         DebugLogger.shared.action("FloatGraph", "플로팅 창 숨김")
+    }
+
+    /// 앱 종료 직전 현재 프레임 저장 (didMove 없이 종료해도 위치 유지)
+    func persistPosition() {
+        guard let panel else { return }
+        saveOrigin(panel.frame)
+    }
+
+    func requestOpenProcesses() {
+        openProcesses?()
     }
 
     private func createPanel() {
         let hosting = NSHostingController(
-            rootView: FloatingGraphView(store: store)
+            rootView: FloatingGraphView(
+                store: store,
+                onOpenProcesses: { [weak self] in
+                    self?.requestOpenProcesses()
+                }
+            )
         )
         let size = NSSize(width: 300, height: 200)
-        let screenFrame = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
-        var origin = FloatingGraphLogic.parseOrigin(
+        let screenFrame = (NSScreen.main ?? NSScreen.screens.first)?.visibleFrame
+            ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
+        // 저장값 = 왼쪽 위 꼭지점 1점 — 없으면 좌상단 고정 (오른쪽 기본값 금지)
+        let savedTopLeft = FloatingGraphLogic.parseOrigin(
             UserDefaults.standard.string(forKey: Self.originKey)
-        ) ?? NSPoint(
-            x: screenFrame.maxX - size.width - 20,
-            y: screenFrame.maxY - size.height - 48
         )
-        origin.x = min(max(origin.x, screenFrame.minX), max(screenFrame.maxX - size.width, screenFrame.minX))
-        origin.y = min(max(origin.y, screenFrame.minY), max(screenFrame.maxY - size.height, screenFrame.minY))
+        let topLeft = FloatingGraphLogic.clampTopLeft(
+            savedTopLeft ?? NSPoint(
+                x: screenFrame.minX + 20,
+                y: screenFrame.maxY - 48
+            ),
+            size: size,
+            in: screenFrame
+        )
+        let origin = FloatingGraphLogic.bottomLeft(fromTopLeft: topLeft, height: size.height)
 
         let win = NSPanel(
             contentRect: NSRect(origin: origin, size: size),
@@ -145,26 +188,23 @@ final class FloatingGraphController {
         win.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         win.isOpaque = false
         win.backgroundColor = .clear
-        win.hasShadow = true
+        // 투명 배경 + 그림자 이슈 방지 (TetherLens 동일)
+        win.hasShadow = false
         win.isReleasedWhenClosed = false
         win.identifier = NSUserInterfaceItemIdentifier(Self.windowID)
         win.contentViewController = hosting
         panel = win
-        applyStoredOpacity()
+        // 생성 직후 content 크기 반영 전 frame을 못 맞추면 maxY가 깨져 저장됨 — 의도한 좌상단으로 고정
+        win.setFrame(NSRect(origin: origin, size: size), display: false)
         observeMove(win)
         installDragMonitor(for: win)
         DebugLogger.shared.action("FloatGraph", "창 생성 위치=\(origin)")
     }
 
-    /// Settings 슬라이더 / AppStorage → 패널 alpha
+    /// Settings 슬라이더 / AppStorage → clamp 후 defaults 기록 (뷰 배경 fill이 투명도 반영)
     func setOpacity(_ raw: Double) {
         let v = FloatingGraphLogic.clampOpacity(raw)
         UserDefaults.standard.set(v, forKey: FloatingGraphLogic.opacityKey)
-        applyStoredOpacity()
-    }
-
-    private func applyStoredOpacity() {
-        panel?.alphaValue = FloatingGraphLogic.storedOpacity()
     }
 
     func fitToContent() {
@@ -177,7 +217,7 @@ final class FloatingGraphController {
         guard h > 0, h.isFinite else { return }
         h = min(max(h, 80), 480)
         guard abs(h - panel.frame.height) > 0.5 else { return }
-        let screenFrame = NSScreen.main?.visibleFrame ?? panel.frame
+        let screenFrame = (panel.screen ?? NSScreen.main)?.visibleFrame ?? panel.frame
         var origin = panel.frame.origin
         origin.y += panel.frame.height - h
         origin.x = min(max(origin.x, screenFrame.minX), max(screenFrame.maxX - panel.frame.width, screenFrame.minX))
@@ -186,6 +226,7 @@ final class FloatingGraphController {
             NSRect(origin: origin, size: NSSize(width: panel.frame.width, height: h)),
             display: true
         )
+        saveOrigin(panel.frame)
     }
 
     private func installDragMonitor(for panel: NSPanel) {
@@ -219,7 +260,7 @@ final class FloatingGraphController {
                 ))
             case .leftMouseUp:
                 if self.dragPressScreen != nil {
-                    self.saveOrigin(panel.frame.origin)
+                    self.saveOrigin(panel.frame)
                 }
                 self.dragPressScreen = nil
                 self.dragOriginAtPress = nil
@@ -238,13 +279,15 @@ final class FloatingGraphController {
         ) { [weak self] note in
             guard let win = note.object as? NSWindow else { return }
             Task { @MainActor [weak self] in
-                self?.saveOrigin(win.frame.origin)
+                self?.saveOrigin(win.frame)
             }
         }
     }
 
-    private func saveOrigin(_ p: NSPoint) {
-        UserDefaults.standard.set(FloatingGraphLogic.formatOrigin(p), forKey: Self.originKey)
+    private func saveOrigin(_ frame: NSRect) {
+        guard FloatingGraphLogic.isSavableFrame(frame) else { return }
+        let topLeft = FloatingGraphLogic.topLeft(of: frame)
+        UserDefaults.standard.set(FloatingGraphLogic.formatOrigin(topLeft), forKey: Self.originKey)
     }
 
     /// Settings 토글 ↔ 패널 표시 동기화

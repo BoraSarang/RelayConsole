@@ -24,7 +24,7 @@ struct DroidDashboardView: View {
 
     var body: some View {
         ZStack {
-            Color(hex: 0x0F111A).ignoresSafeArea()
+            OPColor.popBG.ignoresSafeArea()
             ScrollView {
                 VStack(alignment: .leading, spacing: OPSpace.lg) {
                     if device == nil {
@@ -70,6 +70,7 @@ struct DroidDashboardView: View {
                                 DroidCards.health(device: device)
                             }
                         }
+                        todaySummaryCard
                         footer
                     }
                 }
@@ -77,8 +78,8 @@ struct DroidDashboardView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
-        .background(Color(hex: 0x0F111A))
-        .preferredColorScheme(.dark)
+        .background(OPColor.popBG)
+        .preferredColorScheme(ThemeManager.shared.mode.preferred)
         .sheet(isPresented: $showProcessList) {
             ProcessListSheet(store: store)
         }
@@ -320,6 +321,72 @@ struct DroidDashboardView: View {
     }
 
     // MARK: - Values
+
+    /// 오늘 요약 카드 (PLAN Phase3 · 표시 위치 C)
+    private var todaySummaryCard: some View {
+        Group {
+            if let d = device {
+                let dayKey = InsightLogic.dayKey(for: .now)
+                let report = ReportLogic.dayOverDay(
+                    events: store.recentWatchEvents,
+                    dailies: Array(DeviceDailyStore.shared.map.values),
+                    sessions: ConnectionSessionStore.shared.sessions,
+                    dayKey: dayKey,
+                    serial: d.serial,
+                    thresholds: store.patternThresholds()
+                )
+                let daily = DeviceDailyStore.shared.day(serial: d.serial, dayKey: dayKey)
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Text(L10n.string("droid.today.title"))
+                            .font(OPFont.body(12))
+                            .foregroundStyle(OPColor.ink)
+                        Spacer()
+                        Text(dayKey)
+                            .font(OPFont.number(10))
+                            .foregroundStyle(OPColor.inkDim)
+                    }
+                    HStack(spacing: 12) {
+                        todayMetric(
+                            L10n.string("insights.metric.critical"),
+                            "\(report.criticalCount)",
+                            report.criticalCount > 0 ? OPColor.bad : OPColor.ok
+                        )
+                        todayMetric(
+                            L10n.string("insights.metric.crash"),
+                            "\(report.crashCount)",
+                            report.crashCount > 0 ? OPColor.bad : OPColor.ok
+                        )
+                        todayMetric(
+                            L10n.string("insights.metric.temp"),
+                            daily?.tempMax.map { String(format: "%.1f°", $0) } ?? L10n.na,
+                            OPColor.thermal
+                        )
+                        todayMetric(
+                            L10n.string("insights.pattern.repeating"),
+                            "\(report.repeatingCount)",
+                            report.repeatingCount > 0 ? OPColor.bad : OPColor.ok
+                        )
+                    }
+                }
+                .padding(OPSpace.md)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(OPColor.card, in: RoundedRectangle(cornerRadius: 12))
+                .overlay(RoundedRectangle(cornerRadius: 12).stroke(OPColor.border, lineWidth: 1))
+            }
+        }
+    }
+
+    private func todayMetric(_ label: String, _ value: String, _ color: Color) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label)
+                .font(OPFont.number(9))
+                .foregroundStyle(OPColor.inkDim)
+            Text(value)
+                .font(OPFont.number(13))
+                .foregroundStyle(color)
+        }
+    }
 
     private var footer: some View {
         VStack(alignment: .leading, spacing: 8) {

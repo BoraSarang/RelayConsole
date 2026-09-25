@@ -33,13 +33,13 @@ struct MenuBarPopoverView: View {
 
     var body: some View {
         ZStack {
-            Color(hex: 0x0F111A).ignoresSafeArea()
+            OPColor.popBG.ignoresSafeArea()
             VStack(spacing: 0) {
                 headerBlock
                     .padding(.horizontal, OPSpace.lg)
                     .padding(.top, OPSpace.lg)
                     .padding(.bottom, OPSpace.sm)
-                    .background(Color(hex: 0x0F111A))
+                    .background(OPColor.popBG)
 
                 Divider().overlay(OPColor.border)
 
@@ -84,15 +84,24 @@ struct MenuBarPopoverView: View {
                 footer
                     .padding(.horizontal, OPSpace.lg)
                     .padding(.vertical, OPSpace.md)
-                    .background(Color(hex: 0x0F111A))
+                    .background(OPColor.popBG)
             }
         }
         .frame(width: 360, height: 560)
-        .background(Color(hex: 0x0F111A))
-        .preferredColorScheme(.dark)
+        .background(OPColor.popBG)
+        .preferredColorScheme(ThemeManager.shared.mode.preferred)
         .onAppear {
             // LSUIElement — 팝오버 열림 시 앱 활성화 누락 → 다른 창이 뒤로 내려감
             WindowFocus.menuBarPopoverDidOpen()
+            // 기기가 하나면 기기 상세/카드 자동 펼침
+            if devices.count == 1 {
+                showDeviceDetail = true
+            }
+        }
+        .onChange(of: devices.count) { _, count in
+            if count == 1 {
+                showDeviceDetail = true
+            }
         }
         .onDisappear {
             WindowFocus.menuBarPopoverDidClose()
@@ -173,6 +182,7 @@ struct MenuBarPopoverView: View {
 
             if briefingEnabled {
                 briefingLine
+                    .padding(.top, 6)
             }
         }
         .fixedSize(horizontal: false, vertical: true)

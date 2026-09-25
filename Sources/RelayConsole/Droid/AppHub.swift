@@ -135,6 +135,9 @@ final class AppHubController: ObservableObject {
         }
         busyPackage = package
         let adb = DeviceMonitor.adbPathNow()
+        let logKind: String = removeAfter
+            ? IssueLog.Kind.appUninstall
+            : (okKey == "apphub.status.stopped" ? IssueLog.Kind.appForceStop : IssueLog.Kind.appLaunch)
         Task.detached(priority: .userInitiated) {
             var message: String?
             var ok = false
@@ -148,6 +151,17 @@ final class AppHubController: ObservableObject {
             } else {
                 message = L10n.string("apphub.status.failed")
             }
+            // Phase1 — 액션 로그 (런치 후 N초 크래시 상관 원재료)
+            IssueLog.append(
+                IssueLog.Entry(
+                    kind: logKind,
+                    detail: message ?? "ok",
+                    serial: serial,
+                    package: package,
+                    ok: ok
+                ),
+                name: "apphub"
+            )
             await MainActor.run {
                 self.busyPackage = nil
                 if ok {

@@ -358,37 +358,74 @@ final class WatchEngine {
     }
 
     /// ANR logcat 적중 — 1회성, 5분 쿨다운, clear 자동 없음 (가이드 TTL 의존)
-    func feedAnr(serial: String, detail: String = "", now: Date = .now) -> WatchEvent? {
+    /// packageName/exceptionClass는 구조화 필드로 승격 (detail 문자열 아님)
+    func feedAnr(
+        serial: String,
+        detail: String = "",
+        packageName: String? = nil,
+        exceptionClass: String? = nil,
+        now: Date = .now
+    ) -> WatchEvent? {
         if let last = anrLastAt[serial], now.timeIntervalSince(last) < logcatFatalCooldown {
             return nil
         }
         anrLastAt[serial] = now
         let short = AdbClient.shortId(serial)
-        return WatchEvent(
+        let shortPkg = packageName.map { " · \($0)" } ?? ""
+        var ev = WatchEvent(
             kind: .anr,
             severity: .critical,
             serial: serial,
             title: L10n.string("event.anr.enter"),
-            detail: detail.isEmpty ? short : "\(short) · \(detail)",
-            at: now
+            detail: detail.isEmpty ? short + shortPkg : "\(short) · \(detail)",
+            at: now,
+            packageName: packageName,
+            exceptionClass: exceptionClass ?? "ANR"
         )
+        if let fp = WatchEvent.makeErrorFingerprint(
+            serial: serial,
+            kind: .anr,
+            packageName: packageName,
+            exceptionClass: exceptionClass ?? "ANR"
+        ) {
+            ev = ev.structured(errorFingerprint: fp)
+        }
+        return ev
     }
 
     /// 크래시 logcat 적중 — 1회성, 5분 쿨다운, clear 자동 없음 (가이드 TTL 의존)
-    func feedCrash(serial: String, detail: String = "", now: Date = .now) -> WatchEvent? {
+    func feedCrash(
+        serial: String,
+        detail: String = "",
+        packageName: String? = nil,
+        exceptionClass: String? = nil,
+        now: Date = .now
+    ) -> WatchEvent? {
         if let last = crashLastAt[serial], now.timeIntervalSince(last) < logcatFatalCooldown {
             return nil
         }
         crashLastAt[serial] = now
         let short = AdbClient.shortId(serial)
-        return WatchEvent(
+        let shortPkg = packageName.map { " · \($0)" } ?? ""
+        var ev = WatchEvent(
             kind: .crash,
             severity: .critical,
             serial: serial,
             title: L10n.string("event.crash.enter"),
-            detail: detail.isEmpty ? short : "\(short) · \(detail)",
-            at: now
+            detail: detail.isEmpty ? short + shortPkg : "\(short) · \(detail)",
+            at: now,
+            packageName: packageName,
+            exceptionClass: exceptionClass
         )
+        if let fp = WatchEvent.makeErrorFingerprint(
+            serial: serial,
+            kind: .crash,
+            packageName: packageName,
+            exceptionClass: exceptionClass
+        ) {
+            ev = ev.structured(errorFingerprint: fp)
+        }
+        return ev
     }
 
     /// 기기 분리 시 상태 정리 + 미해결 활성 gate의 synthetic clear 반환

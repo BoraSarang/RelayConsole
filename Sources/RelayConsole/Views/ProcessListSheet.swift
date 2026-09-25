@@ -6,6 +6,8 @@ import AppKit
 struct ProcessListContent: View {
     @ObservedObject var store: ConsoleStore
     var onClose: (() -> Void)?
+    /// true: 독립 창 — 시스템 타이틀바가 제목/닫기를 담당 (콘텐츠 헤더 제목 생략)
+    var windowMode: Bool = false
 
     private enum SortKey: String, CaseIterable {
         case cpu, rss, name, pid, path
@@ -67,16 +69,23 @@ struct ProcessListContent: View {
                 .padding(OPSpace.sm)
         }
         .frame(minWidth: 560, minHeight: 480)
-        .background(Color(hex: 0x0F111A))
-        .preferredColorScheme(.dark)
+        .background(OPColor.popBG)
+        .preferredColorScheme(ThemeManager.shared.mode.preferred)
     }
 
     private var header: some View {
         HStack {
-            Text(L10n.format("droid.process.title", device?.displayName ?? L10n.na))
-                .font(OPFont.title(14))
-                .foregroundStyle(OPColor.ink)
-                .lineLimit(1)
+            if !windowMode {
+                Text(L10n.format("droid.process.title", device?.displayName ?? L10n.na))
+                    .font(OPFont.title(14))
+                    .foregroundStyle(OPColor.ink)
+                    .lineLimit(1)
+            } else if let name = device?.displayName {
+                Text(name)
+                    .font(OPFont.number(12))
+                    .foregroundStyle(OPColor.inkDim)
+                    .lineLimit(1)
+            }
             Spacer()
             if onClose != nil {
                 Button(L10n.string("droid.process.close")) { onClose?() }
@@ -173,13 +182,12 @@ struct ProcessListSheet: View {
     }
 }
 
-/// 메뉴바용 독립 윈도우 — 팝오버 닫힘과 무관
+/// 메뉴바용 독립 윈도우 — 시스템 타이틀바(제목·닫기) 사용, 콘텐츠 헤더 제목 제거
 struct ProcessListWindowView: View {
     @ObservedObject var store: ConsoleStore
-    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        ProcessListContent(store: store) { dismiss() }
+        ProcessListContent(store: store, windowMode: true)
             .background(WindowAccessor { w in
                 w.identifier = NSUserInterfaceItemIdentifier("processes")
             })

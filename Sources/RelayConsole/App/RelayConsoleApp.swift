@@ -5,6 +5,7 @@ import AppKit
 struct RelayConsoleApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var store = ConsoleStore.shared
+    @ObservedObject private var theme = ThemeManager.shared
     @Environment(\.openWindow) private var openWindow
     @Environment(\.openSettings) private var openSettings
 
@@ -22,8 +23,8 @@ struct RelayConsoleApp: App {
                 openLogs()
             })
             .frame(width: 360, height: 560)
-            .preferredColorScheme(.dark)
-            .background(Color(hex: 0x0F111A)) // SOLID — V0-2: no material/glass
+            .preferredColorScheme(theme.mode.preferred)
+            .background(OPColor.popBG) // SOLID — V0-2: no material/glass
         }
         label: {
             // 아이콘만 — 텍스트 없음. 0대: 흰 안테나 · 1대+: 흰 Android + 초록점 · critical 미해결: 주황 배지
@@ -32,6 +33,10 @@ struct RelayConsoleApp: App {
                     .resizable()
                     .scaledToFit()
                     .frame(height: 18)
+                    .onAppear {
+                        // 플로팅에서 프로세스 창 열기 — openWindow Environment 주입 (항상 메뉴바에 존재)
+                        FloatingGraphController.shared.openProcesses = { openProcesses() }
+                    }
                 if store.hasActiveCritical {
                     Circle()
                         .fill(OPColor.thermal)
@@ -51,50 +56,35 @@ struct RelayConsoleApp: App {
             }
         }
 
+        // 창 크롬 통일: 전부 시스템 타이틀바 (Settings scene과 동일 — DESIGN §4 native)
         Window(L10n.string("droid.header.title"), id: "console") {
-            ZStack {
-                Color(hex: 0x0F111A).ignoresSafeArea()
-                ConsoleView(store: store)
-            }
-            .frame(minWidth: 760, minHeight: 520)
-            .preferredColorScheme(.dark)
-            .background(Color(hex: 0x0F111A))
+            ConsoleView(store: store)
+                .frame(minWidth: 760, minHeight: 520)
+                .preferredColorScheme(theme.mode.preferred)
+                .background(OPColor.popBG)
         }
-        .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 900, height: 700)
 
         Window(L10n.string("droid.process.titleShort"), id: "processes") {
-            ZStack {
-                Color(hex: 0x0F111A).ignoresSafeArea()
-                ProcessListWindowView(store: store)
-            }
-            .frame(minWidth: 560, minHeight: 480)
-            .preferredColorScheme(.dark)
-            .background(Color(hex: 0x0F111A))
+            ProcessListWindowView(store: store)
+                .frame(minWidth: 560, minHeight: 480)
+                .preferredColorScheme(theme.mode.preferred)
+                .background(OPColor.popBG)
         }
-        .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 640, height: 520)
 
         Window(L10n.string("droid.logs.titleShort"), id: "logs") {
-            ZStack {
-                Color(hex: 0x0F111A).ignoresSafeArea()
-                LogViewerWindowView(store: store)
-            }
-            .frame(minWidth: 640, minHeight: 420)
-            .preferredColorScheme(.dark)
-            .background(Color(hex: 0x0F111A))
+            LogViewerWindowView(store: store)
+                .frame(minWidth: 640, minHeight: 420)
+                .preferredColorScheme(theme.mode.preferred)
+                .background(OPColor.popBG)
         }
-        .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 720, height: 480)
 
         Settings {
-            ZStack {
-                Color(hex: 0x0F111A).ignoresSafeArea()
-                SettingsView(store: store)
-            }
-            .frame(minWidth: 560, minHeight: 400)
-            .preferredColorScheme(.dark)
-            .background(Color(hex: 0x0F111A))
+            SettingsView(store: store)
+                .frame(minWidth: 560, maxWidth: 640, minHeight: 400, maxHeight: 720)
+                .preferredColorScheme(theme.mode.preferred)
         }
 
         debugScenes
@@ -104,13 +94,10 @@ struct RelayConsoleApp: App {
     private var debugScenes: some Scene {
 #if DEBUG
         Window(L10n.string("ui.debug.title"), id: "debug") {
-            ZStack {
-                Color(hex: 0x0F111A).ignoresSafeArea()
-                DebugPanelView()
-            }
-            .frame(minWidth: 560, minHeight: 400)
-            .preferredColorScheme(.dark)
-            .background(Color(hex: 0x0F111A))
+            DebugPanelView()
+                .frame(minWidth: 560, minHeight: 400)
+                .preferredColorScheme(theme.mode.preferred)
+                .background(OPColor.popBG)
         }
         .defaultSize(width: 640, height: 480)
         .commands {

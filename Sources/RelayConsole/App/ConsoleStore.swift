@@ -93,6 +93,19 @@ final class ConsoleStore: ObservableObject {
     @AppStorage("relay.briefing.enabled") var briefingEnabled = true
     /// S4 Incident Bundle 자동 캡처
     @AppStorage("relay.incident.auto") var incidentAuto = true
+    /// 인사이트·보관 (Phase1) — 30/60/90/0(무제한), 기본 30
+    @AppStorage(InsightSettings.retentionKey) var retentionDays = InsightSettings.defaultRetentionDays
+    /// 패턴 판정 임계값 (테스트기/안정기 전환용)
+    @AppStorage(PatternThresholds.keys.repeatingDays) var patternRepeatingDays = PatternThresholds.default.repeatingDays
+    @AppStorage(PatternThresholds.keys.repeatingCount) var patternRepeatingCount = PatternThresholds.default.repeatingCount
+    @AppStorage(PatternThresholds.keys.resolvedQuietDays) var patternResolvedQuietDays = PatternThresholds.default.resolvedQuietDays
+    @AppStorage(PatternThresholds.keys.dormantQuietDays) var patternDormantQuietDays = PatternThresholds.default.dormantQuietDays
+
+    /// 보관 정리 대상 공통 스케줄
+    private var retentionSweepTask: Task<Void, Never>?
+    /// 메트릭 1분 롤업 디바운스 (serial → 마지막 수집 시각)
+    private var lastDailyIngestAt: [String: Date] = [:]
+    private let dailyIngestDebounce: TimeInterval = 60
 
     private init() {
         selectedSerial = UserDefaults.standard.string(forKey: selectedKey)
@@ -101,6 +114,80 @@ final class ConsoleStore: ObservableObject {
         recentWatchEvents = EventStore.shared.load()
         sites = SitesJobsStore.shared.loadSites()
         jobs = SitesJobsStore.shared.loadJobs()
+        // Phase1 스토어 로드
+        _ = ConnectionSessionStore.shared
+        _ = DeviceDailyStore.shared
+        // 기존 메모리 이력으로 일자 롤업 보강 + retention 정리
+        migrateDailyFromMemory()
+        pruneAllStores()
+        startRetentionSweep()
+    }
+
+    // MARK: - Phase1 인사이트 스토어
+
+    private func migrateDailyFromMemory() {
+        // 메모리 ring에만 있던 값을 첫 실행 때 일자 bucket으로 승격
+        for (serial, metrics) in metricsHistory {
+            guard !metrics.cpuHistory.isEmpty else { continue }
+            let sample = DeviceDailySample(
+                cpu: metrics.cpuHistory.last,
+                temp: metrics.tempHistory.last,
+                batteryLevel: metrics.levelHistory.last.map(Int.init),
+                gpu: metrics.gpuHistory.last,
+                at: .now
+            )
+            DeviceDailyStore.shared.ingest(serial: serial, sample: sample, forceFlush: true)
+        }
+    }
+
+    /// retention 변경/시작 시 정리
+    func pruneAllStores(now: Date = .now) {
+        let days = retentionDays
+        DeviceDailyStore.shared.prune(retentionDays: days, now: now)
+        ConnectionSessionStore.shared.prune(retentionDays: days, now: now)
+        pruneEventStoreRetention(days: now, retentionDays: days)
+    }
+
+    /// WatchEvent 보관 — retention 경과분 제거 (EventStore 저장 경로와 동일 500 cap 유지)
+    private func pruneEventStoreRetention(days now: Date, retentionDays: Int) {
+        guard retentionDays > 0 else { return }
+        guard let cutoff = Calendar.current.date(
+            byAdding: .day,
+            value: -retentionDays,
+            to: Calendar.current.startOfDay(for: now)
+        ) else { return }
+        let before = recentWatchEvents.count
+        recentWatchEvents.removeAll { $0.at < cutoff }
+        if recentWatchEvents.count != before {
+            EventStore.shared.save(recentWatchEvents)
+        }
+    }
+
+    private func startRetentionSweep() {
+        retentionSweepTask?.cancel()
+        retentionSweepTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 3_600_000_000_000) // 1시간
+                guard let self else { return }
+                self.pruneAllStores()
+                DeviceDailyStore.shared.flushPending(force: true)
+            }
+        }
+    }
+
+    /// 설정에서 retention 즉시 적용
+    func applyRetentionNow() {
+        pruneAllStores()
+    }
+
+    /// 현재 패턴 임계값 (InsightLogic 주입용)
+    func patternThresholds() -> PatternThresholds {
+        PatternThresholds(
+            repeatingDays: max(1, patternRepeatingDays),
+            repeatingCount: max(1, patternRepeatingCount),
+            resolvedQuietDays: max(1, patternResolvedQuietDays),
+            dormantQuietDays: max(1, patternDormantQuietDays)
+        )
     }
 
     func start() {
@@ -519,6 +606,8 @@ final class ConsoleStore: ObservableObject {
     func shutdown() {
         stopSitesJobs()
         ScrcpyController.shared.stop()
+        DeviceDailyStore.shared.flushPending(force: true)
+        ConnectionSessionStore.shared.flush()
         let group = DispatchGroup()
         group.enter()
         Task.detached {
@@ -602,6 +691,42 @@ final class ConsoleStore: ObservableObject {
             m.push(cpu: cpu, temp: temp, level: level, net: netPush, diskRead: diskRead, diskWrite: diskWrite, gpu: gpu)
             metricsHistory[snapshot.serial] = m
         }
+
+        // Phase1 — 1분 디바운스 일자 롤업
+        ingestDailyRollup(snapshot)
+    }
+
+    /// 메트릭 → DeviceDailyStore (1분 디바운스)
+    private func ingestDailyRollup(_ snapshot: DeviceSnapshot) {
+        let now = Date()
+        if let last = lastDailyIngestAt[snapshot.serial],
+           now.timeIntervalSince(last) < dailyIngestDebounce {
+            return
+        }
+        lastDailyIngestAt[snapshot.serial] = now
+
+        let temp = snapshot.deviceTempC ?? snapshot.batteryTempC
+        var memPct: Double?
+        if let used = snapshot.memoryUsedGB, let total = snapshot.memoryTotalGB, total > 0 {
+            memPct = used / total * 100.0
+        }
+        // netUp/Down은 MB/s → 1분 분량 근사
+        let sample = DeviceDailySample(
+            cpu: snapshot.cpuUsePercent,
+            temp: temp,
+            batteryLevel: snapshot.batteryLevel,
+            isCharging: snapshot.isCharging,
+            netUpMB: snapshot.netUpMBps.map { $0 * 60 },
+            netDownMB: snapshot.netDownMBps.map { $0 * 60 },
+            diskReadMBps: snapshot.diskReadMBps,
+            diskWriteMBps: snapshot.diskWriteMBps,
+            gpu: snapshot.gpuUtilPercent,
+            memUsedPct: memPct,
+            psi: snapshot.memPressurePct,
+            rsrp: snapshot.rsrp,
+            at: now
+        )
+        DeviceDailyStore.shared.ingest(serial: snapshot.serial, sample: sample)
     }
 
     // MARK: - Selection (PLAN_v0.3)
@@ -653,6 +778,15 @@ final class ConsoleStore: ObservableObject {
         pushEvent(event.summary)
         EventStore.shared.save(recentWatchEvents)
         maybeCaptureIncident(event)
+        // Phase1 — 일자 이벤트 카운트 (crash/anr/warn)
+        DeviceDailyStore.shared.countEvent(
+            serial: event.serial,
+            kind: event.kind,
+            isClear: event.isClear,
+            at: event.at
+        )
+        // 연결 세션 추적 (Android)
+        trackConnectionSession(event)
 
         if !forceNotify {
             guard watchEnabled(for: event.kind), watchNotifications else { return }
@@ -673,12 +807,54 @@ final class ConsoleStore: ObservableObject {
         lastNotifiedAt[fp] = now
         postSystemNotification(for: event)
         sendExternalNotify(for: event)
+        IssueLog.append(
+            IssueLog.Entry(
+                kind: IssueLog.Kind.notifySystem,
+                detail: event.summary,
+                serial: event.serial,
+                package: event.packageName,
+                ok: true
+            ),
+            name: "notify"
+        )
         if watchBanner {
             let name = device(for: event.serial)?.displayName
                 ?? AdbClient.displayDeviceName(deviceName: nil, model: nil, serial: event.serial)
             AlertBannerPresenter.shared.show(event: event, deviceName: name)
         }
         pruneNotifyCooldown(now: now)
+    }
+
+    /// Android 연결 WatchEvent → ConnectionSessionStore open/close
+    private func trackConnectionSession(_ event: WatchEvent) {
+        guard event.sourceOrDefault == .android else { return }
+        switch event.kind {
+        case .androidConnected:
+            let kind = AdbClient.parseConnection(event.serial).kind
+            ConnectionSessionStore.shared.open(serial: event.serial, kind: kind, at: event.at)
+            IssueLog.append(
+                IssueLog.Entry(
+                    kind: IssueLog.Kind.androidConnected,
+                    detail: event.summary,
+                    serial: event.serial,
+                    at: event.at
+                ),
+                name: "device"
+            )
+        case .androidDisconnected:
+            ConnectionSessionStore.shared.close(serial: event.serial, at: event.at)
+            IssueLog.append(
+                IssueLog.Entry(
+                    kind: IssueLog.Kind.androidDisconnected,
+                    detail: event.summary,
+                    serial: event.serial,
+                    at: event.at
+                ),
+                name: "device"
+            )
+        default:
+            break
+        }
     }
 
     /// S4 — ANR/crash/siteDown 자동 번들 (fingerprint 5분 쿨다운)
@@ -718,9 +894,17 @@ final class ConsoleStore: ObservableObject {
         guard force || Self.shouldSendExternal(event, config: config) else { return }
         if config.ntfyReady, let req = NotifyChannel.ntfyRequest(event: event, config: config) {
             performNotify(req, channel: "ntfy")
+            IssueLog.append(
+                IssueLog.Entry(kind: IssueLog.Kind.notifyNtfy, detail: event.summary, serial: event.serial, ok: true),
+                name: "notify"
+            )
         }
         if config.slackReady, let req = NotifyChannel.slackRequest(event: event, config: config) {
             performNotify(req, channel: "slack")
+            IssueLog.append(
+                IssueLog.Entry(kind: IssueLog.Kind.notifySlack, detail: event.summary, serial: event.serial, ok: true),
+                name: "notify"
+            )
         }
     }
 
@@ -785,6 +969,7 @@ final class ConsoleStore: ObservableObject {
         case .anr: return watchAnr
         case .crash: return watchCrash
         case .appleConnected, .appleDisconnected: return watchNotifications
+        case .androidConnected, .androidDisconnected: return watchNotifications
         case .siteDown, .siteUp, .jobOverdue, .jobRecovered: return watchNotifications
         case .sslExpiring: return watchNotifications
         }
@@ -830,6 +1015,13 @@ final class ConsoleStore: ObservableObject {
     /// 확인 처리
     func ackWatchEvent(id: UUID, at: Date = .now) {
         updateWatchEvent(id: id, ackAt: at, setAck: true)
+    }
+
+    /// fatal 이벤트 보강 (앱 버전 등) — 같은 id 교체 후 저장
+    func refreshWatchEvent(_ updated: WatchEvent) {
+        guard let idx = recentWatchEvents.firstIndex(where: { $0.id == updated.id }) else { return }
+        recentWatchEvents[idx] = updated
+        EventStore.shared.save(recentWatchEvents)
     }
 
     /// 메모 저장 (nil = 해제)

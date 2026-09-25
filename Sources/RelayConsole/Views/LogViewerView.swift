@@ -92,6 +92,8 @@ struct LogViewerContent: View {
     @ObservedObject private var streamer = LogcatStreamer.shared
     @ObservedObject var store: ConsoleStore
     var onClose: (() -> Void)?
+    /// true: 독립 창 — 시스템 타이틀바가 제목/닫기를 담당
+    var windowMode: Bool = false
 
     @State private var follow = true
 
@@ -148,8 +150,8 @@ struct LogViewerContent: View {
             footer
         }
         .frame(minWidth: 640, minHeight: 420)
-        .background(Color(hex: 0x0F111A))
-        .preferredColorScheme(.dark)
+        .background(OPColor.popBG)
+        .preferredColorScheme(ThemeManager.shared.mode.preferred)
         .onAppear { restart(serial) }
         .onDisappear { streamer.stop() }
     }
@@ -167,10 +169,19 @@ struct LogViewerContent: View {
 
     private var header: some View {
         HStack {
-            Text(L10n.format("droid.logs.title", store.selectedDevice?.displayName ?? L10n.na))
-                .font(OPFont.title(14))
-                .foregroundStyle(OPColor.ink)
-                .lineLimit(1)
+            if windowMode {
+                if let name = store.selectedDevice?.displayName {
+                    Text(name)
+                        .font(OPFont.number(12))
+                        .foregroundStyle(OPColor.inkDim)
+                        .lineLimit(1)
+                }
+            } else {
+                Text(L10n.format("droid.logs.title", store.selectedDevice?.displayName ?? L10n.na))
+                    .font(OPFont.title(14))
+                    .foregroundStyle(OPColor.ink)
+                    .lineLimit(1)
+            }
             Spacer()
             if streamer.isRunning {
                 Circle().fill(OPColor.ok).frame(width: 6, height: 6)
@@ -230,9 +241,8 @@ struct LogViewerSheet: View {
 
 struct LogViewerWindowView: View {
     @ObservedObject var store: ConsoleStore
-    @Environment(\.dismiss) private var dismiss
     var body: some View {
-        LogViewerContent(store: store) { dismiss() }
+        LogViewerContent(store: store, windowMode: true)
             .background(WindowAccessorLogs { w in
                 w.identifier = NSUserInterfaceItemIdentifier("logs")
             })

@@ -4,6 +4,7 @@ import SwiftUI
 /// borderless NSPanel(.nonactivating) 안에서 호스팅 (FloatingGraphController 소유)
 struct FloatingGraphView: View {
     @ObservedObject var store: ConsoleStore
+    var onOpenProcesses: () -> Void = {}
 
     @AppStorage("relay.float.showNetwork") private var showNetwork = true
     @AppStorage("relay.float.showCPU") private var showCPU = true
@@ -17,9 +18,11 @@ struct FloatingGraphView: View {
     private static let corner: CGFloat = 12
     private static let width: CGFloat = 300
     /// 헤더 우측 고정 슬롯 — hover 시 opacity만 변화 (삽입/삭제로 인한 출렁임 방지)
-    private static let trailingSlotWidth: CGFloat = 74
+    /// scrcpy(≈90) + menu/opacity/close(22×3) + spacing
+    private static let trailingSlotWidth: CGFloat = 176
 
     private var device: DeviceSnapshot? { store.selectedDevice }
+    private var devices: [DeviceSnapshot] { store.inventory.devices }
     private var metrics: DroidMetrics? {
         device.map { store.metrics(for: $0.serial) }
     }
@@ -44,19 +47,37 @@ struct FloatingGraphView: View {
                     .padding(.horizontal, 12)
                     .padding(.bottom, 12)
             } else {
+                let bg = FloatingGraphLogic.clampOpacity(opacity)
                 VStack(alignment: .leading, spacing: 10) {
                     if cards.network {
-                        DroidCards.network(device: device, metrics: metrics)
-                            .environment(\.dynamicTypeSize, .xSmall)
+                        DroidCards.network(
+                            device: device,
+                            metrics: metrics,
+                            backgroundOpacity: bg
+                        )
+                        .environment(\.dynamicTypeSize, .xSmall)
                     }
                     if cards.cpu {
-                        DroidCards.cpu(device: device, metrics: metrics)
+                        DroidCards.cpu(
+                            device: device,
+                            metrics: metrics,
+                            backgroundOpacity: bg
+                        )
                     }
                     if cards.gpu {
-                        DroidCards.gpu(device: device, metrics: metrics)
+                        DroidCards.gpu(
+                            device: device,
+                            metrics: metrics,
+                            backgroundOpacity: bg
+                        )
                     }
                     if cards.memory {
-                        DroidCards.memory(device: device, metrics: metrics) {}
+                        DroidCards.memory(
+                            device: device,
+                            metrics: metrics,
+                            backgroundOpacity: bg,
+                            onMore: { onOpenProcesses() }
+                        )
                     }
                 }
                 .padding(.horizontal, 10)
@@ -65,17 +86,21 @@ struct FloatingGraphView: View {
         }
         .frame(width: Self.width)
         .background(
+            // 블러(뒤 내용 흐림) + 브랜드 틴트 — 텍스트는 항상 불투명
             RoundedRectangle(cornerRadius: Self.corner, style: .continuous)
-                .fill(Color(hex: 0x0F111A))
+                .fill(.ultraThinMaterial)
+                .opacity(FloatingGraphLogic.clampOpacity(opacity))
+        )
+        .background(
+            RoundedRectangle(cornerRadius: Self.corner, style: .continuous)
+                .fill(OPColor.popBG)
+                .opacity(FloatingGraphLogic.clampOpacity(opacity))
         )
         .overlay(
             RoundedRectangle(cornerRadius: Self.corner, style: .continuous)
                 .stroke(isHovering ? OPColor.border : Color.clear, lineWidth: 1)
         )
         .onHover { isHovering = $0 }
-        .onChange(of: opacity) { _, new in
-            FloatingGraphController.shared.setOpacity(new)
-        }
         .onReceive(Timer.publish(every: 5, on: .main, in: .common).autoconnect()) { _ in
             // fittingSize 갱신 — 카드 토글/데이터 변화 대응
             FloatingGraphController.shared.fitToContent()
@@ -87,19 +112,20 @@ struct FloatingGraphView: View {
             Circle()
                 .fill(device?.isOnline == true ? OPColor.ok : OPColor.inkDim)
                 .frame(width: 7, height: 7)
-            Text(device?.displayName ?? L10n.string("float.noDevice"))
-                .font(OPFont.body(11))
-                .foregroundStyle(OPColor.ink)
-                .lineLimit(1)
-                .truncationMode(.tail)
+            if devices.count > 1 {
+                devicePicker
+            } else {
+                Text(device?.displayName ?? L10n.string("float.noDevice"))
+                    .font(OPFont.body(11))
+                    .foregroundStyle(OPColor.ink)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
             Spacer(minLength: 4)
             // 항상 레이아웃 점유 — 메뉴/닫기 아이콘이 생겨도 헤더 폭·높이 고정
             HStack(spacing: 4) {
+                // 카드 선택만 — Menu 안 Slider는 macOS에서 깨짐(투명도는 전용 팝오버)
                 Menu {
-                    Section(L10n.string("float.opacity")) {
-                        Slider(value: $opacity, in: FloatingGraphLogic.minOpacity...FloatingGraphLogic.maxOpacity)
-                    }
-                    Divider()
                     Toggle(L10n.string("float.card.cpu"), isOn: $showCPU)
                     Toggle(L10n.string("float.card.gpu"), isOn: $showGPU)
                     Toggle(L10n.string("float.card.memory"), isOn: $showMemory)
@@ -114,6 +140,10 @@ struct FloatingGraphView: View {
                 .fixedSize()
                 .frame(width: 22, height: 22)
                 .help(L10n.string("float.menu.help"))
+
+                if let d = device, !d.serial.isEmpty {
+                    ScrcpyHeaderButton(serial: d.serial)
+                }
 
                 Button {
                     showOpacityPopover = true
@@ -132,14 +162,14 @@ struct FloatingGraphView: View {
                             .foregroundStyle(OPColor.ink)
                         Slider(value: $opacity, in: FloatingGraphLogic.minOpacity...FloatingGraphLogic.maxOpacity)
                             .frame(width: 160)
-                        Text("\(Int(opacity * 100))%")
+                        Text("\(Int(FloatingGraphLogic.clampOpacity(opacity) * 100))%")
                             .font(OPFont.number(11))
                             .foregroundStyle(OPColor.inkDim)
                     }
                     .padding(12)
                     .frame(width: 184)
-                    .background(Color(hex: 0x0F111A))
-                    .preferredColorScheme(.dark)
+                    .background(OPColor.popBG)
+                    .preferredColorScheme(ThemeManager.shared.mode.preferred)
                 }
 
                 Button {
@@ -162,6 +192,32 @@ struct FloatingGraphView: View {
         .padding(.bottom, 2)
         // 헤더 높이 고정 — hover/menu 오픈 시 출렁임 방지
         .frame(height: 34)
+    }
+
+    /// 다중 기기 — 헤더에서 전역 선택 변경 (이슈 0)
+    private var devicePicker: some View {
+        Menu {
+            ForEach(devices, id: \.serial) { d in
+                Button {
+                    store.select(d.serial)
+                } label: {
+                    Label(d.displayName, systemImage: d.isOnline ? "iphone" : "iphone.slash")
+                }
+            }
+        } label: {
+            Text(device?.displayName ?? L10n.string("float.noDevice"))
+                .font(OPFont.body(11))
+                .foregroundStyle(OPColor.ink)
+                .lineLimit(1)
+                .truncationMode(.tail)
+            Image(systemName: "chevron.down")
+                .font(.system(size: 8, weight: .semibold))
+                .foregroundStyle(OPColor.inkDim)
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help(L10n.string("droid.header.picker"))
     }
 
     private var emptyHint: some View {

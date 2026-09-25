@@ -210,8 +210,8 @@ struct ScrcpyInstallSheet: View {
         }
         .padding(20)
         .frame(width: 360)
-        .background(Color(hex: 0x0F111A))
-        .preferredColorScheme(.dark)
+        .background(OPColor.popBG)
+        .preferredColorScheme(ThemeManager.shared.mode.preferred)
         .onReceive(NotificationCenter.default.publisher(for: .scrcpyInstalled)) { _ in
             scrcpy.refresh()
             if scrcpy.binaryPath != nil {

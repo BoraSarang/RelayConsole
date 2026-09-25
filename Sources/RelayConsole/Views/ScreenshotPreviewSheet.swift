@@ -94,8 +94,8 @@ struct ScreenshotPreviewSheet: View {
         }
         .padding(20)
         .frame(width: 300)
-        .background(Color(hex: 0x0F111A))
-        .preferredColorScheme(.dark)
+        .background(OPColor.popBG)
+        .preferredColorScheme(ThemeManager.shared.mode.preferred)
         .onAppear {
             shots.refresh(serial: serial, adbPath: DeviceMonitor.adbPathNow())
         }

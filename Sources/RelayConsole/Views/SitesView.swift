@@ -42,7 +42,7 @@ struct SitesView: View {
 
     var body: some View {
         ZStack {
-            Color(hex: 0x0F111A).ignoresSafeArea()
+            OPColor.popBG.ignoresSafeArea()
             VStack(spacing: 0) {
                 header
                 Divider().overlay(OPColor.border)
@@ -73,8 +73,8 @@ struct SitesView: View {
                 }
             }
         }
-        .background(Color(hex: 0x0F111A))
-        .preferredColorScheme(.dark)
+        .background(OPColor.popBG)
+        .preferredColorScheme(ThemeManager.shared.mode.preferred)
         .navigationTitle(L10n.string("sidebar.sites"))
         .sheet(item: $sheetMode) { mode in
             siteFormSheet(mode)
@@ -511,7 +511,7 @@ struct SitesView: View {
             title = L10n.string("sites.edit.title")
         }
         return ZStack {
-            Color(hex: 0x0F111A).ignoresSafeArea()
+            OPColor.popBG.ignoresSafeArea()
             VStack(alignment: .leading, spacing: 14) {
                 Text(title)
                     .font(OPFont.title(15))
@@ -630,7 +630,7 @@ struct SitesView: View {
             .padding(OPSpace.xl)
         }
         .frame(minWidth: 380, minHeight: 420)
-        .preferredColorScheme(.dark)
+        .preferredColorScheme(ThemeManager.shared.mode.preferred)
     }
 
     private func submit(_ mode: SiteSheetMode) {

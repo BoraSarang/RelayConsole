@@ -18,6 +18,10 @@ enum WatchKind: String, Sendable, Equatable, CaseIterable, Codable {
     case appleConnected
     /// Apple 기기 해제
     case appleDisconnected
+    /// Android USB/network 연결
+    case androidConnected
+    /// Android 연결 해제
+    case androidDisconnected
     /// 사이트 다운 (PLAN_sites_jobs)
     case siteDown
     /// 사이트 복구
@@ -78,8 +82,21 @@ struct WatchEvent: Identifiable, Sendable, Equatable, Codable {
     var note: String?
     /// 무음 만료 — nil = mute 안됨
     var mutedUntil: Date?
+    /// 문제 앱 패키지명 (crash/ANR 구조화) — 기존 JSON nil 허용
+    var packageName: String?
+    /// 예외 클래스 (java.lang.XxxException 등)
+    var exceptionClass: String?
+    /// 반복 이슈 키 — serial:kind:pkg:exception (nil이면 errorFingerprintComputed 미사용)
+    var errorFingerprint: String?
+    /// crash 시점 앱 버전 (dumpsys package, 선택)
+    var appVersion: String?
 
     var fingerprint: String { "\(serial):\(kind.rawValue)" }
+
+    /// 반복 패턴용 fingerprint — errorFingerprint 없으면 기존 serial:kind
+    var patternFingerprint: String {
+        errorFingerprint ?? fingerprint
+    }
 
     /// 플랫폼 (nil은 android)
     var sourceOrDefault: WatchSource { source ?? .android }
@@ -95,7 +112,11 @@ struct WatchEvent: Identifiable, Sendable, Equatable, Codable {
         source: WatchSource? = nil,
         ackAt: Date? = nil,
         note: String? = nil,
-        mutedUntil: Date? = nil
+        mutedUntil: Date? = nil,
+        packageName: String? = nil,
+        exceptionClass: String? = nil,
+        errorFingerprint: String? = nil,
+        appVersion: String? = nil
     ) {
         self.id = UUID()
         self.kind = kind
@@ -109,6 +130,10 @@ struct WatchEvent: Identifiable, Sendable, Equatable, Codable {
         self.ackAt = ackAt
         self.note = note
         self.mutedUntil = mutedUntil
+        self.packageName = packageName
+        self.exceptionClass = exceptionClass
+        self.errorFingerprint = errorFingerprint
+        self.appVersion = appVersion
     }
 
     /// 팝오버/로그용 한 줄 요약 (기존 recentEvents: [String] 하위호환)
@@ -138,6 +163,33 @@ struct WatchEvent: Identifiable, Sendable, Equatable, Codable {
         if setMute { copy.mutedUntil = mutedUntil }
         return copy
     }
+
+    /// 구조화 필드 주입 (crash context 승격용)
+    func structured(
+        packageName: String? = nil,
+        exceptionClass: String? = nil,
+        errorFingerprint: String? = nil,
+        appVersion: String? = nil
+    ) -> WatchEvent {
+        var copy = self
+        if let packageName { copy.packageName = packageName }
+        if let exceptionClass { copy.exceptionClass = exceptionClass }
+        if let errorFingerprint { copy.errorFingerprint = errorFingerprint }
+        if let appVersion { copy.appVersion = appVersion }
+        return copy
+    }
+
+    /// errorFingerprint 자동 생성 (pkg + exception)
+    static func makeErrorFingerprint(
+        serial: String,
+        kind: WatchKind,
+        packageName: String?,
+        exceptionClass: String?
+    ) -> String? {
+        guard let pkg = packageName, !pkg.isEmpty else { return nil }
+        let exc = (exceptionClass ?? "unknown").trimmingCharacters(in: .whitespaces)
+        return "\(serial):\(kind.rawValue):\(pkg):\(exc)"
+    }
 }
 
 /// Alerts 조회 필터 — 순수 (배서 메모리 500건 기준)
@@ -145,6 +197,8 @@ struct AlertsFilter: Sendable, Equatable {
     var state: AlertsState?
     var severities: Set<WatchSeverity>?
     var sources: Set<WatchSource>?
+    /// 이벤트 종류 필터 — nil/빈 set = 전체
+    var kinds: Set<WatchKind>?
     var serial: String?
     var since: Date?
     var until: Date?
@@ -154,6 +208,7 @@ struct AlertsFilter: Sendable, Equatable {
         state: AlertsState? = nil,
         severities: Set<WatchSeverity>? = nil,
         sources: Set<WatchSource>? = nil,
+        kinds: Set<WatchKind>? = nil,
         serial: String? = nil,
         since: Date? = nil,
         until: Date? = nil,
@@ -162,6 +217,7 @@ struct AlertsFilter: Sendable, Equatable {
         self.state = state
         self.severities = severities
         self.sources = sources
+        self.kinds = kinds
         self.serial = serial
         self.since = since
         self.until = until
@@ -180,11 +236,12 @@ enum WatchEventAlerts {
             if let s = f.state, e.state(now: now) != s { return false }
             if let sev = f.severities, !sev.isEmpty, !sev.contains(e.severity) { return false }
             if let src = f.sources, !src.isEmpty, !src.contains(e.sourceOrDefault) { return false }
+            if let kinds = f.kinds, !kinds.isEmpty, !kinds.contains(e.kind) { return false }
             if let serial = f.serial, e.serial != serial { return false }
             if let since = f.since, e.at < since { return false }
             if let until = f.until, e.at > until { return false }
             if let q = f.search?.trimmingCharacters(in: .whitespacesAndNewlines), !q.isEmpty {
-                let hay = "\(e.title) \(e.detail) \(e.serial)"
+                let hay = "\(e.title) \(e.detail) \(e.serial) \(e.packageName ?? "") \(e.exceptionClass ?? "")"
                 if !hay.localizedCaseInsensitiveContains(q) { return false }
             }
             return true
@@ -232,7 +289,7 @@ enum WatchEventAlerts {
     }
 
     static func exportCSV(_ events: [WatchEvent], now: Date = .now) -> String {
-        let header = "at,source,serial,kind,severity,state,title,detail,ackAt,note,mutedUntil"
+        let header = "at,source,serial,kind,severity,state,title,detail,package,exception,ackAt,note,mutedUntil"
         let iso = ISO8601DateFormatter()
         var lines = [header]
         for e in events {
@@ -245,6 +302,8 @@ enum WatchEventAlerts {
                 e.state(now: now).rawValue,
                 csvEscape(e.title),
                 csvEscape(e.detail),
+                csvEscape(e.packageName ?? ""),
+                csvEscape(e.exceptionClass ?? ""),
                 e.ackAt.map { iso.string(from: $0) } ?? "",
                 csvEscape(e.note ?? ""),
                 e.mutedUntil.map { iso.string(from: $0) } ?? ""
