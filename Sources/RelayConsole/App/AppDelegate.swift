@@ -5,7 +5,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         // V0-2: appearance는 NSApp 준비 후 세팅 — 테마(시스템/다크/화이트) 연동
         ThemeManager.shared.applyAppearance()
-        DebugLogger.shared.info("App", "[INFO] [FEATURE] Relay Console 1.13.0 시작")
+        DebugLogger.shared.info("App", "[INFO] [FEATURE] Relay Console 1.14.0 시작")
         HeadlessLaunch.apply()
         LoginItemController.shared.refreshStatus()
         ConsoleStore.shared.start()

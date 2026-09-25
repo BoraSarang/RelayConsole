@@ -141,7 +141,7 @@ struct MenuBarPopoverView: View {
                         .font(OPFont.number(11))
                         .foregroundStyle(chip.1)
                 }
-                Text("1.13.0")
+                Text("1.14.0")
                     .font(OPFont.number(10))
                     .foregroundStyle(OPColor.inkDim)
             }
