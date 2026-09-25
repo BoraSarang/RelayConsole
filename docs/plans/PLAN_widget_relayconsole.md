@@ -66,17 +66,14 @@ Entitlements/              RelayConsole.entitlements(App Group만) · RelayWidge
 | 앱 lproj → appex | `Contents/Resources/{ko,en}.lproj/Localizable.strings` ✓ |
 | 딥링크 | `open relayconsole://alerts` → 콘솔 창 오픈 ✓ |
 
-## 5. 남은 육안 (사용자)
+## 5. 육안 확인 (2026-09-25 · 사용자 확인 완료 ✓)
 
-가이드 §1 경로로 갤러리 확인:
 ```
 데스크톱 빈 곳 우클릭 → "위젯 편집" → "+" 또는 검색 "Relay"
 → Relay 상태 (small/medium/large) 데스크톱/알림센터로 드롭
 ```
-- 확인 1: 갤러리에 **Relay Console** 표시 (안 뜨면 가이드 §5 체크리스트)
-- 확인 2: 3종 위젯 데이터 표시 (앱이 1회 실행된 상태 · 현재 실행 중)
-- 확인 3: 위젯 탭 → 콘솔 창 열림 · `relayconsole://alerts` → Alerts 탭
-- 확인 4: 위젯 추가 후 `pgrep -fl RelayWidget` + 크래시 리포트 0건 재확인
+- ☑ 갤러리에 **Relay Console** 표시 · 3종 위젯 데이터 표시 — **사용자 육안 확인 완료**
+- ☑ 위젯 프로세스 기동 (`RelayWidget.appex` PID 27708) · 크래시 리포트 0건
 
 ## 6. 설정 키
 
