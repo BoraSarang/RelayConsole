@@ -64,9 +64,10 @@ struct JobsView: View {
                 .font(.system(size: 12))
                 .foregroundStyle(store.heartbeatLastError != nil ? OPColor.bad : OPColor.jobs)
             if let err = store.heartbeatLastError {
-                Text("\(err) — \(L10n.string("jobs.hb.error"))")
+                Text(heartbeatErrorText(err))
                     .font(OPFont.body(11))
                     .foregroundStyle(OPColor.bad)
+                    .textSelection(.enabled)
             } else {
                 Text(L10n.format("jobs.hb.listening", store.heartbeatPort))
                     .font(OPFont.body(11))
@@ -77,6 +78,15 @@ struct JobsView: View {
         .padding(.horizontal, OPSpace.md)
         .padding(.vertical, 8)
         .background(OPColor.card.opacity(0.6))
+    }
+
+    /// 하트비트 오류 문구 — 내부 코드 대신 원인(+실제 NW/OS 사유) 표시 (AGENTS.local §4 [표시②])
+    private func heartbeatErrorText(_ code: String) -> String {
+        let reason = ErrorCode(rawValue: code) == .jobBindFailed
+            ? L10n.string("jobs.hb.bindFailed")
+            : L10n.string("jobs.hb.error")
+        guard let detail = store.heartbeatErrorDetail, !detail.isEmpty else { return reason }
+        return "\(reason) — \(detail)"
     }
 
     private var emptyState: some View {

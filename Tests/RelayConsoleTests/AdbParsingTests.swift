@@ -419,7 +419,24 @@ struct AdbParsingTests {
     @Test func displayDeviceNamePrefersNameThenModel() {
         #expect(AdbClient.displayDeviceName(deviceName: "S22", model: "SM_S901N", serial: "x") == "S22")
         #expect(AdbClient.displayDeviceName(deviceName: nil, model: "SM_S901N", serial: "x") == "SM_S901N")
-        #expect(AdbClient.displayDeviceName(deviceName: nil, model: "", serial: "ABCD1234") == "…1234")
+        #expect(AdbClient.displayDeviceName(deviceName: nil, model: "", serial: "ABCD1234") == "ABCD1234")
+    }
+
+    @Test func identLabelIsDeviceIdentifiable() {
+        var usb = DeviceSnapshot(serial: "R5CT10ABCDE", model: "SM-S901N")
+        usb.connectionKind = .usb
+        usb.connectionLabel = "USB"
+        #expect(usb.identLabel == "SM-S901N · R5CT10ABCDE")
+
+        var bare = DeviceSnapshot(serial: "R5CT10ABCDE")
+        bare.connectionKind = .usb
+        #expect(bare.identLabel == "R5CT10ABCDE")
+
+        var net = DeviceSnapshot(serial: "10.233.247.205:5555")
+        net.connectionKind = .network
+        net.connectionLabel = "10.233.247.205:5555"
+        #expect(net.identLabel == "10.233.247.205:5555")
+        #expect(net.identLabel != "…5555")
     }
 
     // MARK: - Two-serial inventory merge (PLAN_v0.3)

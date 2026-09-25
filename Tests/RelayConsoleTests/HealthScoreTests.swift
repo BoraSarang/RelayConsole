@@ -103,6 +103,19 @@ struct HealthScoreTests {
         #expect(score < HealthScoreLogic.cpuLoadScore(10))
     }
 
+    @Test func missingMetricsAreExcludedNotInterpolated() throws {
+        var d = DeviceSnapshot()
+        d.isOnline = true
+        d.batteryLevel = 100
+        d.batteryHealthPct = 100
+        let s = try #require(HealthScoreLogic.score(from: d))
+        // 결측을 50으로 보간하면 70이 됨 — 미측정은 가중치에서 제외 (AGENTS.local §4 [표시②])
+        #expect(s.battery == 100)
+        #expect(s.thermal == nil)
+        #expect(s.throttle == nil)
+        #expect(s.total == 100)
+    }
+
     @Test func clampBounds() {
         #expect(HealthScoreLogic.clamp(-5) == 0)
         #expect(HealthScoreLogic.clamp(150) == 100)

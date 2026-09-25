@@ -3,9 +3,10 @@ import Foundation
 /// S2 Device Health Score — 배터리·발열·스로틀 가중 0–100 (읽기 전용 파생 지표)
 struct HealthBreakdown: Sendable, Equatable {
     var total: Int
-    var battery: Int
-    var thermal: Int
-    var throttle: Int
+    /// nil = 미측정 — 실측치로 오인되지 않도록 표시 단계에서 "—" (AGENTS.local §4 [표시②])
+    var battery: Int?
+    var thermal: Int?
+    var throttle: Int?
     /// `health.band.good` | `health.band.fair` | `health.band.poor`
     var bandKey: String
 }
@@ -29,20 +30,20 @@ enum HealthScoreLogic {
         let thermal = thermalScore(snapshot)
         let throttle = throttleScore(snapshot)
 
-        guard battery != nil || thermal != nil || throttle != nil else { return nil }
+        // 결측 항목을 50점으로 보간하지 않고 해당 가중치만 제외 (미측정 ≠ 중간 점수)
+        var weighted = 0.0
+        var weightSum = 0.0
+        if let b = battery { weighted += Double(b) * batteryWeight; weightSum += batteryWeight }
+        if let t = thermal { weighted += Double(t) * thermalWeight; weightSum += thermalWeight }
+        if let c = throttle { weighted += Double(c) * throttleWeight; weightSum += throttleWeight }
+        guard weightSum > 0 else { return nil }
 
-        let b = battery ?? 50
-        let t = thermal ?? 50
-        let c = throttle ?? 50
-        let total = clamp(Int(
-            (Double(b) * batteryWeight + Double(t) * thermalWeight + Double(c) * throttleWeight)
-                .rounded()
-        ))
+        let total = clamp(Int((weighted / weightSum).rounded()))
         return HealthBreakdown(
             total: total,
-            battery: b,
-            thermal: t,
-            throttle: c,
+            battery: battery,
+            thermal: thermal,
+            throttle: throttle,
             bandKey: bandKey(total: total)
         )
     }

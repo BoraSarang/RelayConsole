@@ -18,6 +18,7 @@ struct AlertsView: View {
     @State private var noteDrafts: [UUID: String] = [:]
     @State private var editingNote: UUID?
     @State private var exportMessage: String?
+    @State private var exportFailed = false
 
     var body: some View {
         ZStack {
@@ -39,7 +40,7 @@ struct AlertsView: View {
             }
         }
         .alert(
-            L10n.string("alerts.export.done"),
+            L10n.string(exportFailed ? "alerts.export.failed" : "alerts.export.done"),
             isPresented: Binding(
                 get: { exportMessage != nil },
                 set: { if !$0 { exportMessage = nil } }
@@ -505,13 +506,21 @@ struct AlertsView: View {
     // MARK: - export
 
     private func exportJSON() {
-        guard let data = store.exportWatchEventsJSON(filtered) else { return }
+        guard let data = store.exportWatchEventsJSON(filtered) else {
+            exportFailed = true
+            exportMessage = L10n.string("alerts.export.failed.convert")
+            return
+        }
         savePanel(data: data, name: "relay-alerts.json", isJSON: true)
     }
 
     private func exportCSV() {
         let csv = store.exportWatchEventsCSV(filtered)
-        guard let data = csv.data(using: .utf8) else { return }
+        guard let data = csv.data(using: .utf8) else {
+            exportFailed = true
+            exportMessage = L10n.string("alerts.export.failed.convert")
+            return
+        }
         savePanel(data: data, name: "relay-alerts.csv", isJSON: false)
     }
 
@@ -525,9 +534,11 @@ struct AlertsView: View {
             guard response == .OK, let url = panel.url else { return }
             do {
                 try data.write(to: url, options: .atomic)
+                exportFailed = false
                 exportMessage = L10n.format("alerts.export.path", url.lastPathComponent)
             } catch {
-                exportMessage = error.localizedDescription
+                exportFailed = true
+                exportMessage = L10n.format("alerts.export.failed.detail", error.localizedDescription)
             }
         }
     }
@@ -581,6 +592,8 @@ struct AlertsView: View {
         case .jobOverdue: return L10n.string("kind.jobOverdue")
         case .jobRecovered: return L10n.string("kind.jobRecovered")
         case .sslExpiring: return L10n.string("kind.sslExpiring")
+        case .settingsChanged: return L10n.string("kind.settingsChanged")
+        case .logcatHits: return L10n.string("kind.logcatHits")
         }
     }
 
@@ -685,21 +698,7 @@ struct AlertsView: View {
     }
 
     private func shortSerial(_ serial: String) -> String {
-        // 기기 인벤토리에서 displayName 시도
-        if let device = store.device(for: serial), !device.displayName.isEmpty {
-            return device.displayName
-        }
-        // network serial: IP만 (포트 제외)
-        if serial.contains(":") {
-            let ip = serial.split(separator: ":").first.map(String.init) ?? serial
-            return ip
-        }
-        // USB serial: 연결 라벨 또는 shortId
-        if let label = store.device(for: serial)?.connectionLabel, label != "USB" {
-            return label
-        }
-        guard serial.count > 4 else { return serial }
-        return "…" + serial.suffix(4)
+        store.identLabel(for: serial)
     }
 }
 

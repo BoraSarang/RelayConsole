@@ -377,6 +377,19 @@ final class SitesJobsTests: XCTestCase {
         XCTAssertEqual(SslAssertLogic.sslBadge(days: -1), "SSL ✕")
     }
 
+    func testSiteStatusTextLocalizesInternalTokens() {
+        XCTAssertEqual(SitesJobsLogic.statusText(detail: nil), nil)
+        XCTAssertEqual(SitesJobsLogic.statusText(detail: ""), nil)
+        XCTAssertEqual(SitesJobsLogic.statusText(detail: "timeout"), L10n.string("sites.fail.timeout"))
+        XCTAssertEqual(SitesJobsLogic.statusText(detail: "bad-url"), L10n.string("sites.fail.badUrl"))
+        XCTAssertEqual(SitesJobsLogic.statusText(detail: "assert-fail"), L10n.string("sites.fail.assertFail"))
+        XCTAssertEqual(SitesJobsLogic.statusText(detail: "offline"), L10n.string("sites.fail.offline"))
+        XCTAssertEqual(SitesJobsLogic.statusText(detail: "HTTP 503"), L10n.format("sites.fail.http", 503))
+        XCTAssertEqual(SitesJobsLogic.statusText(detail: "DNS probe failed"), "DNS probe failed")
+        // 내부 토큰이 화면에 그대로 노출되지 않는지
+        XCTAssertFalse(SitesJobsLogic.statusText(detail: "ping-fail") == "ping-fail")
+    }
+
     func testSslExpiringWatchKindCodable() throws {
         let e = WatchEvent(kind: .sslExpiring, severity: .warning, serial: "site:X", title: "API", detail: "SSL 14")
         let data = try JSONEncoder().encode(e)

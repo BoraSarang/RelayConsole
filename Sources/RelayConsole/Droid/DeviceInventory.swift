@@ -150,6 +150,9 @@ struct DeviceSnapshot: Sendable, Equatable {
     var logcatHitCount: Int?
     /// 포그라운드 앱 패키지 (15s dumpsys activity)
     var foregroundPackage: String?
+    /// 마지막 측정 시각 — 오프라인 후 지표 신선도 표시용 (AGENTS.local §4 [표시②])
+    var lastSampleAt: Date?
+    /// 수집 실패 원인 (성공 틱에서 자동 해제)
     var lastError: String?
 
     /// Equatable — 배열/옵셔널 필드 자동 합성 충분 (tuple 없음)
@@ -161,9 +164,22 @@ struct DeviceSnapshot: Sendable, Equatable {
         return false
     }
 
-    /// 헤더 표시 이름 — deviceName > model > shortId
+    /// 헤더 표시 이름 — deviceName > model > serial 원문
     var displayName: String {
         AdbClient.displayDeviceName(deviceName: deviceName, model: model, serial: serial)
+    }
+
+    /// 기기 식별 라벨 — 화면·알림·내보내기 공통 진입점 (마스킹 금지 · AGENTS.local §4)
+    /// network → `IP:PORT`, USB → `기기명 또는 모델 · 시리얼 원문`
+    var identLabel: String {
+        if connectionKind == .network {
+            if let l = connectionLabel, !l.isEmpty, l != "USB" { return l }
+            return serial
+        }
+        let name = displayName
+        if serial.isEmpty { return name }
+        if name.isEmpty || name == serial { return serial }
+        return "\(name) · \(serial)"
     }
 }
 
@@ -180,7 +196,7 @@ struct DeviceInventory: Equatable {
     }
 
     /// 부분 스냅샷 병합 — nil optional은 이전 값 유지 (5s 틱이 15s 필드를 덮지 않음)
-    mutating func merge(_ snapshot: DeviceSnapshot) {
+    mutating func merge(_ snapshot: DeviceSnapshot, now: Date = .now) {
         guard !snapshot.serial.isEmpty else { return }
         if let idx = devices.firstIndex(where: { $0.serial == snapshot.serial }) {
             var merged = snapshot
@@ -251,9 +267,12 @@ struct DeviceInventory: Equatable {
                 merged.diskReadMBps = merged.diskReadMBps ?? prev.diskReadMBps
                 merged.diskWriteMBps = merged.diskWriteMBps ?? prev.diskWriteMBps
             }
+            if merged.isOnline { merged.lastSampleAt = now } else { merged.lastSampleAt = prev.lastSampleAt }
             devices[idx] = merged
         } else {
-            devices.append(snapshot)
+            var added = snapshot
+            if added.isOnline { added.lastSampleAt = now }
+            devices.append(added)
         }
     }
 

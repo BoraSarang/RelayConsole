@@ -101,7 +101,7 @@ struct ConsoleView: View {
 
             switch platform {
             case .android:
-                DroidDashboardView(store: store)
+                DroidDashboardView(store: store, onOpenAlerts: { selection = .alerts })
             case .apple:
                 AppleDashboardView(store: store)
             }

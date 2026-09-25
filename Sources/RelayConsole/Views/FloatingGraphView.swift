@@ -1,17 +1,16 @@
 import SwiftUI
 
-/// 플로팅 그래프 본체 — Network(고정) + CPU/GPU/Memory 토글
-/// borderless NSPanel(.nonactivating) 안에서 호스팅 (FloatingGraphController 소유)
+/// 플로팅 그래프 본체 — **한 창 = 한 지표** (네트워크/CPU/GPU/MEMORY)
+/// borderless NSPanel(.nonactivating) 안에서 호스팅 (FloatingGraphController가 창 id별로 소유)
 struct FloatingGraphView: View {
     @ObservedObject var store: ConsoleStore
+    /// 이 창이 표시할 (지표, 기기, 위치) — 변경 시 컨트롤러가 호스팅을 교체
+    let win: FloatingGraphLogic.FloatWin
     var onOpenProcesses: () -> Void = {}
     var onOpenAppNetwork: () -> Void = {}
     var onOpenConsole: () -> Void = {}
 
-    @AppStorage("relay.float.showNetwork") private var showNetwork = true
-    @AppStorage("relay.float.showCPU") private var showCPU = true
-    @AppStorage("relay.float.showGPU") private var showGPU = false
-    @AppStorage("relay.float.showMemory") private var showMemory = false
+    @ObservedObject private var float = FloatingGraphController.shared
     @AppStorage(FloatingGraphLogic.opacityKey) private var opacity = FloatingGraphLogic.defaultOpacity
 
     @State private var isHovering = false
@@ -23,21 +22,21 @@ struct FloatingGraphView: View {
     /// dashboard(22) + scrcpy(≈90) + menu/opacity/close(22×3) + spacing(4×5)
     private static let trailingSlotWidth: CGFloat = 200
 
-    private var device: DeviceSnapshot? { store.selectedDevice }
+    /// 이 창의 기기 — serial이 비었거나 기기가 사라졌으면 전역 선택으로 폴백
+    private var device: DeviceSnapshot? {
+        if let d = store.inventory.devices.first(where: { $0.serial == win.serial }) {
+            return d
+        }
+        return store.selectedDevice
+    }
+
     private var devices: [DeviceSnapshot] { store.inventory.devices }
+
     private var metrics: DroidMetrics? {
         device.map { store.metrics(for: $0.serial) }
     }
 
-    /// 전부 off 방지
-    private var cards: FloatingGraphLogic.Cards {
-        FloatingGraphLogic.resolve(
-            network: showNetwork,
-            cpu: showCPU,
-            gpu: showGPU,
-            memory: showMemory
-        )
-    }
+    private var serialForChild: String { device?.serial ?? win.serial }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -49,42 +48,9 @@ struct FloatingGraphView: View {
                     .padding(.horizontal, 12)
                     .padding(.bottom, 12)
             } else {
-                let bg = FloatingGraphLogic.clampOpacity(opacity)
-                VStack(alignment: .leading, spacing: 10) {
-                    if cards.network {
-                        DroidCards.network(
-                            device: device,
-                            metrics: metrics,
-                            backgroundOpacity: bg,
-                            onMore: { onOpenAppNetwork() }
-                        )
-                        .environment(\.dynamicTypeSize, .xSmall)
-                    }
-                    if cards.cpu {
-                        DroidCards.cpu(
-                            device: device,
-                            metrics: metrics,
-                            backgroundOpacity: bg
-                        )
-                    }
-                    if cards.gpu {
-                        DroidCards.gpu(
-                            device: device,
-                            metrics: metrics,
-                            backgroundOpacity: bg
-                        )
-                    }
-                    if cards.memory {
-                        DroidCards.memory(
-                            device: device,
-                            metrics: metrics,
-                            backgroundOpacity: bg,
-                            onMore: { onOpenProcesses() }
-                        )
-                    }
-                }
-                .padding(.horizontal, 10)
-                .padding(.bottom, 10)
+                card
+                    .padding(.horizontal, 10)
+                    .padding(.bottom, 10)
             }
         }
         .frame(width: Self.width)
@@ -104,9 +70,40 @@ struct FloatingGraphView: View {
                 .stroke(isHovering ? OPColor.border : Color.clear, lineWidth: 1)
         )
         .onHover { isHovering = $0 }
-        .onReceive(Timer.publish(every: 5, on: .main, in: .common).autoconnect()) { _ in
-            // fittingSize 갱신 — 카드 토글/데이터 변화 대응
-            FloatingGraphController.shared.fitToContent()
+    }
+
+    /// 한 창에 지표 1개만 — 높이가 카드 1장으로 고정되어 화면 가림 최소
+    @ViewBuilder
+    private var card: some View {
+        let bg = FloatingGraphLogic.clampOpacity(opacity)
+        switch win.metric {
+        case .network:
+            DroidCards.network(
+                device: device,
+                metrics: metrics,
+                backgroundOpacity: bg,
+                onMore: { onOpenAppNetwork() }
+            )
+            .environment(\.dynamicTypeSize, .xSmall)
+        case .cpu:
+            DroidCards.cpu(
+                device: device,
+                metrics: metrics,
+                backgroundOpacity: bg
+            )
+        case .gpu:
+            DroidCards.gpu(
+                device: device,
+                metrics: metrics,
+                backgroundOpacity: bg
+            )
+        case .memory:
+            DroidCards.memory(
+                device: device,
+                metrics: metrics,
+                backgroundOpacity: bg,
+                onMore: { onOpenProcesses() }
+            )
         }
     }
 
@@ -139,11 +136,40 @@ struct FloatingGraphView: View {
                 .buttonStyle(.plain)
                 .help(L10n.string("float.console"))
 
-                // 카드 선택만 — Menu 안 Slider는 macOS에서 깨짐(투명도는 전용 팝오버)
+                // 창 추가 · 지표 전환 · 정렬 — Menu 안 Slider는 macOS에서 깨짐(투명도는 전용 팝오버)
                 Menu {
-                    Toggle(L10n.string("float.card.cpu"), isOn: $showCPU)
-                    Toggle(L10n.string("float.card.gpu"), isOn: $showGPU)
-                    Toggle(L10n.string("float.card.memory"), isOn: $showMemory)
+                    Menu(L10n.string("float.add")) {
+                        ForEach(FloatingGraphLogic.Metric.allCases, id: \.self) { m in
+                            Button(L10n.string(m.l10nKey)) {
+                                FloatingGraphController.shared.openWindow(
+                                    metric: m, serial: serialForChild
+                                )
+                            }
+                            .disabled(float.isAtCapacity)
+                        }
+                    }
+                    Menu(L10n.string("float.switch")) {
+                        ForEach(FloatingGraphLogic.Metric.allCases, id: \.self) { m in
+                            Button {
+                                FloatingGraphController.shared.setMetric(id: win.id, metric: m)
+                            } label: {
+                                if m == win.metric {
+                                    Label(L10n.string(m.l10nKey), systemImage: "checkmark")
+                                } else {
+                                    Text(L10n.string(m.l10nKey))
+                                }
+                            }
+                            .disabled(m == win.metric)
+                        }
+                    }
+                    Button(L10n.string("float.arrange")) {
+                        FloatingGraphController.shared.arrange()
+                    }
+                    .disabled(float.wins.count < 2)
+                    if float.isAtCapacity {
+                        Text(L10n.string("float.limit"))
+                            .font(OPFont.body(10))
+                    }
                     Divider()
                     Button(L10n.string("float.processes")) { onOpenProcesses() }
                     Button(L10n.string("float.appnet")) { onOpenAppNetwork() }
@@ -158,10 +184,6 @@ struct FloatingGraphView: View {
                 .fixedSize()
                 .frame(width: 22, height: 22)
                 .help(L10n.string("float.menu.help"))
-
-                if let d = device, !d.serial.isEmpty {
-                    ScrcpyHeaderButton(serial: d.serial)
-                }
 
                 Button {
                     showOpacityPopover = true
@@ -190,8 +212,12 @@ struct FloatingGraphView: View {
                     .preferredColorScheme(ThemeManager.shared.mode.preferred)
                 }
 
+                if let d = device, !d.serial.isEmpty {
+                    ScrcpyHeaderButton(serial: d.serial)
+                }
+
                 Button {
-                    FloatingGraphController.shared.hide()
+                    FloatingGraphController.shared.closeWindow(id: win.id)
                 } label: {
                     Image(systemName: "xmark")
                         .font(.system(size: 10, weight: .semibold))
@@ -212,12 +238,12 @@ struct FloatingGraphView: View {
         .frame(height: 34)
     }
 
-    /// 다중 기기 — 헤더에서 전역 선택 변경 (이슈 0)
+    /// 다중 기기 — **이 창 전용** 기기 지정 (전역 선택은 건드리지 않음)
     private var devicePicker: some View {
         Menu {
             ForEach(devices, id: \.serial) { d in
                 Button {
-                    store.select(d.serial)
+                    FloatingGraphController.shared.setSerial(id: win.id, serial: d.serial)
                 } label: {
                     Label(d.displayName, systemImage: d.isOnline ? "iphone" : "iphone.slash")
                 }

@@ -37,6 +37,12 @@ final class WatchEngine {
 
     private init() {}
 
+    /// 기기 식별 라벨 해석기 — ConsoleStore가 DeviceInventory 기반으로 주입 (기본: serial 원문 · AGENTS.local §4)
+    var ident: @MainActor (String) -> String = { $0 }
+
+    /// 알림/이벤트 detail용 식별 라벨 (마스킹 금지)
+    private func identLabel(_ serial: String) -> String { ident(serial) }
+
     func thermalGate(for serial: String) -> ThresholdGate {
         if let g = thermalGates[serial] { return g }
         // clear ≤2 (SEVERE 이탈) — Status 2 구간에서 후속조치 잔류 방지, 60s 쿨다운 유지
@@ -54,7 +60,7 @@ final class WatchEngine {
         thermalGates[serial] = gate
         guard action != .none else { return nil }
 
-        let short = AdbClient.shortId(serial)
+        let short = identLabel(serial)
         if action == .enter {
             let sev: WatchSeverity = status >= 3 ? .critical : .warning
             return WatchEvent(
@@ -84,7 +90,7 @@ final class WatchEngine {
         chargeGates[serial] = gate
         guard action == .enter else { return nil }
 
-        let short = AdbClient.shortId(serial)
+        let short = identLabel(serial)
         let title = charging
             ? L10n.string("event.charge.start")
             : L10n.string("event.charge.stop")
@@ -105,7 +111,7 @@ final class WatchEngine {
         protectionGates[serial] = gate
         guard action == .enter else { return nil }
 
-        let short = AdbClient.shortId(serial)
+        let short = identLabel(serial)
         let title = enabled
             ? L10n.string("event.protection.on")
             : L10n.string("event.protection.off")
@@ -127,7 +133,7 @@ final class WatchEngine {
         lowPowerGates[serial] = gate
         guard action == .enter else { return nil }
 
-        let short = AdbClient.shortId(serial)
+        let short = identLabel(serial)
         let title = enabled
             ? L10n.string("event.lowPower.on")
             : L10n.string("event.lowPower.off")
@@ -153,7 +159,7 @@ final class WatchEngine {
             batteryArmed[serial] = armed
             if batteryAlertActive[serial] == true {
                 batteryAlertActive[serial] = false
-                let short = AdbClient.shortId(serial)
+                let short = identLabel(serial)
                 return WatchEvent(
                     kind: .batteryThreshold,
                     severity: .info,
@@ -176,7 +182,7 @@ final class WatchEngine {
         armed.remove(threshold)
         batteryArmed[serial] = armed
 
-        let short = AdbClient.shortId(serial)
+        let short = identLabel(serial)
         let sev: WatchSeverity = threshold <= 10 ? .warning : .info
         if sev >= .warning {
             batteryAlertActive[serial] = true
@@ -198,7 +204,7 @@ final class WatchEngine {
         psiGates[serial] = gate
         guard action != .none else { return nil }
 
-        let short = AdbClient.shortId(serial)
+        let short = identLabel(serial)
         if action == .enter {
             return WatchEvent(
                 kind: .psiPressure,
@@ -229,7 +235,7 @@ final class WatchEngine {
         loadGates[serial] = gate
         guard action != .none else { return nil }
 
-        let short = AdbClient.shortId(serial)
+        let short = identLabel(serial)
         if action == .enter {
             return WatchEvent(
                 kind: .loadSpike,
@@ -258,7 +264,7 @@ final class WatchEngine {
         memGates[serial] = gate
         guard action != .none else { return nil }
 
-        let short = AdbClient.shortId(serial)
+        let short = identLabel(serial)
         if action == .enter {
             return WatchEvent(
                 kind: .memoryLow,
@@ -286,7 +292,7 @@ final class WatchEngine {
             bsohAlertActive[serial] = false
             bsohPreDrop[serial] = nil
             bsohBaseline[serial] = bsoh
-            let short = AdbClient.shortId(serial)
+            let short = identLabel(serial)
             return WatchEvent(
                 kind: .bsohDrop,
                 severity: .info,
@@ -302,7 +308,7 @@ final class WatchEngine {
             bsohPreDrop[serial] = base
             bsohAlertActive[serial] = true
             bsohBaseline[serial] = bsoh
-            let short = AdbClient.shortId(serial)
+            let short = identLabel(serial)
             return WatchEvent(
                 kind: .bsohDrop,
                 severity: .warning,
@@ -318,7 +324,7 @@ final class WatchEngine {
 
     /// RSRP 급락 — 악화 Δ≤−6 enter · 회복 Δ≥+6 clear · 60s enter 쿨다운
     func feedRsrp(serial: String, rsrp: Int, now: Date = .now) -> WatchEvent? {
-        let short = AdbClient.shortId(serial)
+        let short = identLabel(serial)
         if let last = rsrpLast[serial] {
             let delta = rsrp - last
             let active = rsrpAlertActive[serial] ?? false
@@ -370,7 +376,7 @@ final class WatchEngine {
             return nil
         }
         anrLastAt[serial] = now
-        let short = AdbClient.shortId(serial)
+        let short = identLabel(serial)
         let shortPkg = packageName.map { " · \($0)" } ?? ""
         var ev = WatchEvent(
             kind: .anr,
@@ -405,7 +411,7 @@ final class WatchEngine {
             return nil
         }
         crashLastAt[serial] = now
-        let short = AdbClient.shortId(serial)
+        let short = identLabel(serial)
         let shortPkg = packageName.map { " · \($0)" } ?? ""
         var ev = WatchEvent(
             kind: .crash,
@@ -431,7 +437,7 @@ final class WatchEngine {
     /// 기기 분리 시 상태 정리 + 미해결 활성 gate의 synthetic clear 반환
     @discardableResult
     func forget(serial: String) -> [WatchEvent] {
-        let short = AdbClient.shortId(serial)
+        let short = identLabel(serial)
         let now = Date()
         var clears: [WatchEvent] = []
 

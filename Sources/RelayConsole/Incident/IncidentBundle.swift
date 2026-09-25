@@ -23,8 +23,8 @@ enum IncidentBundleLogic {
             c.year ?? 1970, c.month ?? 1, c.day ?? 1,
             c.hour ?? 0, c.minute ?? 0, c.second ?? 0
         )
-        let short = sanitize(AdbClient.shortId(event.serial))
-        return "\(ts)-\(sanitize(event.kind.rawValue))-\(short)"
+        let ident = sanitize(event.serial)
+        return "\(ts)-\(sanitize(event.kind.rawValue))-\(ident)"
     }
 
     /// fingerprint 기준 5분 쿨다운 (nil lastAt = 첫 시도)

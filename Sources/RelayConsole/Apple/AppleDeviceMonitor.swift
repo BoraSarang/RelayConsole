@@ -80,7 +80,7 @@ actor AppleDeviceMonitor {
             off.at = .now
             cache[udid] = off
             emit(off)
-            let short = IdeviceClient.shortUdid(udid)
+            let short = off.identLabel
             await notify(L10n.format("apple.event.disconnected", short))
             await emitWatch(
                 kind: .appleDisconnected,
@@ -90,8 +90,22 @@ actor AppleDeviceMonitor {
             )
         }
 
+        var anyOnline = false
+        var failDetail: String?
         for udid in found {
-            let infoText = run(infoPath, ["-u", udid]) ?? ""
+            let infoRes = runCapture(infoPath, ["-u", udid])
+            guard let infoText = infoRes.out, !infoText.isEmpty else {
+                // ideviceinfo 실패 — 이전 스냅샷을 오프라인으로 강등 (성공으로 위장 금지 · AGENTS.local §4 [표시②])
+                if var off = cache[udid] {
+                    off.isOnline = false
+                    off.at = .now
+                    cache[udid] = off
+                    emit(off)
+                }
+                if failDetail == nil { failDetail = infoRes.err }
+                continue
+            }
+            anyOnline = true
             var info = IdeviceClient.parseInfo(infoText)
             // disk_usage 병합 (실패해도 배터리·디바이스 정보는 유지)
             let diskText = run(infoPath, ["-u", udid, "-q", "com.apple.disk_usage"]) ?? ""
@@ -114,9 +128,18 @@ actor AppleDeviceMonitor {
                     kind: .appleConnected,
                     serial: udid,
                     title: L10n.string("event.appleConnected"),
-                    detail: "\(snap.displayName) · \(IdeviceClient.shortUdid(udid))"
+                    detail: snap.identLabel
                 )
             }
+        }
+        // 오류 배너 — 실패 시 실제 원인, 전부 성공 시 해제
+        if let failDetail {
+            let reason = failDetail.isEmpty
+                ? ErrorCode.appleConnectFailed.koMessage
+                : "\(ErrorCode.appleConnectFailed.koMessage) — \(failDetail)"
+            await publishError("[\(ErrorCode.appleConnectFailed.rawValue)] \(reason)")
+        } else if anyOnline {
+            await publishError(nil)
         }
     }
 
@@ -152,21 +175,30 @@ actor AppleDeviceMonitor {
     }
 
     private func run(_ path: String, _ args: [String]) -> String? {
+        runCapture(path, args).out
+    }
+
+    /// stdout + stderr 함께 수집 — 실패 원인을 화면에 노출 (AGENTS.local §4 [표시②])
+    private func runCapture(_ path: String, _ args: [String]) -> (out: String?, err: String) {
         let proc = Process()
         proc.executableURL = URL(fileURLWithPath: path)
         proc.arguments = args
         let out = Pipe()
+        let errPipe = Pipe()
         proc.standardOutput = out
-        proc.standardError = Pipe()
+        proc.standardError = errPipe
         do {
             try proc.run()
         } catch {
-            return nil
+            return (nil, error.localizedDescription)
         }
         let data = out.fileHandleForReading.readDataToEndOfFile()
+        let errData = errPipe.fileHandleForReading.readDataToEndOfFile()
         proc.waitUntilExit()
-        guard proc.terminationStatus == 0 else { return nil }
-        return String(decoding: data, as: UTF8.self)
+        let errText = String(decoding: errData, as: UTF8.self)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard proc.terminationStatus == 0 else { return (nil, errText) }
+        return (String(decoding: data, as: UTF8.self), errText)
     }
 
     private func logLast(_ message: String) async {

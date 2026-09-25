@@ -24,6 +24,11 @@ enum LoginItemLogic {
         return "settings.login.error"
     }
 
+    /// 오류 상세 — 실제 원인을 함께 노출 (AGENTS.local §4 [표시②])
+    static func errorDetail(from error: Error) -> String {
+        error.localizedDescription
+    }
+
     /// 헤드리스 시작 여부 — 기본 true (창 없이 메뉴바)
     static func defaultHeadless() -> Bool { true }
 
@@ -44,6 +49,8 @@ final class LoginItemController: ObservableObject {
     @Published private(set) var launchAtLogin = false
     @Published private(set) var statusKey = LoginItemLogic.statusKey(for: .notRegistered)
     @Published var messageKey: String?
+    /// 실패 원인 (성공 시 nil)
+    @Published var messageDetail: String?
     @Published private(set) var busy = false
 
     private init() {
@@ -61,6 +68,7 @@ final class LoginItemController: ObservableObject {
         guard !busy else { return }
         busy = true
         messageKey = nil
+        messageDetail = nil
         do {
             if enabled {
                 try SMAppService.mainApp.register()
@@ -72,6 +80,7 @@ final class LoginItemController: ObservableObject {
         } catch {
             refreshStatus()
             messageKey = LoginItemLogic.errorKey(from: error)
+            messageDetail = LoginItemLogic.errorDetail(from: error)
         }
         busy = false
     }

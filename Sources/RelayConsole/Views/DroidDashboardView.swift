@@ -3,6 +3,8 @@ import AppKit
 
 struct DroidDashboardView: View {
     @ObservedObject var store: ConsoleStore
+    /// 사이드바 알림(Alerts)으로 이동 — 탐지 타임라인 행 탭
+    var onOpenAlerts: () -> Void = {}
     @Environment(\.openWindow) private var openWindow
     @State private var showProcessList = false
     @State private var showLogs = false
@@ -13,15 +15,23 @@ struct DroidDashboardView: View {
     @ObservedObject private var shots = ScreenshotService.shared
     @ObservedObject private var scrcpy = ScrcpyController.shared
 
-    private let columns = [
-        GridItem(.flexible(), spacing: 16, alignment: .top),
-        GridItem(.flexible(), spacing: 16, alignment: .top)
-    ]
-
     private var device: DeviceSnapshot? { store.selectedDevice }
     private var devices: [DeviceSnapshot] { store.inventory.devices }
     private var metrics: DroidMetrics? {
         device.map { store.metrics(for: $0.serial) }
+    }
+
+    /// 토글 ON인 행 (행 안 전부 OFF면 그 행은 건너뜀)
+    private var visibleRows: [[DashboardCard]] {
+        DashboardCard.rows.compactMap { row in
+            let visible = row.filter { store.cardEnabled($0) }
+            return visible.isEmpty ? nil : visible
+        }
+    }
+
+    /// 토글 ON인 전폭 카드
+    private var visibleWideCards: [DashboardCard] {
+        DashboardCard.wideCards.filter { store.cardEnabled($0) }
     }
 
     var body: some View {
@@ -35,47 +45,23 @@ struct DroidDashboardView: View {
                             .padding(.top, 80)
                     } else {
                         header
+                        if let d = device, !d.isOnline {
+                            offlineBanner(d)
+                        }
+                        if let d = device, let err = d.lastError, !err.isEmpty {
+                            lastErrorBanner(err)
+                        }
                         if devices.count > 1 {
                             devicePicker
                         }
                         if let d = device, d.isThermalAlert {
                             thermalBanner(device: d)
                         }
-                        LazyVGrid(columns: columns, spacing: 16) {
-                            if store.cardCpu {
-                                DroidCards.cpu(device: device, metrics: metrics)
-                            }
-                            if store.cardGpu {
-                                DroidCards.gpu(device: device, metrics: metrics)
-                            }
-                            if store.cardMemory {
-                                DroidCards.memory(device: device, metrics: metrics) {
-                                    showProcessList = true
-                                }
-                            }
-                            if store.cardSensors {
-                                DroidCards.sensors(device: device, metrics: metrics)
-                            }
-                            if store.cardBattery {
-                                DroidCards.battery(device: device, metrics: metrics)
-                            }
-                            if store.cardNetwork {
-                                DroidCards.network(device: device, metrics: metrics) {
-                                    openAppNetwork()
-                                }
-                            }
-                            if store.cardThermal {
-                                DroidCards.thermal(device: device, metrics: metrics)
-                            }
-                            if store.cardStorage {
-                                DroidCards.storage(device: device, metrics: metrics)
-                            }
-                            if store.cardHealth {
-                                DroidCards.health(device: device)
-                            }
-                        }
+                        // 1순위 — 오늘 요약 상단 전폭 (관제 진입 시 오늘 상태 먼저)
                         todaySummaryCard
-                        footer
+                        dashboardGrid
+                        // 2순위 — 설정 변경·logcat 탐지 타임라인 (하단)
+                        detectionCard
                     }
                 }
                 .padding(OPSpace.xl)
@@ -111,6 +97,125 @@ struct DroidDashboardView: View {
         WindowFocus.dismissMenuBarPanels()
         openWindow(id: "appnetwork")
         WindowFocus.present(sceneID: "appnetwork")
+    }
+
+    // MARK: - Dashboard grid
+
+    /// 2열 Grid + 전폭 카드 — 행 높이 동기화(바닥 정렬) · 순서 = `DashboardLayout` 단일 진실원처
+    @ViewBuilder
+    private var dashboardGrid: some View {
+        if visibleRows.isEmpty && visibleWideCards.isEmpty {
+            Text(L10n.string("cards.empty"))
+                .font(OPFont.body(12))
+                .foregroundStyle(OPColor.inkDim)
+                .frame(maxWidth: .infinity, alignment: .center)
+                .padding(OPSpace.lg)
+                .background(OPColor.card, in: RoundedRectangle(cornerRadius: OPSpace.radiusCard))
+                .overlay(
+                    RoundedRectangle(cornerRadius: OPSpace.radiusCard)
+                        .stroke(OPColor.border, lineWidth: 1)
+                )
+        } else {
+            if !visibleRows.isEmpty {
+                Grid(alignment: .top, horizontalSpacing: 16, verticalSpacing: 16) {
+                    ForEach(Array(visibleRows.enumerated()), id: \.offset) { _, row in
+                        GridRow {
+                            ForEach(row, id: \.self) { card in
+                                cardView(card, fillsRow: true)
+                                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                            }
+                        }
+                    }
+                }
+            }
+            ForEach(visibleWideCards, id: \.self) { card in
+                cardView(card, fillsRow: false)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func cardView(_ card: DashboardCard, fillsRow: Bool) -> some View {
+        switch card {
+        case .cpu:
+            DroidCards.cpu(device: device, metrics: metrics, fillsRow: fillsRow)
+        case .thermal:
+            DroidCards.thermal(device: device, metrics: metrics, fillsRow: fillsRow)
+        case .memory:
+            DroidCards.memory(device: device, metrics: metrics, fillsRow: fillsRow) {
+                showProcessList = true
+            }
+        case .network:
+            DroidCards.network(device: device, metrics: metrics, fillsRow: fillsRow) {
+                openAppNetwork()
+            }
+        case .battery:
+            DroidCards.battery(device: device, metrics: metrics, fillsRow: fillsRow)
+        case .health:
+            DroidCards.health(device: device, fillsRow: fillsRow)
+        case .gpu:
+            DroidCards.gpu(device: device, metrics: metrics, fillsRow: fillsRow)
+        case .storage:
+            DroidCards.storage(device: device, metrics: metrics, fillsRow: fillsRow)
+        case .sensors:
+            DroidCards.sensors(device: device, metrics: metrics, fillsRow: fillsRow)
+        }
+    }
+
+    /// 오프라인 — 지표가 과거 스냅샷임을 명시 (AGENTS.local §4 [표시②])
+    private func offlineBanner(_ d: DeviceSnapshot) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: "cable.connector.slash")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(OPColor.bad)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(L10n.string("droid.offline.banner"))
+                    .font(OPFont.body(12))
+                    .foregroundStyle(OPColor.ink)
+                if let at = d.lastSampleAt {
+                    Text(L10n.format("droid.lastSample.at", Self.timeString(at)))
+                        .font(OPFont.number(10))
+                        .foregroundStyle(OPColor.inkDim)
+                }
+            }
+            .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+        }
+        .padding(OPSpace.md)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(OPColor.bad.opacity(0.12), in: RoundedRectangle(cornerRadius: 10))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(OPColor.bad.opacity(0.45), lineWidth: 1)
+        )
+    }
+
+    /// 수집 실패 원인 표시 — 원인 없는 일반 문구 대신 실제 에러 노출 (AGENTS.local §4 [표시②])
+    private func lastErrorBanner(_ text: String) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: "xmark.octagon")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(OPColor.bad)
+            Text(L10n.format("droid.lastError", text))
+                .font(OPFont.body(12))
+                .foregroundStyle(OPColor.bad)
+                .fixedSize(horizontal: false, vertical: true)
+                .textSelection(.enabled)
+            Spacer(minLength: 0)
+        }
+        .padding(OPSpace.md)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(OPColor.bad.opacity(0.12), in: RoundedRectangle(cornerRadius: 10))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(OPColor.bad.opacity(0.45), lineWidth: 1)
+        )
+    }
+
+    private static func timeString(_ date: Date) -> String {
+        let f = DateFormatter()
+        f.dateFormat = "HH:mm:ss"
+        return f.string(from: date)
     }
 
     private var header: some View {
@@ -223,7 +328,7 @@ struct DroidDashboardView: View {
                 }
                 .buttonStyle(.plain)
                 .help(L10n.string("scrcpy.thumb.openHint"))
-                Text(d.connectionKind == .network ? (d.connectionLabel ?? "") : AdbClient.shortId(d.serial))
+                Text(d.identLabel)
                     .font(OPFont.number(11))
                     .foregroundStyle(OPColor.inkDim)
             }
@@ -334,7 +439,7 @@ struct DroidDashboardView: View {
 
     // MARK: - Values
 
-    /// 오늘 요약 카드 (PLAN Phase3 · 표시 위치 C)
+    /// 오늘 요약 카드 — 상단 전폭 KPI 바 (PLAN Phase3 표시 위치 C → 2026-09-25 상단 이동)
     private var todaySummaryCard: some View {
         Group {
             if let d = device {
@@ -381,10 +486,13 @@ struct DroidDashboardView: View {
                         )
                     }
                 }
-                .padding(OPSpace.md)
+                .padding(OPSpace.lg)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(OPColor.card, in: RoundedRectangle(cornerRadius: 12))
-                .overlay(RoundedRectangle(cornerRadius: 12).stroke(OPColor.border, lineWidth: 1))
+                .background(OPColor.card, in: RoundedRectangle(cornerRadius: OPSpace.radiusCard))
+                .overlay(
+                    RoundedRectangle(cornerRadius: OPSpace.radiusCard)
+                        .stroke(OPColor.border.opacity(0.5), lineWidth: 1)
+                )
             }
         }
     }
@@ -400,34 +508,112 @@ struct DroidDashboardView: View {
         }
     }
 
-    private var footer: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(L10n.format(
-                "droid.footer.settingsChanged",
-                device?.settingsChangedCount ?? 0
-            ))
-                .font(OPFont.body(12))
-                .foregroundStyle((device?.settingsChangedCount ?? 0) > 0
-                    ? OPColor.thermal
-                    : OPColor.inkDim)
-                .lineLimit(1)
-                .truncationMode(.tail)
-            Text(L10n.format(
-                "droid.footer.logcatHits",
-                device?.logcatHitCount ?? 0
-            ))
-                .font(OPFont.body(12))
-                .foregroundStyle((device?.logcatHitCount ?? 0) > 0
-                    ? OPColor.cta
-                    : OPColor.inkDim)
-                .lineLimit(1)
-                .truncationMode(.tail)
+    // MARK: - Detect (settings · logcat)
+
+    /// 오늘 · 현재 기기의 탐지 이벤트 (신순)
+    private var todayDetectEvents: [WatchEvent] {
+        DetectLogic.today(events: store.recentWatchEvents, serial: device?.serial ?? "")
+    }
+
+    /// 탐지 카드 — 설정 변경·logcat을 구조화 이벤트 타임라인으로 표시
+    /// (구버전 텍스트 카운터 대체 — 시각·원인 노출, 행 탭 → Alerts) (AGENTS.local §4 [표시②])
+    private var detectionCard: some View {
+        let events = todayDetectEvents
+        let counts = DetectLogic.counts(events)
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Text(L10n.string("droid.detect.title"))
+                    .font(OPFont.body(12))
+                    .foregroundStyle(OPColor.ink)
+                Spacer(minLength: 8)
+                detectCountChip(L10n.string("droid.detect.settings"), counts.settings, color: OPColor.thermal)
+                detectCountChip(L10n.string("droid.detect.logcat"), counts.logcat, color: OPColor.cta)
+                Button {
+                    showLogs = true
+                } label: {
+                    Text(L10n.string("droid.detect.logs"))
+                        .font(OPFont.number(10))
+                        .foregroundStyle(OPColor.cta)
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 4)
+                        .background(OPColor.cta.opacity(0.12), in: RoundedRectangle(cornerRadius: 6))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 6)
+                                .stroke(OPColor.cta.opacity(0.35), lineWidth: 1)
+                        )
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help(L10n.string("droid.logs.button"))
+            }
+            if events.isEmpty {
+                Text(L10n.string("droid.detect.empty"))
+                    .font(OPFont.body(11))
+                    .foregroundStyle(OPColor.inkDim)
+            } else {
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(Array(events.prefix(DetectLogic.listLimit))) { e in
+                        Button(action: onOpenAlerts) {
+                            detectRow(e)
+                        }
+                        .buttonStyle(.plain)
+                        .help(L10n.string("sidebar.alerts"))
+                    }
+                }
+            }
         }
-        .padding(OPSpace.md)
+        .padding(OPSpace.lg)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(OPColor.card, in: RoundedRectangle(cornerRadius: 12))
+        .background(OPColor.card, in: RoundedRectangle(cornerRadius: OPSpace.radiusCard))
+        .overlay(
+            RoundedRectangle(cornerRadius: OPSpace.radiusCard)
+                .stroke(OPColor.border.opacity(0.5), lineWidth: 1)
+        )
+    }
+
+    private func detectCountChip(_ label: String, _ count: Int, color: Color) -> some View {
+        Text("\(label) \(count)")
+            .font(OPFont.number(10))
+            .foregroundStyle(count > 0 ? color : OPColor.inkDim)
+            .padding(.horizontal, 7)
+            .padding(.vertical, 4)
+            .background(
+                (count > 0 ? color : OPColor.inkDim).opacity(count > 0 ? 0.14 : 0.06),
+                in: RoundedRectangle(cornerRadius: 6)
+            )
+    }
+
+    private func detectRow(_ e: WatchEvent) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Text(Self.timeString(e.at))
+                .font(OPFont.number(10))
+                .foregroundStyle(OPColor.inkDim)
+                .frame(width: 56, alignment: .leading)
+            Image(systemName: e.kind == .settingsChanged ? "gearshape" : "terminal")
+                .font(.system(size: 11))
+                .foregroundStyle(e.kind == .settingsChanged ? OPColor.thermal : OPColor.cta)
+                .frame(width: 14)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(e.title)
+                    .font(OPFont.body(11))
+                    .foregroundStyle(OPColor.ink)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                if !e.detail.isEmpty {
+                    Text(e.detail)
+                        .font(OPFont.number(10))
+                        .foregroundStyle(OPColor.inkDim)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .textSelection(.enabled)
+                }
+            }
+            Spacer(minLength: 4)
+            Image(systemName: "chevron.right")
+                .font(.system(size: 8, weight: .semibold))
+                .foregroundStyle(OPColor.inkDim)
+        }
         .contentShape(Rectangle())
-        .onTapGesture { showLogs = true }
-        .help(L10n.string("droid.logs.button"))
+        .padding(.vertical, 2)
     }
 }

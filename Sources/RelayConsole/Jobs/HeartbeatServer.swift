@@ -10,18 +10,25 @@ final class HeartbeatServer: @unchecked Sendable {
     private var listener: NWListener?
     private var portRaw: UInt16 = 8787
     private var onBeat: (@Sendable (String) -> Void)?
-    private var onBindError: (@Sendable (String) -> Void)?
+    private var onBindError: (@Sendable (String, String) -> Void)?
+    private var onReady: (@Sendable () -> Void)?
     private(set) var isRunning = false
 
     var port: UInt16 { portRaw }
 
-    /// 시작 — 실패 시 onBindError 콜백 (E-MAC-JOB-0001)
-    func start(port: UInt16 = 8787, onBeat: @escaping @Sendable (String) -> Void, onBindError: @escaping @Sendable (String) -> Void) {
+    /// 시작 — 실패 시 onBindError(코드·원인), 성공 시 onReady 콜백 (E-MAC-JOB-0001)
+    func start(
+        port: UInt16 = 8787,
+        onBeat: @escaping @Sendable (String) -> Void,
+        onBindError: @escaping @Sendable (String, String) -> Void,
+        onReady: @escaping @Sendable () -> Void = {}
+    ) {
         queue.async { [weak self] in
             guard let self else { return }
             self.stopLocked()
             self.onBeat = onBeat
             self.onBindError = onBindError
+            self.onReady = onReady
             self.portRaw = port
 
             let params = NWParameters.tcp
@@ -36,10 +43,11 @@ final class HeartbeatServer: @unchecked Sendable {
                     case .ready:
                         self?.isRunning = true
                         DebugLogger.shared.info("HB", "[INFO] [FEATURE] 하트비트 서버 listening 127.0.0.1:\(port)")
+                        self?.onReady?()
                     case .failed(let err):
                         self?.isRunning = false
                         DebugLogger.shared.error("HB", "[ERROR] E-MAC-JOB-0001 하트비트 바인드 실패: \(err)")
-                        self?.onBindError?("E-MAC-JOB-0001")
+                        self?.onBindError?("E-MAC-JOB-0001", String(describing: err))
                     case .cancelled:
                         self?.isRunning = false
                     default:
@@ -54,7 +62,7 @@ final class HeartbeatServer: @unchecked Sendable {
             } catch {
                 self.isRunning = false
                 DebugLogger.shared.error("HB", "[ERROR] E-MAC-JOB-0001 하트비트 서버 생성 실패: \(error)")
-                onBindError("E-MAC-JOB-0001")
+                onBindError("E-MAC-JOB-0001", error.localizedDescription)
             }
         }
     }

@@ -228,14 +228,26 @@ final class ScrcpyController: ObservableObject {
         let pathEnv = env["PATH"] ?? ""
         env["PATH"] = "/opt/homebrew/bin:/usr/local/bin:" + pathEnv
         proc.environment = env
+        // scrcpy stderr 수집 — 실제 실패 원인을 화면에 노출 (AGENTS.local §4 [표시②])
+        let errPipe = Pipe()
+        proc.standardError = errPipe
         proc.terminationHandler = { [weak self] p in
+            let errData = errPipe.fileHandleForReading.readDataToEndOfFile()
+            let errText = String(decoding: errData, as: UTF8.self)
+                .split(separator: "\n")
+                .map { $0.trimmingCharacters(in: .whitespaces) }
+                .filter { !$0.isEmpty }
+                .last ?? ""
             Task { @MainActor in
                 guard let self else { return }
                 if self.process === p || self.runningSerial == serial {
                     self.process = nil
                     self.runningSerial = nil
                     if p.terminationStatus != 0 && p.terminationStatus != 15 {
-                        self.lastError = ErrorCode.scrcpyLaunchFailed.koMessage
+                        let base = ErrorCode.scrcpyLaunchFailed.koMessage
+                        self.lastError = errText.isEmpty
+                            ? "\(base) (exit \(p.terminationStatus))"
+                            : "\(base) — \(errText)"
                     }
                 }
             }

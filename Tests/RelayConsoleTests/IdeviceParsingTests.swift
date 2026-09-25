@@ -116,15 +116,18 @@ struct IdeviceParsingTests {
         #expect(snap.cycleCount == 312)
     }
 
-    @Test func snapshotDisplayNameFallback() {
+    @Test func snapshotDisplayNameFallsBackToUdid() {
         let bare = IdeviceClient.snapshot(udid: "00008101-001A2B3C4D5E6F70", info: [:])
-        #expect(bare.displayName.hasSuffix("6F70"))
-        #expect(bare.displayName.hasPrefix("…"))
+        #expect(bare.displayName == "00008101-001A2B3C4D5E6F70")
+        #expect(bare.identLabel == "00008101-001A2B3C4D5E6F70")
     }
 
-    @Test func shortUdidMasksMiddle() {
-        #expect(IdeviceClient.shortUdid("00008101-001A2B3C4D5E6F70") == "…6F70")
-        #expect(IdeviceClient.shortUdid("ab") == "ab")
+    @Test func identLabelIsUniquePerDevice() {
+        let named = IdeviceClient.snapshot(
+            udid: "00008101-001A2B3C4D5E6F70",
+            info: ["DeviceName": "내 iPhone", "ProductType": "iPhone15,2"]
+        )
+        #expect(named.identLabel == "내 iPhone · 00008101-001A2B3C4D5E6F70")
     }
 
     @Test func bytesToGBCalculates() {

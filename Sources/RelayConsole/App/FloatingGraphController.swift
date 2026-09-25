@@ -4,26 +4,165 @@ import Combine
 
 /// 순수 플로팅 그래프 로직 — 단위 테스트 대상
 enum FloatingGraphLogic {
-    struct Cards: Equatable {
-        var network: Bool
-        var cpu: Bool
-        var gpu: Bool
-        var memory: Bool
+    /// 창이 표시하는 지표 단위 (한 창 = 한 지표)
+    enum Metric: String, CaseIterable, Codable, Equatable, Sendable {
+        case network, cpu, gpu, memory
+
+        var l10nKey: String { "float.card.\(rawValue)" }
     }
 
-    /// 카드 전부 off 방지 — Network 강제 유지 (TetherLens network always-on)
-    static func resolve(
+    /// 플로팅 창 인스턴스 — (지표, 기기, 위치)
+    /// `id`는 생성 시 고정이라 기기/지표를 바꿔도 위치가 보존됨
+    struct FloatWin: Identifiable, Codable, Equatable, Sendable {
+        let id: UUID
+        var metric: Metric
+        var serial: String
+        var frame: String
+    }
+
+    /// 동시에 띄울 수 있는 최대 창 수
+    static let maxWindows = 6
+    static let windowsKey = "relay.float.windows"
+
+    // MARK: - 창 리스트 저장
+
+    static func decodeWins(_ raw: String?) -> [FloatWin] {
+        guard let raw, let data = raw.data(using: .utf8),
+              let list = try? JSONDecoder().decode([FloatWin].self, from: data) else { return [] }
+        return Array(list.prefix(maxWindows))
+    }
+
+    static func encodeWins(_ wins: [FloatWin]) -> String {
+        guard let data = try? JSONEncoder().encode(Array(wins.prefix(maxWindows))),
+              let json = String(data: data, encoding: .utf8) else { return "[]" }
+        return json
+    }
+
+    /// 구버전(단일 창 `relay.float.origin` + 카드 토글 4키) → 창 리스트 1회 마이그레이션
+    /// 카드 전부 off였으면 network 강제 — 기존 `resolve`와 동일한 불변식
+    static func migrateWins(
+        origin: String?,
         network: Bool,
         cpu: Bool,
         gpu: Bool,
-        memory: Bool
-    ) -> Cards {
-        let anyOn = network || cpu || gpu || memory
-        if !anyOn {
-            return Cards(network: true, cpu: false, gpu: false, memory: false)
+        memory: Bool,
+        serial: String
+    ) -> [FloatWin] {
+        var on: [Metric] = []
+        if network { on.append(.network) }
+        if cpu { on.append(.cpu) }
+        if gpu { on.append(.gpu) }
+        if memory { on.append(.memory) }
+        if on.isEmpty { on = [.network] }
+        let frame = origin ?? ""
+        return on.prefix(maxWindows).map {
+            FloatWin(id: UUID(), metric: $0, serial: serial, frame: frame)
         }
-        return Cards(network: network, cpu: cpu, gpu: gpu, memory: memory)
     }
+
+    // MARK: - 창 조작 (순수)
+
+    static func indexOf(id: UUID, wins: [FloatWin]) -> Int? {
+        wins.firstIndex { $0.id == id }
+    }
+
+    static func isOpen(_ metric: Metric, wins: [FloatWin]) -> Bool {
+        wins.contains { $0.metric == metric }
+    }
+
+    /// 창 추가 — cap 초과 시 거부(반환 false)
+    @discardableResult
+    static func openWindow(metric: Metric, serial: String, wins: inout [FloatWin]) -> Bool {
+        guard wins.count < maxWindows else { return false }
+        wins.append(FloatWin(id: UUID(), metric: metric, serial: serial, frame: ""))
+        return true
+    }
+
+    /// Settings 토글 — 해당 지표 창이 있으면 전부 닫고, 없으면 1개만 생성
+    @discardableResult
+    static func toggleMetric(_ metric: Metric, serial: String, wins: inout [FloatWin]) -> Bool {
+        if isOpen(metric, wins: wins) {
+            wins.removeAll { $0.metric == metric }
+            return false
+        }
+        return openWindow(metric: metric, serial: serial, wins: &wins)
+    }
+
+    static func closeWindow(id: UUID, wins: inout [FloatWin]) {
+        wins.removeAll { $0.id == id }
+    }
+
+    /// 지표 전환 — id·frame 유지
+    static func setMetric(id: UUID, metric: Metric, wins: inout [FloatWin]) {
+        guard let i = indexOf(id: id, wins: wins) else { return }
+        wins[i].metric = metric
+    }
+
+    /// 기기 전환(창 전용) — 전역 선택은 건드리지 않음
+    static func setSerial(id: UUID, serial: String, wins: inout [FloatWin]) {
+        guard let i = indexOf(id: id, wins: wins) else { return }
+        wins[i].serial = serial
+    }
+
+    static func setFrame(id: UUID, frame: String, wins: inout [FloatWin]) {
+        guard let i = indexOf(id: id, wins: wins) else { return }
+        wins[i].frame = frame
+    }
+
+    // MARK: - 위치
+
+    /// 세로 정렬 — 좌상단에서 시작해 열(column) 단위로 채우고 넘치면 옆 열로
+    static func arrange(wins: inout [FloatWin], in area: NSRect, gap: CGFloat = 10) {
+        guard !wins.isEmpty else { return }
+        let inset: CGFloat = 16
+        var x = area.minX + inset
+        var y = area.maxY
+        var columnWidth: CGFloat = 0
+        for i in wins.indices {
+            let size = parseFrame(wins[i].frame)?.size ?? NSSize(width: 300, height: 200)
+            if y - size.height < area.minY + inset {
+                // 현재 열이 꽉 참 → 다음 열
+                x += columnWidth + gap
+                y = area.maxY
+                columnWidth = 0
+            }
+            y -= size.height
+            let clamped = clampTopLeft(
+                NSPoint(x: x, y: max(y, area.minY + size.height)),
+                size: size,
+                in: area
+            )
+            wins[i].frame = formatFrame(topLeft: clamped, size: size)
+            y -= gap
+            columnWidth = max(columnWidth, size.width)
+        }
+    }
+
+    /// 새 창 위치 — 기존 창과 겹치면 아래로(불가하면 오른쪽으로) 밀어 배치
+    static func cascadeTopLeft(
+        _ p: NSPoint,
+        size: NSSize,
+        occupied: [NSRect],
+        in area: NSRect
+    ) -> NSPoint {
+        var candidate = clampTopLeft(p, size: size, in: area)
+        for _ in 0..<maxWindows {
+            let rect = NSRect(origin: bottomLeft(fromTopLeft: candidate, height: size.height), size: size)
+            if !occupied.contains(where: { $0.intersects(rect) }) { return candidate }
+            var next = candidate
+            next.y -= (size.height + 12)
+            if clampTopLeft(next, size: size, in: area) == next {
+                candidate = next
+            } else {
+                next = candidate
+                next.x += 28
+                candidate = clampTopLeft(next, size: size, in: area)
+            }
+        }
+        return candidate
+    }
+
+    // MARK: - 기존 프레임 로직 (하위호환 유지)
 
     /// `"x,y"` → NSPoint (실패 시 nil)
     static func parseOrigin(_ raw: String?) -> NSPoint? {
@@ -137,7 +276,8 @@ enum FloatingGraphLogic {
 }
 
 /// 기기 그래프 플로팅 창 — TetherLens FloatingWindowController 패턴
-/// borderless NSPanel · .nonactivatingPanel · .floating · 위치/카드 설정 유지
+/// borderless NSPanel · .nonactivatingPanel · .floating
+/// 한 창 = 한 지표, (지표 × 기기) 인스턴스를 여러 개 동시에 띄울 수 있음
 @MainActor
 final class FloatingGraphController: ObservableObject {
     static let shared = FloatingGraphController()
@@ -146,8 +286,14 @@ final class FloatingGraphController: ObservableObject {
     private static let originKey = "relay.float.origin"
     static let enabledKey = "relay.float.enabled"
 
-    private var panel: NSPanel?
-    private var moveObserver: NSObjectProtocol?
+    typealias Metric = FloatingGraphLogic.Metric
+    typealias FloatWin = FloatingGraphLogic.FloatWin
+
+    /// 창 id → 패널
+    private var panels: [UUID: NSPanel] = [:]
+    /// 창 id → 마지막으로 호스팅한 콘텐츠 (metric/serial 비교용)
+    private var hosted: [UUID: FloatWin] = [:]
+    private var moveObservers: [UUID: NSObjectProtocol] = [:]
     private var dragMonitor: Any?
     private var dragPressScreen: NSPoint?
     private var dragOriginAtPress: NSPoint?
@@ -161,6 +307,9 @@ final class FloatingGraphController: ObservableObject {
     @Published private(set) var isEnabled: Bool =
         UserDefaults.standard.bool(forKey: FloatingGraphController.enabledKey)
 
+    /// 열려 있는 창 리스트 — 단일 진실원처 (Settings 토글·창 UI 공통)
+    @Published private(set) var wins: [FloatWin] = []
+
     /// App 라벨 onAppear에서 주입 — 플로팅에서 프로세스 창 열기 (openWindow Environment 재사용)
     var openProcesses: (() -> Void)?
     /// 플로팅에서 앱 네트워크 창 열기
@@ -168,16 +317,55 @@ final class FloatingGraphController: ObservableObject {
     /// 플로팅에서 대시보드(콘솔) 창 열기
     var openConsole: (() -> Void)?
 
-    var isVisible: Bool { panel?.isVisible == true }
+    /// 하나라도 보이면 On으로 간주
+    var isVisible: Bool { panels.values.contains { $0.isVisible } }
+
+    var isAtCapacity: Bool { wins.count >= FloatingGraphLogic.maxWindows }
 
     private init() {
-        // 설정 카드 토글 변경 → 높이 재적합
+        wins = Self.loadWins()
+        installDragMonitor()
+        // 콘텐츠 높이 변화(수집 직후 카드 늘어남 등) → 디바운스 재적합
+        // (구버전: store 변경마다 즉시 fit 2회 layout → 레이아웃 폭주)
         storeCancellable = store.objectWillChange
             .receive(on: DispatchQueue.main)
+            .debounce(for: .milliseconds(400), scheduler: DispatchQueue.main)
             .sink { [weak self] _ in
-                self?.fitToContent()
+                self?.fitAll()
             }
     }
+
+    // MARK: - 저장/마이그레이션
+
+    private static func boolDefault(_ key: String, _ fallback: Bool) -> Bool {
+        let d = UserDefaults.standard
+        return d.object(forKey: key) == nil ? fallback : d.bool(forKey: key)
+    }
+
+    private static func loadWins() -> [FloatWin] {
+        let d = UserDefaults.standard
+        let key = FloatingGraphLogic.windowsKey
+        if d.object(forKey: key) != nil {
+            return FloatingGraphLogic.decodeWins(d.string(forKey: key))
+        }
+        // 1회 마이그레이션 — 기존 단일 창 프레임 + 카드 토글 4키
+        let migrated = FloatingGraphLogic.migrateWins(
+            origin: d.string(forKey: originKey),
+            network: boolDefault("relay.float.showNetwork", true),
+            cpu: boolDefault("relay.float.showCPU", true),
+            gpu: boolDefault("relay.float.showGPU", false),
+            memory: boolDefault("relay.float.showMemory", false),
+            serial: d.string(forKey: "relay.selectedSerial") ?? ""
+        )
+        d.set(FloatingGraphLogic.encodeWins(migrated), forKey: key)
+        return migrated
+    }
+
+    private func persistWins() {
+        UserDefaults.standard.set(FloatingGraphLogic.encodeWins(wins), forKey: FloatingGraphLogic.windowsKey)
+    }
+
+    // MARK: - 표시/숨김
 
     func toggle() {
         if isVisible { hide() } else { show() }
@@ -187,26 +375,31 @@ final class FloatingGraphController: ObservableObject {
 
     func show() {
         setEnabledFlag(true)
-        if let panel, panel.isVisible {
-            panel.orderFront(nil)
-            fitToContent()
-            return
+        if wins.isEmpty {
+            FloatingGraphLogic.openWindow(metric: .network, serial: defaultSerial(), wins: &wins)
+            persistWins()
         }
-        if panel == nil {
-            createPanel()
-        }
-        panel?.orderFront(nil)
-        fitToContent()
-        DebugLogger.shared.action("FloatGraph", "플로팅 창 표시")
+        syncPanels()
+        DebugLogger.shared.action("FloatGraph", "플로팅 창 표시 (\(wins.count)개)")
     }
 
     func hide() {
         setEnabledFlag(false)
-        guard let panel, panel.isVisible else { return }
-        // 위치 저장 — 재오픈/재시작 시 복원 (이슈 4)
-        saveOrigin(panel.frame)
-        panel.orderOut(nil)
+        for (id, panel) in panels where panel.isVisible {
+            persistFrame(id: id, frame: panel.frame)
+            panel.orderOut(nil)
+        }
         DebugLogger.shared.action("FloatGraph", "플로팅 창 숨김")
+    }
+
+    /// 재기동 복원 — enabled가 true일 때만 패널 재생성
+    func restoreAll() {
+        guard isEnabled else { return }
+        if wins.isEmpty {
+            FloatingGraphLogic.openWindow(metric: .network, serial: defaultSerial(), wins: &wins)
+            persistWins()
+        }
+        syncPanels()
     }
 
     /// 단일 진실원천 갱신 — 플리시 값과 UserDefaults를 한 곳에서만 기록
@@ -215,11 +408,103 @@ final class FloatingGraphController: ObservableObject {
         UserDefaults.standard.set(value, forKey: Self.enabledKey)
     }
 
-    /// 앱 종료 직전 현재 프레임 저장 (didMove 없이 종료해도 위치 유지)
+    /// 앱 종료 직전 전 창 프레임 저장 (didMove 없이 종료해도 위치 유지)
     func persistPosition() {
-        guard let panel else { return }
-        saveOrigin(panel.frame)
+        for (id, panel) in panels {
+            persistFrame(id: id, frame: panel.frame)
+        }
     }
+
+    // MARK: - 창 조작
+
+    /// 새 창 추가 (cap 초과 시 거부)
+    func openWindow(metric: Metric, serial: String? = nil) {
+        guard FloatingGraphLogic.openWindow(
+            metric: metric,
+            serial: serial ?? defaultSerial(),
+            wins: &wins
+        ) else {
+            DebugLogger.shared.warn("FloatGraph", "[WARN] 창 최대 \(FloatingGraphLogic.maxWindows)개 도달")
+            return
+        }
+        persistWins()
+        if !isEnabled { setEnabledFlag(true) }
+        syncPanels()
+    }
+
+    /// 창 닫기 — 마지막 창이 닫히면 On/Off도 off로
+    func closeWindow(id: UUID) {
+        var list = wins
+        FloatingGraphLogic.closeWindow(id: id, wins: &list)
+        guard list.count != wins.count else { return }
+        wins = list
+        persistWins()
+        syncPanels()
+        if wins.isEmpty { setEnabledFlag(false) }
+    }
+
+    /// Settings 카드 토글 ↔ 창 열림/닫힘
+    func setMetricOpen(_ metric: Metric, _ open: Bool) {
+        var list = wins
+        if open {
+            guard !FloatingGraphLogic.isOpen(metric, wins: list) else { return }
+            guard FloatingGraphLogic.openWindow(
+                metric: metric, serial: defaultSerial(), wins: &list
+            ) else {
+                DebugLogger.shared.warn("FloatGraph", "[WARN] 창 최대 \(FloatingGraphLogic.maxWindows)개 도달")
+                return
+            }
+        } else {
+            list.removeAll { $0.metric == metric }
+        }
+        wins = list
+        persistWins()
+        if open, !isEnabled { setEnabledFlag(true) }
+        if list.isEmpty { setEnabledFlag(false); return }
+        syncPanels()
+    }
+
+    func setMetric(id: UUID, metric: Metric) {
+        var list = wins
+        FloatingGraphLogic.setMetric(id: id, metric: metric, wins: &list)
+        guard list != wins else { return }
+        wins = list
+        persistWins()
+        syncPanels()
+    }
+
+    func setSerial(id: UUID, serial: String) {
+        var list = wins
+        FloatingGraphLogic.setSerial(id: id, serial: serial, wins: &list)
+        guard list != wins else { return }
+        wins = list
+        persistWins()
+        syncPanels()
+    }
+
+    /// 세로 정렬 — wins 프레임 갱신 후 패널에 반영
+    func arrange() {
+        var list = wins
+        FloatingGraphLogic.arrange(wins: &list, in: Self.visibleUnion())
+        guard list != wins else { return }
+        wins = list
+        persistWins()
+        applyFrames()
+    }
+
+    private static func visibleUnion() -> NSRect {
+        let frames = NSScreen.screens.map(\.visibleFrame)
+        guard let first = frames.first else {
+            return NSRect(x: 0, y: 0, width: 1440, height: 900)
+        }
+        return frames.dropFirst().reduce(first) { $0.union($1) }
+    }
+
+    private func defaultSerial() -> String {
+        store.selectedDevice?.serial ?? ""
+    }
+
+    // MARK: - 외부 창 열기
 
     func requestOpenProcesses() {
         guard let openProcesses else {
@@ -249,10 +534,44 @@ final class FloatingGraphController: ObservableObject {
         openConsole()
     }
 
-    private func createPanel() {
-        let hosting = NSHostingController(
+    /// Settings 슬라이더 / AppStorage → clamp 후 defaults 기록 (뷰 배경 fill이 투명도 반영)
+    func setOpacity(_ raw: Double) {
+        let v = FloatingGraphLogic.clampOpacity(raw)
+        UserDefaults.standard.set(v, forKey: FloatingGraphLogic.opacityKey)
+    }
+
+    // MARK: - 패널 동기화
+
+    private func syncPanels() {
+        for win in wins {
+            if let panel = panels[win.id] {
+                let contentChanged = hosted[win.id].map {
+                    $0.metric != win.metric || $0.serial != win.serial
+                } ?? true
+                if contentChanged {
+                    // 지표/기기 전환 — 호스팅만 교체(위치·패널 유지)
+                    panel.contentViewController = makeHosting(for: win)
+                    hosted[win.id] = win
+                    if isEnabled, !panel.isVisible { panel.orderFront(nil) }
+                    fitToContent(id: win.id)
+                } else if isEnabled, !panel.isVisible {
+                    panel.orderFront(nil)
+                }
+            } else {
+                createPanel(for: win)
+            }
+        }
+        for (id, panel) in panels where !wins.contains(where: { $0.id == id }) {
+            panel.orderOut(nil)
+            teardown(id: id)
+        }
+    }
+
+    private func makeHosting(for win: FloatWin) -> NSHostingController<FloatingGraphView> {
+        NSHostingController(
             rootView: FloatingGraphView(
                 store: store,
+                win: win,
                 onOpenProcesses: { [weak self] in
                     self?.requestOpenProcesses()
                 },
@@ -264,64 +583,81 @@ final class FloatingGraphController: ObservableObject {
                 }
             )
         )
-        let size = NSSize(width: 300, height: 200)
+    }
+
+    private func createPanel(for win: FloatWin) {
+        let hosting = makeHosting(for: win)
+        let defaultSize = NSSize(width: 300, height: 200)
         // 저장값 = (좌상단, 크기) — 구버전 "x,y"도 하위호환. 화면 역조회로 소실 방지
-        let stored = FloatingGraphLogic.parseFrame(
-            UserDefaults.standard.string(forKey: Self.originKey)
-        )
+        let stored = FloatingGraphLogic.parseFrame(win.frame)
         let savedTopLeft = stored?.topLeft
-        let savedSize = stored?.size ?? size
+        let savedSize = stored?.size ?? defaultSize
         let screenFrame = FloatingGraphLogic.screenFrame(
             containing: savedTopLeft ?? NSPoint(x: 0, y: CGFloat.greatestFiniteMagnitude)
         )
-        let topLeft = FloatingGraphLogic.clampTopLeft(
-            savedTopLeft ?? NSPoint(
-                x: screenFrame.minX + 20,
-                y: screenFrame.maxY - 48
-            ),
+        let desiredTopLeft = savedTopLeft ?? NSPoint(
+            x: screenFrame.minX + 20,
+            y: screenFrame.maxY - 48
+        )
+        // 이미 떠 있는 창과 겹치지 않도록 캐스케이드
+        let topLeft = FloatingGraphLogic.cascadeTopLeft(
+            desiredTopLeft,
             size: savedSize,
+            occupied: panels.values.map(\.frame),
             in: screenFrame
         )
         let origin = FloatingGraphLogic.bottomLeft(fromTopLeft: topLeft, height: savedSize.height)
 
-        let win = NSPanel(
+        let panel = NSPanel(
             contentRect: NSRect(origin: origin, size: savedSize),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
         )
-        win.level = .floating
-        win.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-        win.isOpaque = false
-        win.backgroundColor = .clear
+        panel.level = .floating
+        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        panel.isOpaque = false
+        panel.backgroundColor = .clear
         // 투명 배경 + 그림자 이슈 방지 (TetherLens 동일)
-        win.hasShadow = false
-        win.isReleasedWhenClosed = false
-        win.identifier = NSUserInterfaceItemIdentifier(Self.windowID)
-        win.contentViewController = hosting
-        panel = win
+        panel.hasShadow = false
+        panel.isReleasedWhenClosed = false
+        // 식별자에 창 id 접미 — WindowFocus가 접두로 전체를 팝오버 닫힘 대상에서 제외
+        panel.identifier = NSUserInterfaceItemIdentifier("\(Self.windowID).\(win.id.uuidString)")
+        panel.contentViewController = hosting
+        panels[win.id] = panel
+        hosted[win.id] = win
         // 생성 직후 content 크기 반영 전 frame을 못 맞추면 maxY가 깨져 저장됨 — 의도한 좌상단으로 고정
-        win.setFrame(NSRect(origin: origin, size: savedSize), display: false)
-        observeMove(win)
-        installDragMonitor(for: win)
-        DebugLogger.shared.action("FloatGraph", "창 생성 위치=\(origin)")
+        panel.setFrame(NSRect(origin: origin, size: savedSize), display: false)
+        observeMove(id: win.id, panel: panel)
+        DebugLogger.shared.action("FloatGraph", "창 생성 metric=\(win.metric.rawValue) 위치=\(origin)")
+        fitToContent(id: win.id)
     }
 
-    /// Settings 슬라이더 / AppStorage → clamp 후 defaults 기록 (뷰 배경 fill이 투명도 반영)
-    func setOpacity(_ raw: Double) {
-        let v = FloatingGraphLogic.clampOpacity(raw)
-        UserDefaults.standard.set(v, forKey: FloatingGraphLogic.opacityKey)
+    private func teardown(id: UUID) {
+        if let token = moveObservers.removeValue(forKey: id) {
+            NotificationCenter.default.removeObserver(token)
+        }
+        panels.removeValue(forKey: id)
+        hosted.removeValue(forKey: id)
     }
 
-    func fitToContent() {
-        guard !isDragging, let panel, panel.isVisible,
+    // MARK: - 높이 재적합
+
+    private func fitAll() {
+        guard !isDragging else { return }
+        for id in panels.keys { fitToContent(id: id) }
+    }
+
+    func fitToContent(id: UUID) {
+        guard !isDragging, let panel = panels[id], panel.isVisible,
               let hosting = panel.contentViewController else { return }
         hosting.view.layoutSubtreeIfNeeded()
         var h = hosting.view.fittingSize.height
         hosting.view.layoutSubtreeIfNeeded()
         h = hosting.view.fittingSize.height
         guard h > 0, h.isFinite else { return }
-        h = min(max(h, 80), 480)
+        // 한 창 = 한 카드 — 상한은 카드 1장 + 여유로 설정
+        h = min(max(h, 80), 560)
         guard abs(h - panel.frame.height) > 0.5 else { return }
         let screenFrame = (panel.screen ?? NSScreen.main)?.visibleFrame ?? panel.frame
         var origin = panel.frame.origin
@@ -332,22 +668,25 @@ final class FloatingGraphController: ObservableObject {
             NSRect(origin: origin, size: NSSize(width: panel.frame.width, height: h)),
             display: true
         )
-        saveOrigin(panel.frame)
+        persistFrame(id: id, frame: panel.frame)
     }
 
-    private func installDragMonitor(for panel: NSPanel) {
+    // MARK: - 드래그
+
+    private func installDragMonitor() {
         guard dragMonitor == nil else { return }
         dragMonitor = NSEvent.addLocalMonitorForEvents(
             matching: [.leftMouseDown, .leftMouseDragged, .leftMouseUp]
-        ) { [weak self, weak panel] event in
-            guard let self, let panel, panel.isVisible else { return event }
+        ) { [weak self] event in
+            guard let self else { return event }
+            let panel = event.window as? NSPanel
             switch event.type {
             case .leftMouseDown:
                 self.dragPressScreen = nil
                 self.dragOriginAtPress = nil
                 self.dragSkippedControl = false
                 self.isDragging = false
-                guard event.window === panel else { return event }
+                guard let panel, self.isFloatPanel(panel) else { return event }
                 if let hit = panel.contentView?.hitTest(event.locationInWindow), hit is NSControl {
                     self.dragSkippedControl = true
                 } else {
@@ -357,6 +696,7 @@ final class FloatingGraphController: ObservableObject {
                 }
             case .leftMouseDragged:
                 guard !self.dragSkippedControl,
+                      let panel, self.isFloatPanel(panel),
                       let press = self.dragPressScreen,
                       let origin = self.dragOriginAtPress else { return event }
                 let cur = NSEvent.mouseLocation
@@ -372,13 +712,15 @@ final class FloatingGraphController: ObservableObject {
                 )
                 panel.setFrameOrigin(clamped)
             case .leftMouseUp:
-                if self.dragPressScreen != nil {
-                    self.saveOrigin(panel.frame)
+                if self.dragPressScreen != nil, let panel, self.isFloatPanel(panel),
+                   let dragID = self.id(of: panel) {
+                    self.persistFrame(id: dragID, frame: panel.frame)
                 }
                 self.dragPressScreen = nil
                 self.dragOriginAtPress = nil
                 self.dragSkippedControl = false
                 self.isDragging = false
+                self.fitAll()
             default:
                 break
             }
@@ -386,24 +728,50 @@ final class FloatingGraphController: ObservableObject {
         }
     }
 
-    private func observeMove(_ panel: NSPanel) {
-        moveObserver = NotificationCenter.default.addObserver(
+    private func isFloatPanel(_ panel: NSPanel) -> Bool {
+        panels.values.contains { $0 === panel }
+    }
+
+    private func id(of panel: NSPanel) -> UUID? {
+        panels.first { $0.value === panel }?.key
+    }
+
+    private func observeMove(id: UUID, panel: NSPanel) {
+        let token = NotificationCenter.default.addObserver(
             forName: NSWindow.didMoveNotification, object: panel, queue: .main
         ) { [weak self] note in
             guard let win = note.object as? NSWindow else { return }
             Task { @MainActor [weak self] in
-                self?.saveOrigin(win.frame)
+                guard let self else { return }
+                // 드래그 중에는 매 프레임 갱신하지 않음 — mouseUp에서 1회 기록
+                guard !self.isDragging else { return }
+                self.persistFrame(id: id, frame: win.frame)
             }
         }
+        moveObservers[id] = token
     }
 
-    private func saveOrigin(_ frame: NSRect) {
+    private func persistFrame(id: UUID, frame: NSRect) {
         guard FloatingGraphLogic.isSavableFrame(frame) else { return }
-        let topLeft = FloatingGraphLogic.topLeft(of: frame)
-        UserDefaults.standard.set(
-            FloatingGraphLogic.formatFrame(topLeft: topLeft, size: frame.size),
-            forKey: Self.originKey
+        let str = FloatingGraphLogic.formatFrame(
+            topLeft: FloatingGraphLogic.topLeft(of: frame),
+            size: frame.size
         )
+        guard let i = FloatingGraphLogic.indexOf(id: id, wins: wins), wins[i].frame != str else { return }
+        wins[i].frame = str
+        persistWins()
+    }
+
+    /// 기존 프레임 그대로 패널에 적용 (arrange 직후)
+    private func applyFrames() {
+        for win in wins {
+            guard let panel = panels[win.id],
+                  let stored = FloatingGraphLogic.parseFrame(win.frame) else { continue }
+            let screenFrame = FloatingGraphLogic.screenFrame(containing: stored.topLeft)
+            let tl = FloatingGraphLogic.clampTopLeft(stored.topLeft, size: stored.size, in: screenFrame)
+            let origin = FloatingGraphLogic.bottomLeft(fromTopLeft: tl, height: stored.size.height)
+            panel.setFrame(NSRect(origin: origin, size: stored.size), display: true)
+        }
     }
 
     /// Settings 토글 ↔ 패널 표시 동기화 — isEnabled가 단일 진실원천

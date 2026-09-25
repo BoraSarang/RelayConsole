@@ -85,7 +85,6 @@ struct ScrcpyHeaderButton: View {
         // launch/toggle 실패(미설치·프로세스 기동 실패) 시 오류를 그대로 방치하지 않음
         .onChange(of: scrcpy.lastError) { _, err in
             guard let err, !err.isEmpty,
-                  state != .missing,
                   !scrcpy.isInstalling,
                   !showInstall else { return }
             showError = true
