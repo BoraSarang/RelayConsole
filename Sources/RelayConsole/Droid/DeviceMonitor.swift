@@ -18,6 +18,10 @@ actor DeviceMonitor {
         var deviceName: String?
         var connectionKind: ConnectionKind?
         var connectionLabel: String?
+        /// 연속 adb 무응답 횟수 — 0 이 아니면 신선도를 올리지 않는다
+        var failureStreak: Int = 0
+        /// 마지막 실패의 실제 원인 (stderr 등) — 조용한 실패를 막는다
+        var lastPollError: String?
         var prevStat = AdbClient.ProcStatSample()
         var prevCoreStat = AdbClient.CoreStatSample()
         var prevNet = AdbClient.NetSample()
@@ -153,17 +157,35 @@ actor DeviceMonitor {
         guard !script.isEmpty else { return nil }
         do {
             let out = try await ProcessRunner.captureAsync(adb, ["-s", serial, "shell", script])
-            return PollBatch.parse(out.stdout, into: cmds)
-        } catch {
-            // 실패는 조용히 삼키지 않는다 — DebugPanel(1단계 1-6 정책)에 남긴다
-            await MainActor.run {
-                DebugLogger.shared.warn(
-                    "Droid",
-                    "[WARN] 배치 폴링 실패 serial=\(NotifyChannel.maskSerial(serial)) \(ProcessRunner.describe(error))"
+            // 종료 코드가 0 이 아니고 마커가 하나도 없으면 실패로 본다
+            let parsed = PollBatch.parse(out.stdout, into: cmds)
+            if parsed.isEmpty {
+                let failure = ProcessRunner.Failure(
+                    base: L10n.string("adb.error.noResponse"),
+                    reason: out.cause
+                )
+                await reportPollFailure(
+                    serial: serial,
+                    reason: ProcessRunner.describe(failure)
                 )
             }
+            return parsed
+        } catch {
+            // 실패는 조용히 삼키지 않는다 — 실제 원인을 상태에 남겨 화면에 노출
+            await reportPollFailure(
+                serial: serial,
+                reason: ProcessRunner.describe(error)
+            )
             return nil
         }
+    }
+
+    /// 폴링 실패 원인을 기기 상태에 기록 (actor 격리 안으로 hop)
+    private func reportPollFailure(serial: String, reason: String) async {
+        let trimmed = reason.trimmingCharacters(in: .whitespacesAndNewlines)
+        let message = trimmed.isEmpty ? L10n.string("adb.error.noResponse") : trimmed
+        states[serial]?.lastPollError = message
+        await logLast("[FAIL] \(NotifyChannel.maskSerial(serial)) \(message)")
     }
 
     // MARK: - Per-device poll
@@ -196,6 +218,26 @@ actor DeviceMonitor {
         // adb 호출은 tick()에서 병렬로 이미 수행되어 batch로 전달된다.
         // 종전에는 기기당 6회(fast)·25회(slow)를 개별 실행했다. 마커로 출력을 잘라
         // **종전과 동일한 문자열**을 각 파서에 넘기므로 파서 동작은 변하지 않는다.
+
+        // ── 신선도 판정 ──
+        // batch 가 비었다면 adb 응답을 **하나도 못 받은 것**이다. 종전엔 이 경우에도
+        // isOnline=true 덕에 lastSampleAt 이 갱신돼 "방금 측정" 으로 위장했고,
+        // lastError 도 대부분 기록되지 않았다([표시②] 위반).
+        let gotAnyResponse = !batch.isEmpty
+        if gotAnyResponse {
+            state.failureStreak = 0
+            state.lastPollError = nil
+            snap.measuredAt = .now
+        } else {
+            state.failureStreak += 1
+            snap.measuredAt = nil
+            let detail = state.lastPollError ?? L10n.string("adb.error.noResponse")
+            let msg = L10n.format("adb.error.pollFailed", detail)
+            snap.lastError = msg
+            await logLast(msg)
+        }
+        snap.failureStreak = state.failureStreak
+
         if let battText = batch[.battery] {
             let batt = AdbClient.parseBatteryEx(battText)
             snap.batteryLevel = batt.batteryLevel
@@ -695,12 +737,21 @@ actor DeviceMonitor {
         snap.settingsChangedCount = state.settingsChangedCount
     }
 
+    /// logcat 출력 상한 (바이트) — 최신 라인만 보존한다 (`tail -c`).
+    ///
+    /// 메뉴바 앱은 macOS 절전 중 폴링이 멈춘다. 깨어나면 cursor가 수 시간 전이라
+    /// `logcat -d -T <cursor>` 가 그 사이 **전체 버퍼**를 한 String으로 읽어 들인다.
+    /// 실기기 실측: 상한 없이는 **429,643줄**, 적용하면 **1,729줄** (248배 감소).
+    private static let logcatMaxBytes = 200_000
+
     private func pollLogcatWatch(serial: String, state: inout DeviceState) async {
+        let cap = Self.logcatMaxBytes
         let output: String?
         if let cursor = state.logcatCursor {
-            output = try? shell(serial, "logcat", "-d", "-T", cursor)
+            // 단일 셸 문자열로 파이프 전달 (adb shell 은 argv 를 공백으로 이어 붙인다)
+            output = try? shell(serial, "logcat -d -T '\(cursor)' 2>/dev/null | tail -c \(cap)")
         } else {
-            output = try? shell(serial, "logcat", "-d", "-t", "30")
+            output = try? shell(serial, "logcat -d -t 30 2>/dev/null | tail -c \(cap)")
         }
         guard let output, !output.isEmpty else { return }
 
@@ -744,11 +795,19 @@ actor DeviceMonitor {
             }
         }
         // v0.8 ANR / 크래시 — 적중 시 WatchEngine 1회성 피드 (상세 컨텍스트 포함)
-        let anrHits = AdbClient.countLogcatHits(
+        // 종전엔 anr/crash 두 키워드 집합을 **별도로** 순회했다(출력 2회 전수 스캔).
+        // 한 번의 순회로 두 집합을 함께 센다.
+        let keywordScan = AdbClient.logcatKeywordScan(
             output,
-            keywords: Self.anrKeywords,
+            sets: [
+                .logcat: Self.logcatKeywords,
+                .anr: Self.anrKeywords,
+                .crash: Self.crashKeywords,
+            ],
             afterTimestamp: prevCursor
         )
+        let anrHits = keywordScan.counts[.anr] ?? 0
+        let crashHits = keywordScan.counts[.crash] ?? 0
         if anrHits > 0 {
             // ANR 전용 파서 — ANR in / am_anr 패키지 추출
             let anrCtx = AdbClient.extractAnrContext(output, afterTimestamp: prevCursor)
@@ -769,11 +828,6 @@ actor DeviceMonitor {
                 await enrichFatal(ev, serial: serial)
             }
         }
-        let crashHits = AdbClient.countLogcatHits(
-            output,
-            keywords: Self.crashKeywords,
-            afterTimestamp: prevCursor
-        )
         if crashHits > 0 {
             // 상세 컨텍스트 추출 — 패키지명, 예외 클래스, 메시지, 스택트레이스
             let crashCtx = AdbClient.extractCrashContext(output, afterTimestamp: prevCursor)
@@ -966,6 +1020,9 @@ actor DeviceMonitor {
         for s in knownSerials where !foundSet.contains(s) {
             knownSerials.remove(s)
             states.removeValue(forKey: s)
+            // serial 키 자료구조 정리 — 네트워크 ADB 는 IP 가 바뀌면 새 키가 생겨
+            // 이전 키가 영구 잔류했다(상시 실행 앱의 느린 누수)
+            dropboxScannedAt.removeValue(forKey: s)
             await MainActor.run {
                 ConsoleStore.shared.markDeviceOffline(s)
                 for e in WatchEngine.shared.forget(serial: s) {

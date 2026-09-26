@@ -2,7 +2,9 @@
 > 작업 추적 — bd 연동 (이슈 prefix: RelayConsole)
 
 ## 진행 중 (bd ready)
-- [ ] **R3 신선도·정직성** — `try?` 39회 중 38회가 실패 미기록 · `lastSampleAt` 항상 갱신(위장) 위장 제거 · logcat 4회 전수 스캔→1회 · **오프라인 기기 제거(1단계에서 ratios만 바꾼 근본 · R1-7과 짝)** · 기기 해제 시 dict 정리
+- [ ] **R4 메인 스레드 정지** — `EventStore` 이벤트마다 500건 전량 인코딩을 메인에서 · `SitesJobsStore` 14,400 레코드 5초마다 · `WidgetSnapshotStore` 유일한 동기 atomic write · 저장/로드 실패 무음(`E-MAC-STORE-0001~0003` 미사용) · `IssueLog.url`이 알림마다 mkdir syscall
+- [ ] **R5 SwiftUI 렌더** — `ConsoleStore` 단일 평면(23 body) · `InsightsView` body당 ~19,500회 이벤트 순회 · `fitAll()` 무조건 호출 · `DateFormatter` body 신규
+- [ ] **R6 종료·누수·디스크** — 종료 flush 미보관(0.5s wait 결과 버림) · `NSPanel isReleasedWhenClosed=false` + `teardown`가 `close()` 안 함 · `IssueLog` 무한 append · `EventStore` 비원자적 publish(501건 중간 상태 관측)
 - [ ] **R4 메인 스레드 정지** — `EventStore` 이벤트마다 500건 전량 인코딩을 메인에서 · `SitesJobsStore` 14,400 레코드 5초마다 · `WidgetSnapshotStore` 유일한 동기 atomic write
 - [ ] **R5 SwiftUI 렌더** — `ConsoleStore` 단일 평면(23 body) · `InsightsView` body당 ~19,500회 이벤트 순회 · `fitAll()` 무조건 호출 · `DateFormatter` body 신규
 - [ ] **R6 종료·누수·디스크** — 종료 flush 미보관(0.5s wait 결과 버림) · `NSPanel isReleasedWhenClosed=false` + `teardown`가 `close()` 안 함 · `IssueLog` 무한 append · 저장/로드 실패 무음(`E-MAC-STORE-0001~0003` 미사용) · `IssueLog.url`이 알림마다 mkdir syscall
@@ -23,6 +25,12 @@
 - [ ] **Apple 크래시 리포트 수집 (반드시 해야 할 작업)** — `idevicecrashreport`로 iOS `.ips` crash/ANR를 IncidentBundle에 첨부. 기기 확보 시 1순위. Trust USB + `idevicecrashreport -u <udid> copy` 패턴. Android `logcat -b crash`/dropbox 대응 Apple 쪽 원재료 — **기기 확보 전 구현 불가, 반드시 기억할 것**
 
 ## 완료 (2026-09-26)
+- [x] **R3 신선도·정직성** — `PLAN_refactor_perf_stability_macos` 3단계 · 커밋 `6efd4d4` · 브랜치 `chore/macos-refactor-p3-freshness` · **육안 대기**
+  - **신선도 위장 제거(핵심)** — `pollDevice`가 `isOnline=true` 무조건 세팅 → `merge`가 그걸 보고 `lastSampleAt` 갱신 → **adb 전부 실패에도 "방금 측정" 으로 위장**. `DeviceSnapshot.measuredAt`/`failureStreak` 신설로 **실제 응답이 있을 때만** 신선도 상승, 무응답 시 마지막 정상 시각 유지 + 연속 실패 증가 + `lastError` 에 실제 원인 기록(`DeviceState.lastPollError`, 성공 시 초기화)
+  - **측정 실패를 오프라인과 구분 표시** — `DroidDashboardView.staleBanner`(경고 배너 + 연속 실패 횟수 + **실제 마지막 정상 수집 시각**). 종전엔 구분 수단 없었음 · L10n **729 → 733**(`adb.error.noResponse`·`adb.error.pollFailed`·`droid.stale.banner`·`droid.stale.count`, en/ko 1:1)
+  - **오프라인 기기 정리(1단계 근본 해결)** — `offlineSince` + `pruneOffline(olderThan:)` 신설(보관 30분). `markOffline`이 플래그만 바꾸던 구조가 "한 번 연결된 기기 영구 잔류"를 만들었고 무선 ADB 는 serial 이 `IP:PORT` 라 DHCP 변경마다 새 항목이 쌓였다 → `markDeviceOffline`에서 `metricsHistory`(60×8 Double 링)·`lastNetPushAt`·`lastDailyIngestAt` 정리 + `DeviceMonitor.dropboxScannedAt` 정리. **1단계에서 비율 분모를 뺏던 것을 정상 복원**
+  - **logcat 폭주 + 중복 스캔 제거** — 절전 중 폴링 정지 후 깨어나면 cursor가 수 시간 전이라 `logcat -d -T`가 **전체 버퍼**를 한 String 으로 읽음 → `| tail -c 200000` 상한(실기기 실측 **429,643줄 → 1,779줄**, 최신 라인 보존 확인) · `AdbClient.logcatKeywordScan` 신설로 anr/crash/logcat 집합을 **1회 순회**로 집계(종전 집합별 2회 전수 스캔), 기존 `countLogcatHits` 와 동일함을 테스트로 고정
+  - **검증 [HARD]**: `swift test` **382 + 104 = 486 / 0 failed** (+15 신규) · `./scripts/build-macos.sh debug` **EXIT=0** (1.16.0 · 팀 6GPJQ7BQC9) · 런타임: 기기 재인식·크래시 0건(신규)·logcat 상한을 앱과 동일한 명령으로 실기기 검증(정확히 200,000바이트에서 절단 + 최신 라인 보존)
 - [x] **R2 ADB 배치화 + 기기별 병렬 폴링** — `PLAN_refactor_perf_stability_macos` 2단계 · 커밋 `91d7732` · 브랜치 `chore/macos-refactor-p2-batching` (R1 위에 stacked) · **육안 대기**
   - **`PollBatch` 마커 프로토콜** — 기기측 sh 가 `@@RLY<n>@@` 마커를 내면 호스트가 마커로 출력을 잘라 **종전과 동일한 문자열**을 각 순수 파서에 넘김 → **파서 무변경**(리스크 최소). 마커 없으면 전부 nil(조용한 오염 금지) · 빈 청크=종전 `try?` 실패와 동일 · **실기기 대조 21개 명령: 18개 줄 단위 완전 일치**, 3개는 실행 시점마다 변하는 누적 카운터라 개별 실행끼리도 다름 · 빈 청크 3건(GPU sysfs 미지원)도 개별 실행과 동일 확인
   - **기기별 병렬 폴링(Head-of-Line 해소)** — 종전 기기마다 순차라 느린 기기가 전체 지연 → `tick()`이 `withTaskGroup`으로 기기별 adb 실행을 겹쳐 돌림(actor 격리 밖 `detached`), 상태 갱신은 순차 보존

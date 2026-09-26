@@ -1,3 +1,5 @@
+"adb.error.noResponse" = "기기가 응답하지 않습니다";
+"adb.error.pollFailed" = "기기 응답을 받지 못했습니다 — %@";
 "adb.state.bootloader" = "부트로더 모드입니다";
 "adb.state.noPermissions" = "ADB 접근 권한이 없습니다 — 기기의 USB 권한을 확인하세요";
 "adb.state.offline" = "기기가 오프라인입니다 — 켜져 있는지 확인하세요";
@@ -177,6 +179,8 @@
 "droid.process.more" = "프로세스 목록 더보기";
 "droid.process.title" = "프로세스 — %@";
 "droid.process.titleShort" = "프로세스";
+"droid.stale.banner" = "측정 실패 — 아래 값은 마지막 정상 수집값입니다";
+"droid.stale.count" = "연속 실패 %d회";
 "droid.storage.read" = "읽기";
 "droid.storage.remain" = "%@ 남음";
 "droid.storage.write" = "쓰기";

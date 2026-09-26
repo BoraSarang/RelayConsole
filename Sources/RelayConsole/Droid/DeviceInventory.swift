@@ -58,10 +58,20 @@ struct DeviceSnapshot: Sendable, Equatable {
     var serial: String = ""
     var model: String = ""
     var isOnline: Bool = false
+    /// 이 스냅샷이 **실제 adb 응답**을 포함할 때만 찍히는 시각.
+    ///
+    /// 종전엔 `isOnline` 만 보고 `lastSampleAt` 을 갱신했는데, `isOnline` 은
+    /// `pollDevice` 시작에서 무조건 true 가 된다. 그래서 adb 가 전부 실패해도
+    /// "방금 측정" 으로 위장했다. 이제 실제 응답이 있었을 때만 신선도를 올린다.
+    var measuredAt: Date?
+    /// 연속 실패 횟수 — 실패 / 미측정 / 오프라인 을 구분하기 위한 값 ([표시②])
+    var failureStreak: Int = 0
     /// USB | network
     var connectionKind: ConnectionKind?
     /// 표시용 연결 라벨 — USB | 10.x.x.x:5555
     var connectionLabel: String?
+    /// 오프라인 전환 시각 — 일정 시간 지나면 목록에서 제거한다(`pruneOffline`)
+    var offlineSince: Date?
     /// settings get global device_name (예: S22)
     var deviceName: String?
     var batteryLevel: Int?
@@ -267,17 +277,47 @@ struct DeviceInventory: Equatable {
                 merged.diskReadMBps = merged.diskReadMBps ?? prev.diskReadMBps
                 merged.diskWriteMBps = merged.diskWriteMBps ?? prev.diskWriteMBps
             }
-            if merged.isOnline { merged.lastSampleAt = now } else { merged.lastSampleAt = prev.lastSampleAt }
+            // 신선도는 **실제 adb 응답이 있었을 때만** 올린다.
+            // 종전엔 isOnline(=무조건 true) 로 갱신해 adb 전체 실패를 "방금 측정" 으로 위장했다.
+            if let m = snapshot.measuredAt, merged.isOnline {
+                merged.lastSampleAt = m
+                merged.offlineSince = nil          // 재접속 → 오프라인 경과 초기화
+            } else {
+                merged.lastSampleAt = prev.lastSampleAt
+            }
             devices[idx] = merged
         } else {
             var added = snapshot
-            if added.isOnline { added.lastSampleAt = now }
+            // 신규 등록 — 실제 응답이 있었을 때만 신선도를 찍는다
+            if added.isOnline { added.lastSampleAt = snapshot.measuredAt }
             devices.append(added)
         }
     }
 
-    mutating func markOffline(serial: String) {
+    mutating func markOffline(serial: String, now: Date = .now) {
         guard let idx = devices.firstIndex(where: { $0.serial == serial }) else { return }
+        let wasOnline = devices[idx].isOnline
         devices[idx].isOnline = false
+        // 재연결 → 해제 반복 시 시각이 갱신되지 않도록 첫 전환 시각만 기록
+        if wasOnline || devices[idx].offlineSince == nil {
+            devices[idx].offlineSince = now
+        }
+    }
+
+    /// 오래 오프라인인 기기를 목록에서 제거한다.
+    ///
+    /// ## 왜 필요한가
+    /// `markOffline` 은 플래그만 바꾸고 배열에서 지우지 않아, 한번 연결된 기기는 영원히 남았다.
+    /// 결과:
+    /// - 메뉴바 아이콘 판정이 `devices.isEmpty` 로 되어 **기기 0대인데 Online** 으로 표시됨
+    /// - 팝오버 기기 수가 `0/47` 처럼 무의미해짐 (오프라인 누적)
+    /// - 네트워크 ADB 는 serial 이 `IP:PORT` 라 DHCP 변경마다 새 항목 → 무한 증가
+    ///
+    /// 이벤트·일일 집계는 별도 저장소(영구 데이터)이므로 여기서는 건드리지 않는다.
+    mutating func pruneOffline(olderThan interval: TimeInterval, now: Date = .now) {
+        devices.removeAll { d in
+            guard !d.isOnline, let since = d.offlineSince else { return false }
+            return now.timeIntervalSince(since) >= interval
+        }
     }
 }

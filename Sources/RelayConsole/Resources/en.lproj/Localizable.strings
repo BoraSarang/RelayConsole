@@ -1,3 +1,5 @@
+"adb.error.noResponse" = "The device is not responding";
+"adb.error.pollFailed" = "No response from device — %@";
 "adb.state.bootloader" = "In bootloader mode";
 "adb.state.noPermissions" = "No ADB permission — check the device USB authorization";
 "adb.state.offline" = "Device is offline — make sure it is powered on";
@@ -177,6 +179,8 @@
 "droid.process.more" = "More processes";
 "droid.process.title" = "Processes — %@";
 "droid.process.titleShort" = "Processes";
+"droid.stale.banner" = "Measurement failed — values below are the last successful reading";
+"droid.stale.count" = "%d consecutive failures";
 "droid.storage.read" = "Read";
 "droid.storage.remain" = "%@ left";
 "droid.storage.write" = "Write";

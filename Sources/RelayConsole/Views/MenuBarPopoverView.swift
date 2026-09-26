@@ -127,9 +127,9 @@ struct MenuBarPopoverView: View {
                     .lineLimit(1)
                 Spacer(minLength: 4)
                 if menubarMetrics && !devices.isEmpty {
-                    // [표시②] 분모에 장기 오프라인 기기가 누적되면 "0/47" 같은 무의미한 비율이 된다.
-                    // 오프라인 기기 제거는 R3에서 함께 처리하므로, 그 전까진 항상 참인 "온라인 수"만 표시한다.
-                    Text("\(devices.filter(\.isOnline).count)")
+                    // [표시②] 오프라인 기기는 30분 경과 시 목록에서 제거되므로(R3)
+                    // [표시②] 오프라인 기기는 30분 경과 시 목록에서 제거되므로(R3)
+                    Text("\(devices.filter(\.isOnline).count)/\(devices.count)")
                         .font(OPFont.number(11))
                         .foregroundStyle(OPColor.inkDim)
                         .lineLimit(1)
