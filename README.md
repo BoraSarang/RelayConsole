@@ -116,13 +116,18 @@ swift test
 
 ```
 Sources/RelayConsole/
-  App/        ConsoleStore · EventStore · Alerts 배너 · AppDelegate
-  Droid/      ADB · 감시 엔진 · 스냅샷 · scrcpy
-  Apple/      libimobiledevice Phase1
-  Sites/      HTTP·TCP·ping 체커
-  Jobs/       하트비트 서버
-  Views/      메뉴바 팝오버 · 콘솔 · 설정 · Alerts
-  Utils/      파서 · ThresholdGate · NotifyChannel · DebugLogger
+  App/          ConsoleStore · CoalescingWriter · EventStore · AlertBanner · AppDelegate
+  Droid/        ADB(PollBatch 배치) · 감시 엔진 · ProcessRunner · scrcpy
+  Apple/        libimobiledevice Phase1
+  Sites/        HTTP·TCP·ping 체커
+  Jobs/         하트비트 서버
+  Incident/     ANR·크래시·siteDown 번들 캡처
+  Models/       WatchEvent · SitesJobs · InsightLogic
+  Views/        메뉴바 팝오버 · 콘솔 · 설정 · Alerts · 인사이트
+  DesignSystem/ 토큰 · 공통 컴포넌트
+  Utils/        파서 · ThresholdGate · NotifyChannel · IssueLog · DebugLogger
+Sources/RelayMcpCore/   로컬 MCP 프로토콜·데이터 (읽기 전용)
+Sources/RelayWidgetCore/ 위젯 공유 스냅샷 모델 · App Group 저장소
 docs/         PLAN · RESEARCH · DESIGN · TODO
 ```
 
@@ -152,5 +157,7 @@ docs/         PLAN · RESEARCH · DESIGN · TODO
 ## 주의
 
 - 하트비트 서버는 **127.0.0.1**에만 바인드됩니다 (외부 노출 금지).
-- 로그·외부 알림에 기기 **전체 시리얼**을 남기지 않습니다 (뒤 4자리만).
-- 토큰·웹훅 URL은 하드코딩하지 않습니다.
+- 기기 식별자는 **화면·알림·내보내기에서 원문 그대로** 표시합니다 — 무선 기기는 `IP:PORT`,
+  USB 는 `기기명 · 시리얼`. `…5555` 로 축약하면 무선 기기 구분이 불가능해집니다.
+  마스킹(뒤 4자리)은 **DebugLogger · 로그 파일 출력에만** 적용됩니다.
+- 하트비트 토큰·웹훅 URL은 하드코딩하지 않으며, 로그에는 **마스킹**해 기록합니다.
