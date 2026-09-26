@@ -2,10 +2,7 @@
 > 작업 추적 — bd 연동 (이슈 prefix: RelayConsole)
 
 ## 진행 중 (bd ready)
-- [ ] **R6 종료·누수·디스크** — 종료 시 `group.wait` 결과 버림(타임아웃 확정) · `NSPanel isReleasedWhenClosed=false` + `teardown`가 `close()` 안 함(플로팅 창 반복 열면 누수) · `IssueLog` 무한 append(로테이션·크기 상한 0) · 저장/로드 실패 무음(`E-MAC-STORE-0001~0003` 미사용) · `ScrcpyController` 5초 타이머 미해제
-- [ ] **R4 메인 스레드 정지** — `EventStore` 이벤트마다 500건 전량 인코딩을 메인에서 · `SitesJobsStore` 14,400 레코드 5초마다 · `WidgetSnapshotStore` 유일한 동기 atomic write
-- [ ] **R5 SwiftUI 렌더** — `ConsoleStore` 단일 평면(23 body) · `InsightsView` body당 ~19,500회 이벤트 순회 · `fitAll()` 무조건 호출 · `DateFormatter` body 신규
-- [ ] **R6 종료·누수·디스크** — 종료 flush 미보관(0.5s wait 결과 버림) · `NSPanel isReleasedWhenClosed=false` + `teardown`가 `close()` 안 함 · `IssueLog` 무한 append · 저장/로드 실패 무음(`E-MAC-STORE-0001~0003` 미사용) · `IssueLog.url`이 알림마다 mkdir syscall
+- (없음 — 성능·안정성 리팩토링 6단계 전부 완료. 아래 완료 항목 참조)
 
 ## 다음 스프린트 (리서치 §8 잔여 · 미착수)
 - [ ] **S3 관제 규칙 Rules as Code (로컬 YAML)** — TIER S 중 유일 미착수
@@ -23,6 +20,25 @@
 - [ ] **Apple 크래시 리포트 수집 (반드시 해야 할 작업)** — `idevicecrashreport`로 iOS `.ips` crash/ANR를 IncidentBundle에 첨부. 기기 확보 시 1순위. Trust USB + `idevicecrashreport -u <udid> copy` 패턴. Android `logcat -b crash`/dropbox 대응 Apple 쪽 원재료 — **기기 확보 전 구현 불가, 반드시 기억할 것**
 
 ## 완료 (2026-09-26)
+- [x] **성능·안정성 리팩토링 6단계 전체 완료** — `PLAN_refactor_perf_stability_macos` · PR #45~#50 · 태그 `pre-refactor-perf` 롤백 지점
+  | 단계 | PR | 핵심 성과 |
+  |---|---|---|
+  | 1 어댑버 안전화 | #45 | **앱 정지(Hang) 근본 제거**(`ProcessRunner`) · [HARD] 토큰 평문 로그 |
+  | 2 ADB 배치화 | #46 | **adb 프로세스 85% 절감** (313→47/분) |
+  | 3 신선도·정직성 | #47 | 측정 실패 위장 제거 · logcat 248배 |
+  | 4 메인 스레드 정지 | #48 | **쓰기 증폭 95~99% 제거** |
+  | 5 SwiftUI 렌더 | #49 | **InsightsView body 57ms→3ms** |
+  | 6 종료·누수·디스크 | #50 | NSPanel 누수 · IssueLog 무한 append · 저장 실패 무음 |
+  - 테스트 **332 → 511** 전부 통과 · L10n **729 → 736** 키 (en/ko 1:1) · 버전 1.16.0
+  - **5·6단계는 착수 전 실측해 계획이 과장된 항목을 범위에서 제외** (추측 금지 원칙 일관 적용)
+- [x] **R6 종료·누수·디스크** — `PLAN_refactor_perf_stability_macos` 6단계 · 커밋 `6776605` · 브랜치 `chore/macos-refactor-p6-lifecycle` · **육안 대기**
+  - ① **NSPanel 리소스 누수** — `isReleasedWhenClosed = false` 인데 teardown 이 `orderOut` + 딕셔너리 제거만 해 `NSHostingController`·SwiftUI 트리가 잔류(창 반복 열면 단조 증가) → `contentViewController` → `contentView` → `close()` 순으로 명시적 해제
+  - ② **종료 시 `group.wait` 결과 버림** — 0.5초 timeout 인데 `_ =` 로 버림 → timeout 시 `shutdown.monitorTimeout` 로그
+  - ③ **`ScrcpyController` 5초 타이머 미해제** — `stop()` 이 프로세스만 정리 → `invalidate()` + nil
+  - ④ **`IssueLog` 무한 append** — 로테이션·상한 0 + `tail()` 이 전체 파일 로드 → **일자 분리**(`{name}-yyyyMMdd.jsonl`) + 파일당 2MB 상한(초과 시 최근 절반 유지, 잘린 앞부분 반쪽 줄 버려 **JSONL 무결성 보존**) + 14일 자동 삭제 + `tail()` 은 오늘 파일만. **런타임 검증**: `device-20260926.jsonl`·`notify-20260926.jsonl` 생성, 기존 파일 보존
+  - ⑤ **저장/로드 실패 무음 (복구 불가 위험)** — 로드 실패가 빈 배열로 대체돼 다음 저장에서 **기존 파일이 통째로 덮어써짐**. 미사용이던 `E-MAC-STORE-0001~0003` 활성화 → (a) 파일 존재 + 디코딩 실패 구분(파일 없음=최초 실행=정상, 오탐 방지) (b) 저장 전 손상 원본을 `.corrupt-<ts>` 로 1회 보존 (c) 2분 주기 저장 건강 검사 → `storeProblem` @Published → 대시보드 배너 (d) 복구 시 자동 해제
+  - **검증 [HARD]**: `swift test` **407 + 104 = 511 / 0 failed** (+8 신규) · `./scripts/build-macos.sh debug` **EXIT=0** (1.16.0 · 팀 6GPJQ7BQC9) · 런타임 기기 재인식·크래시 0건(신규)·종료→재기동 후 이벤트 277건 보존 · L10n 3키(총 736, en/ko 1:1) · U+FFFD 0건
+  - **TODO 문서 정리**: R4·R5·R6 이 "진행 중" 에 중복 3줄 잔재 → 통합
 - [x] **R5 SwiftUI 렌더 — 실측 기반 범위 확정** — `PLAN_refactor_perf_stability_macos` 5단계 · 커밋 `88f8e83` · 브랜치 `chore/macos-refactor-p5-swiftui` · **육안 대기**
   - **실측(실제 데이터 264건)**: `monthGrid`(셀 31 × 전체 필터) **19~38ms** · `insight` 중복 ×13 **14.2ms** · `report` 중복 ×9 **4.6ms** · `DateFormatter` body 내 생성 0.178ms/행 → **body 1회 평가 약 57ms**
   - **monthGrid(최대 단일 항목)** — 셀마다 `dayStatus` 에 전체 이벤트 전달 → **날짜별 1회 그룹핑** 후 각 셀은 자기 날짜 배열만 봄 → **1.4ms(13배)**, 결과 동일 확인

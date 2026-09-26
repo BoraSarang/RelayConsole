@@ -644,8 +644,19 @@ final class FloatingGraphController: ObservableObject {
         if let token = moveObservers.removeValue(forKey: id) {
             NotificationCenter.default.removeObserver(token)
         }
-        panels.removeValue(forKey: id)
+        // ── 창 리소스 명시적 해제 ──
+        // `isReleasedWhenClosed = false` 이므로 close() 해도 AppKit(NSApp.windows) 이
+        // 창을 계속 보유한다. 종전엔 orderOut + 딕셔너리 제거만 하고
+        // NSHostingController(와 그 안의 SwiftUI 트리)를 놓아주지 않아,
+        // 플로팅 그래프를 반복해 열면 창 하나당 리소스가 단조 증가했다.
+        // 순서: contentViewController → contentView → close() → 딕셔너리 제거
+        if let panel = panels[id] {
+            panel.contentViewController = nil
+            panel.contentView = nil
+            panel.close()
+        }
         hosted.removeValue(forKey: id)
+        panels.removeValue(forKey: id)
     }
 
     // MARK: - 높이 재적합

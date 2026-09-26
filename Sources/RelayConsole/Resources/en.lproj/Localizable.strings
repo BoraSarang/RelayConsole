@@ -579,6 +579,7 @@
 "settings.watch.recovery" = "Recovery notifications";
 "settings.watch.rsrp" = "Signal drop (RSRP)";
 "settings.watch.throttling" = "Throttling";
+"shutdown.monitorTimeout" = "Device monitors did not stop within 0.5s on quit";
 "sidebar.alerts" = "Alerts";
 "sidebar.devices" = "Devices";
 "sidebar.insights" = "Insights";
@@ -658,6 +659,8 @@
 "sites.state.up" = "Up";
 "sites.state.up.for" = "Up %@";
 "sites.tag.all" = "All";
+"store.read.failed" = "Stored data could not be read — it may be overwritten on next save";
+"store.write.failed" = "Saving failed — check free disk space";
 "ui.debug.clear" = "Clear";
 "ui.debug.inject.alertClear" = "Alert cleared inject";
 "ui.debug.inject.alertCritical" = "Alert critical";
