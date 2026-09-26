@@ -114,14 +114,65 @@ actor DeviceMonitor {
         tickCount += 1
         await resolveDevices()
 
-        for serial in serials {
-            await pollDevice(serial)
+        // ── 수집은 **병렬**, 적용은 순차 ──
+        // 종전에는 기기마다 순차 폴링이라, 한 기기의 느린 adb 호출(half-open TCP 등)이
+        // 나머지 모든 기기의 갱신을 Head-of-Line 로 막았다. ProcessRunner 데드라인이
+        // 무한 대기는 막아주지만 그만큼 지연은 남으므로, adb 대기 구간만 겹쳐 돌린다.
+        // 상태 갱신(states/emitWatch)은 여전히 actor 격리 안에서 순차 수행된다.
+        let isSlowTick = tickCount % 3 == 1
+        let list = serials
+        guard !list.isEmpty else { return }
+
+        let cmds = isSlowTick ? PollBatch.slow : PollBatch.fast
+        var collected: [String: [PollBatch.Cmd: String]] = [:]
+        await withTaskGroup(of: (String, [PollBatch.Cmd: String]).self) { group in
+            for serial in list {
+                group.addTask { [weak self] in
+                    // adb 실행은 actor 격리 밖에서 — 느린 기기가 다른 기기를 막지 않게
+                    let text = await self?.fetchBatch(serial: serial, cmds: cmds)
+                    return (serial, text ?? [:])
+                }
+            }
+            for await (serial, out) in group {
+                collected[serial] = out
+            }
+        }
+
+        for serial in list {
+            await pollDevice(serial, batch: collected[serial] ?? [:], isSlowTick: isSlowTick)
+        }
+    }
+
+    /// 배치 1회 실행 — actor 격리 밖에서 호출되어 adb 대기가 기기끼리 겹친다
+    private nonisolated func fetchBatch(
+        serial: String,
+        cmds: [PollBatch.Cmd]
+    ) async -> [PollBatch.Cmd: String]? {
+        guard let adb = Self.adbPathNow() else { return nil }
+        let script = PollBatch.build(cmds)
+        guard !script.isEmpty else { return nil }
+        do {
+            let out = try await ProcessRunner.captureAsync(adb, ["-s", serial, "shell", script])
+            return PollBatch.parse(out.stdout, into: cmds)
+        } catch {
+            // 실패는 조용히 삼키지 않는다 — DebugPanel(1단계 1-6 정책)에 남긴다
+            await MainActor.run {
+                DebugLogger.shared.warn(
+                    "Droid",
+                    "[WARN] 배치 폴링 실패 serial=\(NotifyChannel.maskSerial(serial)) \(ProcessRunner.describe(error))"
+                )
+            }
+            return nil
         }
     }
 
     // MARK: - Per-device poll
 
-    private func pollDevice(_ serial: String) async {
+    private func pollDevice(
+        _ serial: String,
+        batch: [PollBatch.Cmd: String],
+        isSlowTick: Bool
+    ) async {
         var state = states[serial] ?? DeviceState()
 
         var snap = DeviceSnapshot()
@@ -142,8 +193,10 @@ actor DeviceMonitor {
             snap.sdkInt = state.cacheSDK
         }
 
-        // ── 5s fast: battery + thermal + loadavg + /proc/stat
-        if let battText = try? shell(serial, "dumpsys", "battery") {
+        // adb 호출은 tick()에서 병렬로 이미 수행되어 batch로 전달된다.
+        // 종전에는 기기당 6회(fast)·25회(slow)를 개별 실행했다. 마커로 출력을 잘라
+        // **종전과 동일한 문자열**을 각 파서에 넘기므로 파서 동작은 변하지 않는다.
+        if let battText = batch[.battery] {
             let batt = AdbClient.parseBatteryEx(battText)
             snap.batteryLevel = batt.batteryLevel
             snap.batteryTempC = batt.batteryTempC
@@ -188,8 +241,8 @@ actor DeviceMonitor {
         }
 
         // 저전력 모드 (settings global low_power 0/1) — 15s 틱
-        if tickCount % 3 == 1 {
-            if let lpText = try? shell(serial, "settings", "get", "global", "low_power"),
+        if isSlowTick {
+            if let lpText = batch[.lowPower],
                let lp = AdbClient.parseSettingValue(lpText) {
                 let enabled = (Int(lp) ?? 0) != 0
                 snap.isLowPowerMode = enabled
@@ -199,13 +252,13 @@ actor DeviceMonitor {
             }
         }
 
-        if let thText = try? shell(serial, "dumpsys", "thermalservice") {
+        if let thText = batch[.thermal] {
             let th = AdbClient.parseThermal(thText)
             snap.thermalStatus = th.status
             snap.deviceTempC = th.apTempC ?? th.skinTempC ?? th.batTempC
             if snap.batteryTempC == nil { snap.batteryTempC = th.batTempC }
             // zones는 15s tick에서
-            if tickCount % 3 == 1 {
+            if isSlowTick {
                 snap.thermalZones = AdbClient.parseThermalZones(thText).zones
             }
             // ── 감시 이벤트: 스로틀링 전이 (hysteresis gate)
@@ -217,7 +270,7 @@ actor DeviceMonitor {
         }
 
         var pendingLoad1: Double?
-        if let loadText = try? shell(serial, "cat", "/proc/loadavg") {
+        if let loadText = batch[.loadavg] {
             let la = AdbClient.parseLoadAvg(loadText)
             snap.load1 = la.load1
             snap.load5 = la.load5
@@ -225,10 +278,17 @@ actor DeviceMonitor {
             pendingLoad1 = la.load1
         }
 
-        await pollSettingWatch(serial: serial, state: &state, snap: &snap)
+        // 회전 감지 — settings 2종은 배치 결과에서 전달 (추가 adb 호출 0)
+        await pollSettingWatch(
+            serial: serial,
+            accelRaw: batch[.accelRotation],
+            userRaw: batch[.userRotation],
+            state: &state,
+            snap: &snap
+        )
 
         // /proc/stat + cores
-        if let statText = try? shell(serial, "cat", "/proc/stat") {
+        if let statText = batch[.procStat] {
             let curr = AdbClient.parseProcStat(statText)
             if let use = AdbClient.cpuUsePercent(prev: state.prevStat, curr: curr) {
                 snap.cpuUsePercent = use
@@ -254,15 +314,14 @@ actor DeviceMonitor {
             )
         }
 
-        // ── cpufreq (15s 또는 첫 틱) — 단일 shell 문자열로 glob 확장 (sh -c 인자 분리 시 cat 만 실행되는 버그 회피)
-        if tickCount % 3 == 1 || state.cacheGovernor == nil {
-            let curCmd = "cat /sys/devices/system/cpu/cpu*/cpufreq/scaling_cur_freq"
-            let maxCmd = "cat /sys/devices/system/cpu/cpu*/cpufreq/cpuinfo_max_freq"
-            if let curText = try? shell(serial, curCmd),
-               let maxText = try? shell(serial, maxCmd) {
+        // ── cpufreq (15s 또는 첫 틱) — 배치 결과에서 읽는다 (추가 adb 호출 0)
+        if isSlowTick || state.cacheGovernor == nil {
+            if let curText = batch[.scalingCur],
+               let maxText = batch[.scalingMax] {
                 var gov: String?
                 if state.cacheGovernor == nil {
-                    gov = (try? shell(serial, "cat /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor"))
+                    // governor 는 첫 1회만 필요하므로 배치에 넣지 않고 단발 호출
+                    gov = try? shell(serial, "cat /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor")
                 }
                 let cores = AdbClient.parseCpuCores(curText: curText, maxText: maxText, governorText: gov)
                 if !cores.curMHz.isEmpty { snap.coreFreqsMHz = cores.curMHz }
@@ -275,8 +334,8 @@ actor DeviceMonitor {
         }
 
         // ── 15s slow
-        if tickCount % 3 == 1 {
-            if let memText = try? shell(serial, "cat", "/proc/meminfo") {
+        if isSlowTick {
+            if let memText = batch[.meminfo] {
                 let mem = AdbClient.parseMemInfo(memText)
                 state.cacheMemoryTotalGB = mem.totalGB
                 state.cacheMemoryUsedGB = mem.usedGB
@@ -298,7 +357,7 @@ actor DeviceMonitor {
             }
 
             // PSI pressure
-            if let psiText = try? shell(serial, "cat", "/proc/pressure/memory") {
+            if let psiText = batch[.psi] {
                 let p = AdbClient.parsePressure(psiText)
                 snap.memPressurePct = p.pct
                 snap.memPressureLabel = p.label
@@ -315,11 +374,11 @@ actor DeviceMonitor {
 
             // Top RSS+ARGS + CPU → 프로세스 목록
             var psRows: [ProcessRow] = []
-            if let psText = try? shell(serial, "ps", "-A", "-o", "PID,RSS,NAME,ARGS", "--sort=-rss") {
+            if let psText = batch[.ps] {
                 psRows = AdbClient.parsePsProcRows(psText, limit: 30)
             }
             var cpuRows: [ProcessRow] = []
-            if let cpuText = try? shell(serial, "dumpsys", "cpuinfo") {
+            if let cpuText = batch[.cpuinfo] {
                 cpuRows = AdbClient.parseCpuInfoProcs(cpuText, limit: 30)
             }
             if !psRows.isEmpty || !cpuRows.isEmpty {
@@ -341,7 +400,7 @@ actor DeviceMonitor {
                 if !full.isEmpty { snap.processList = full }
             }
 
-            if let netText = try? shell(serial, "cat", "/proc/net/dev") {
+            if let netText = batch[.netdev] {
                 let curr = AdbClient.parseNetDev(netText)
                 var upDown: (up: Double, down: Double)?
                 if let at = state.prevNetAt {
@@ -361,7 +420,7 @@ actor DeviceMonitor {
             }
 
             // ── 앱(UID) 네트워크 사용량 — 15s, 추가 셸 최대 2회 (netstats + pm list)
-            if let statsText = try? shell(serial, "dumpsys", "netstats", "detail") {
+            if let statsText = batch[.netstats] {
                 let parsed = AdbClient.parseUidNetStats(statsText)
                 if !parsed.isEmpty {
                     if state.packageUids == nil,
@@ -406,19 +465,14 @@ actor DeviceMonitor {
                 snap.processList = procRows
             }
 
-            if let connText = try? shell(serial, "dumpsys", "connectivity") {
+            if let connText = batch[.connectivity] {
                 if let type = AdbClient.parseNetworkType(connText) {
                     state.cacheNetworkType = type
                 }
             }
 
-            // Signal (기기内 grep — 단일 shell 문자열, 추가 셸 명령 0)
-            // mServiceState(mBands/getRilDataRadioTechnology/isUsingCarrierAggregation) + mSignalStrength
-            let sigPattern = "mSignalStrength|mOperatorAlphaLong|mServiceState|mDataConnectionState"
-            if let sigText = try? shell(
-                serial,
-                "dumpsys telephony.registry | grep -E '\(sigPattern)'"
-            ) {
+            // Signal (기기 내 grep — 배치에 포함, 추가 adb 호출 0)
+            if let sigText = batch[.signal] {
                 let sig = AdbClient.parseSignal(sigText)
                 snap.rsrp = sig.rsrp
                 snap.signalOperator = sig.carrier
@@ -436,7 +490,7 @@ actor DeviceMonitor {
             }
 
             // 포그라운드 앱 (15s) — 문제 순간 컨텍스트
-            if let actText = try? shell(serial, "dumpsys", "activity", "activities") {
+            if let actText = batch[.activity] {
                 if let fg = AdbClient.parseForegroundPackage(actText) {
                     state.cacheForegroundPackage = fg
                     snap.foregroundPackage = fg
@@ -462,11 +516,11 @@ actor DeviceMonitor {
             }
 
             // IP
-            if let ipText = try? shell(serial, "ip", "-f", "inet", "addr", "show", "wlan0") {
+            if let ipText = batch[.ipWlan] {
                 state.cacheIP = parseInet4(ipText)
             }
 
-            if let dfText = try? shell(serial, "df", "-h", "/data") {
+            if let dfText = batch[.df] {
                 let df = AdbClient.parseDf(dfText)
                 state.cacheStorageUsedGB = df.usedGB
                 state.cacheStorageTotalGB = df.totalGB
@@ -480,14 +534,14 @@ actor DeviceMonitor {
                     if let e = g.esVersion { state.cacheGpuEs = e }
                 }
             }
-            if let busyText = try? shell(serial, "cat /sys/class/kgsl/kgsl-3d0/gpu_busy_percentage"),
+            if let busyText = batch[.gpuBusy],
                let busy = AdbClient.parseGpuBusyPercent(busyText) {
                 snap.gpuUtilPercent = busy
-            } else if let busy2 = try? shell(serial, "cat /sys/class/kgsl/kgsl-3d0/gpubusy"),
+            } else if let busy2 = batch[.gpuGpubusy],
                       let busy = AdbClient.parseGpuBusyPercent(busy2) {
                 snap.gpuUtilPercent = busy
             }
-            if let clkText = try? shell(serial, "cat /sys/class/kgsl/kgsl-3d0/gpuclk"),
+            if let clkText = batch[.gpuClk],
                let mhz = AdbClient.parseGpuClkMHz(clkText) {
                 snap.gpuFreqMHz = mhz
             }
@@ -495,7 +549,7 @@ actor DeviceMonitor {
             snap.gpuEsVersion = state.cacheGpuEs
 
             // ── P2: SENSORS summary (기기内 grep — 단일 shell 문자열)
-            if let sensText = try? shell(serial, "dumpsys sensorservice | grep -E 'Total [0-9]+ h/w sensors|active-count|\\) type 0x|active connections|Sensor Device|Sensor List'") {
+            if let sensText = batch[.sensors] {
                 let s = AdbClient.parseSensorsSummary(sensText)
                 if s.total != nil || s.activeCount != nil || !s.activeNames.isEmpty {
                     snap.sensorTotalCount = s.total
@@ -506,7 +560,7 @@ actor DeviceMonitor {
             }
 
             // ── P2: diskstats R/W delta (sda)
-            if let diskText = try? shell(serial, "cat /proc/diskstats") {
+            if let diskText = batch[.diskstats] {
                 let curr = AdbClient.parseDiskStats(diskText)
                 var rates: (read: Double, write: Double)?
                 if let at = state.prevDiskAt {
@@ -599,11 +653,12 @@ actor DeviceMonitor {
 
     private func pollSettingWatch(
         serial: String,
+        accelRaw: String?,
+        userRaw: String?,
         state: inout DeviceState,
         snap: inout DeviceSnapshot
     ) async {
-        guard let autoRaw = try? shell(serial, "settings", "get", "system", "accelerometer_rotation"),
-              let userRaw = try? shell(serial, "settings", "get", "system", "user_rotation") else {
+        guard let autoRaw = accelRaw, let userRaw = userRaw else {
             return
         }
         let auto = AdbClient.parseSettingValue(autoRaw)
@@ -966,6 +1021,14 @@ actor DeviceMonitor {
             throw ErrorCode.adbBinaryMissing
         }
         return try run(adb, ["-s", serial, "shell"] + args)
+    }
+
+    /// 배치 호출용 — adb 경로가 없으면 예외로 알린다
+    private func adbForShell() throws -> String {
+        guard let adb = adbPath else {
+            throw ErrorCode.adbBinaryMissing
+        }
+        return adb
     }
 
     /// adb devices 상태 → 사용자 사유 문구 (AGENTS.local §4 [표시②])

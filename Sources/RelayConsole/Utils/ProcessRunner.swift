@@ -95,8 +95,7 @@ enum ProcessRunner {
         _ path: String,
         _ args: [String],
         timeout: TimeInterval = pollTimeout
-    ) throws -> Output {
-        let proc = Process()
+    ) throws -> Output {        let proc = Process()
         proc.executableURL = URL(fileURLWithPath: path)
         proc.arguments = args
         let out = Pipe()
@@ -112,20 +111,25 @@ enum ProcessRunner {
 
         // 두 파이프를 **동시에** 읽는다. 순차로 읽으면 먼저 읽는 쪽이 끝날 때까지
         // 다른 쪽이 채워져 교착할 수 있다.
+        // 결과는 Sendable 박스에 담아 두 동시 실행 클로저가 var 를 직접 바꾸지 않게 한다
+        // (Swift 6 SendableClosureCaptures 경고 방지 + 실제 데이터 경쟁 제거).
+        final class DataBox: @unchecked Sendable {
+            private let lock = NSLock()
+            private var storage = Data()
+            func set(_ d: Data) { lock.lock(); storage = d; lock.unlock() }
+            var value: Data { lock.lock(); defer { lock.unlock() }; return storage }
+        }
+        let outBox = DataBox()
+        let errBox = DataBox()
         let group = DispatchGroup()
-        let lock = NSLock()
-        var outData = Data()
-        var errData = Data()
         group.enter()
         DispatchQueue.global(qos: .utility).async {
-            let d = out.fileHandleForReading.readDataToEndOfFile()
-            lock.lock(); outData = d; lock.unlock()
+            outBox.set(out.fileHandleForReading.readDataToEndOfFile())
             group.leave()
         }
         group.enter()
         DispatchQueue.global(qos: .utility).async {
-            let d = err.fileHandleForReading.readDataToEndOfFile()
-            lock.lock(); errData = d; lock.unlock()
+            errBox.set(err.fileHandleForReading.readDataToEndOfFile())
             group.leave()
         }
 
@@ -153,10 +157,8 @@ enum ProcessRunner {
         // 끝나지 않은 경우에도 **무한정 기다리지 않는다** — 남은 읽기는 백그라운드 큐가 회수한다.
         _ = group.wait(timeout: .now() + graceAfterTerminate)
 
-        lock.lock()
-        let finalOut = outData
-        let finalErr = errData
-        lock.unlock()
+        let finalOut = outBox.value
+        let finalErr = errBox.value
 
         return Output(
             stdout: String(decoding: finalOut, as: UTF8.self),
@@ -164,5 +166,30 @@ enum ProcessRunner {
             exitCode: proc.terminationStatus,
             timedOut: timedOut
         )
+    }
+
+    /// async 변형 — **actor 격리 밖**에서 블로킹 실행을 수행한다.
+    ///
+    /// 동기 `capture`는 호결한 스레드를 최대 `timeout`만큼 붙잡는다. 기기별 폴링을
+    /// 병렬로 돌릴 때 느린 기기가 다른 기기를 막지 않도록 detached Task 로 옮긴다.
+    /// `Process` 로직을 그대로 쓰므로 stderr 교착 방어·데드라인·escalation 은 동일하다.
+    ///
+    /// 취소(awaiting Task.cancel)는 이미 시작된 프로세스를 즉시 죽이지는 않는다.
+    /// 최종 방어선은 `timeout` 데드라인이며, 호출측(폴링 루프)이 취소 여부를 확인한다.
+    static func captureAsync(
+        _ path: String,
+        _ args: [String],
+        timeout: TimeInterval = pollTimeout
+    ) async throws -> Output {
+        try await Task.detached(priority: .utility) {
+            try capture(path, args, timeout: timeout)
+        }.value
+    }
+
+    /// 에러를 사람이 읽을 수 있는 한 줄로 ([표시②] — 원인 삭제 금지)
+    static func describe(_ error: Error) -> String {
+        if let f = error as? Failure { return f.errorDescription ?? "" }
+        if let t = error as? TimedOut { return t.errorDescription ?? "" }
+        return (error as NSError).localizedDescription
     }
 }
