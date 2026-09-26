@@ -29,7 +29,7 @@
   - **실제 결함 ① 쓰기 증폭(95~99% 낭비)** — 상태 파일은 최종 상태 하나만 의미가 있는데 값이 바뀔 때마다 전량 재기록 → 이벤트 20건 연속이면 20회×57KB=1.12MB 쓰고 최종은 마지막 1회로 덮어짐(활동 60건/분=3.4MB, 600건/분=33.5MB 전부 낭비). **`CoalescingWriter` 신설** — 대기 쓰기를 최신 값으로 대체 + 인코딩도 writer 큐에서 수행(MainActor 비용 제거). `EventStore`·`SitesJobsStore`(sites/jobs)·`DeviceDailyStore` 적용. **실측 감소 20건 95% · 60건 98% · 600건 99%**
   - **종료 유실 방지** — `flushSync()`(진행 중 쓰기 + 대기 값 동기 기록) 신설 후 `shutdown()` 에 3개 스토어 flush 연결(R1 `ConnectionSessionStore` 와 동일 결함 방지). **SIGTERM 종료 후 파일 md5 불변 + 259건 정상 디코딩으로 유실 없음 실증**
   - **저장 실패 보존** — `lastSaveError` + `DebugLogger` 기록 (조용한 실패 0건)
-  - **실제 결함 ② 비원자적 `@Published` publish** — `ingestWatch`/`pushEvent` 가 insert·trim 을 나눠 대입해 **상한 초과 중간 상태**(501건/21건)가 관측될 수 있었음(그 상태 렌�� 시 대시보드·인사이트 전부 재계산 — 1단계 단일 평면과 결합해 배수 비용) → 로컬 계산 후 **1회만 대입**, 상한을 `maxWatchEvents`/`maxRecentEvents` 상수로화
+  - **실제 결함 ② 비원자적 `@Published` publish** — `ingestWatch`/`pushEvent` 가 insert·trim 을 나눠 대입해 **상한 초과 중간 상태**(501건/21건)가 관측될 수 있었음(그 상태가 렌더되면 대시보드·인사이트 전부 재계산 — 1단계 단일 평면과 결합해 배수 비용) → 로컬 계산 후 **1회만 대입**, 상한을 `maxWatchEvents`/`maxRecentEvents` 상수로화
   - **변경하지 않기로 근거 있게 결정**: `WidgetSnapshotStore`(60초 주기·총 0.12ms — 측정 근거 없음) · 디렉터리 스캔 백그라운드화(현재 gallery 0개·incidents 3개)
   - **검증 [HARD]**: `swift test` **391 + 104 = 495 / 0 failed** (+9 신규) · `./scripts/build-macos.sh debug` **EXIT=0** (1.16.0 · 팀 6GPJQ7BQC9) · 런타임: 기기 재인식·크래시 0건(신규)·종료 후 md5 불변·재기동 정상
 - [x] **R3 신선도·정직성** — `PLAN_refactor_perf_stability_macos` 3단계 · 커밋 `6efd4d4` · 브랜치 `chore/macos-refactor-p3-freshness` · **육안 대기**
