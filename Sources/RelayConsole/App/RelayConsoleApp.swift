@@ -197,8 +197,10 @@ struct RelayConsoleApp: App {
     /// 기기 0대 → Off(흰 안테나) · 1대+ → Online(흰 Android + 초록점)
     /// 다크 메뉴바용 흰색 리소스 — template 금지(색 유지)
     private var statusIcon: NSImage {
-        let empty = store.inventory.devices.isEmpty
-        let name = empty ? "MenuBar-Off" : "MenuBar-Online"
+        // [표시②] "한 번이라도 본 기기"(devices.isEmpty)가 아니라 **현재 온라인인 기기**로 판정
+        // — 오프라인 기기는 배열에서 제거되지 않으므로 isEmpty만 보면 0대여도 Online으로 잘못 표시됨
+        let online = store.inventory.devices.contains { $0.isOnline }
+        let name = online ? "MenuBar-Online" : "MenuBar-Off"
         guard let img = Bundle.main.image(forResource: name) else {
             return Self.fallbackIcon
         }

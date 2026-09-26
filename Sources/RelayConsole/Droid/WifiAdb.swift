@@ -196,6 +196,8 @@ final class WifiAdbController: ObservableObject {
     func disconnect(serial: String) {
         guard !busy else { return }
         busy = true
+        // enableWifi/connect와 동일 — 이전 실패의 오류 스타일이 성공 문구에 남지 않도록 리셋
+        statusIsError = false
         Task {
             defer { busy = false }
             guard let adb = DeviceMonitor.adbPathNow() else {

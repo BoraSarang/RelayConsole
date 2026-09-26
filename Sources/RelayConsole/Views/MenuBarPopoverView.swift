@@ -127,7 +127,9 @@ struct MenuBarPopoverView: View {
                     .lineLimit(1)
                 Spacer(minLength: 4)
                 if menubarMetrics && !devices.isEmpty {
-                    Text("\(devices.filter(\.isOnline).count)/\(devices.count)")
+                    // [표시②] 분모에 장기 오프라인 기기가 누적되면 "0/47" 같은 무의미한 비율이 된다.
+                    // 오프라인 기기 제거는 R3에서 함께 처리하므로, 그 전까진 항상 참인 "온라인 수"만 표시한다.
+                    Text("\(devices.filter(\.isOnline).count)")
                         .font(OPFont.number(11))
                         .foregroundStyle(OPColor.inkDim)
                         .lineLimit(1)
@@ -142,7 +144,7 @@ struct MenuBarPopoverView: View {
                         .font(OPFont.number(11))
                         .foregroundStyle(chip.1)
                 }
-                Text("1.16.0")
+                Text(AppVersion.display)
                     .font(OPFont.number(10))
                     .foregroundStyle(OPColor.inkDim)
             }
@@ -817,7 +819,7 @@ struct MenuBarPopoverView: View {
         }
     }
 
-    // MARK: - Events (접힘 기본 · �점3)
+    // MARK: - Events (접힘 기본 · 중점3)
 
     private var eventsSection: some View {
         VStack(alignment: .leading, spacing: 4) {

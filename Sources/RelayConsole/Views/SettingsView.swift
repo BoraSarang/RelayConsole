@@ -465,7 +465,7 @@ struct SettingsView: View {
                     Text(L10n.string("settings.app.name"))
                         .font(OPFont.title(15))
                         .foregroundStyle(OPColor.ink)
-                    Text("\(L10n.string("settings.version")) 1.14.0")
+                    Text("\(L10n.string("settings.version")) \(AppVersion.display)")
                         .font(OPFont.number(12))
                         .foregroundStyle(OPColor.inkDim)
                     Text("com.borasarang.relayconsole")

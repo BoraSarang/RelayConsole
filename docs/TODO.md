@@ -2,7 +2,13 @@
 > 작업 추적 — bd 연동 (이슈 prefix: RelayConsole)
 
 ## 진행 중 (bd ready)
-- (없음 — 리서치 §8 백로그 P1~P3 전수 완료)
+- [ ] **R1 어댑버 안전화 + 즉시 결함** — `PLAN_refactor_perf_stability_macos` 1단계 (9건)
+  ① `DeviceMonitor.run` stderr 미배출+무타임아웃 **교착(앱 정지)** ② 폴링 루프 취소 후 tick 1회 추가 실행 ③ `ConnectionSessionStore.flush()` no-op(`dirty=true` 대입 0건) ④ `runSiteCheck` await 전 인덱스 캡처 → **사이트 데이터 오염** ⑤ `ScrcpyController` terminationHandler 세대 race ⑥ **하트비트 토큰 평문 로그([HARD] 위반)** ⑦ 기기 0대인데 메뉴바 "Online"([표시②]) ⑧ `WifiAdb.disconnect` 성공인데 오류 스타일([표시②]) ⑨ 버전 하드코딩 3곳 낡음
+- [ ] **R2 ADB 배치화 + 폴링 구조** — slow 틱 25회→13회(`/proc` 6회 342ms→1회 125ms **2.7배 실측**) · 기기별 병렬 tick · 실제 주기 왜곡 정직화
+- [ ] **R3 신선도·정직성** — `try?` 39회 중 38회가 실패 미기록 · `lastSampleAt` 항상 갱신(위장) 위장 제거 · logcat 4회 전수 스캔→1회 · 기기 해제 시 dict 정리
+- [ ] **R4 메인 스레드 정지** — `EventStore` 이벤트마다 500건 전량 인코딩을 메인에서 · `SitesJobsStore` 14,400 레코드 5초마다 · `WidgetSnapshotStore` 유일한 동기 atomic write
+- [ ] **R5 SwiftUI 렌더** — `ConsoleStore` 단일 평면(23 body) · `InsightsView` body당 ~19,500회 이벤트 순회 · `fitAll()` 무조건 호출 · `DateFormatter` body 신규
+- [ ] **R6 종료·누수·디스크** — 종료 flush 미보관(0.5s wait 결과 버림) · `NSPanel isReleasedWhenClosed=false` + `teardown`가 `close()` 안 함 · `IssueLog` 무한 append · 저장/로드 실패 무음(`E-MAC-STORE-0001~0003` 미사용)
 
 ## 다음 스프린트 (리서치 §8 잔여 · 미착수)
 - [ ] **S3 관제 규칙 Rules as Code (로컬 YAML)** — TIER S 중 유일 미착수
