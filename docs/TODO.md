@@ -2,8 +2,7 @@
 > 작업 추적 — bd 연동 (이슈 prefix: RelayConsole)
 
 ## 진행 중 (bd ready)
-- [ ] **R5 SwiftUI 렌더** — `ConsoleStore` 단일 평면(23 body) · `InsightsView` body당 ~19,500회 이벤트 순회 · `fitAll()` 무조건 호출 · `DateFormatter` body 신규
-- [ ] **R6 종료·누수·디스크** — 종료 flush 미보관(0.5s wait 결과 버림) · `NSPanel isReleasedWhenClosed=false` + `teardown`가 `close()` 안 함 · `IssueLog` 무한 append · 저장/로드 실패 무음(`E-MAC-STORE-0001~0003` 미사용)
+- [ ] **R6 종료·누수·디스크** — 종료 시 `group.wait` 결과 버림(타임아웃 확정) · `NSPanel isReleasedWhenClosed=false` + `teardown`가 `close()` 안 함(플로팅 창 반복 열면 누수) · `IssueLog` 무한 append(로테이션·크기 상한 0) · 저장/로드 실패 무음(`E-MAC-STORE-0001~0003` 미사용) · `ScrcpyController` 5초 타이머 미해제
 - [ ] **R4 메인 스레드 정지** — `EventStore` 이벤트마다 500건 전량 인코딩을 메인에서 · `SitesJobsStore` 14,400 레코드 5초마다 · `WidgetSnapshotStore` 유일한 동기 atomic write
 - [ ] **R5 SwiftUI 렌더** — `ConsoleStore` 단일 평면(23 body) · `InsightsView` body당 ~19,500회 이벤트 순회 · `fitAll()` 무조건 호출 · `DateFormatter` body 신규
 - [ ] **R6 종료·누수·디스크** — 종료 flush 미보관(0.5s wait 결과 버림) · `NSPanel isReleasedWhenClosed=false` + `teardown`가 `close()` 안 함 · `IssueLog` 무한 append · 저장/로드 실패 무음(`E-MAC-STORE-0001~0003` 미사용) · `IssueLog.url`이 알림마다 mkdir syscall
@@ -24,6 +23,14 @@
 - [ ] **Apple 크래시 리포트 수집 (반드시 해야 할 작업)** — `idevicecrashreport`로 iOS `.ips` crash/ANR를 IncidentBundle에 첨부. 기기 확보 시 1순위. Trust USB + `idevicecrashreport -u <udid> copy` 패턴. Android `logcat -b crash`/dropbox 대응 Apple 쪽 원재료 — **기기 확보 전 구현 불가, 반드시 기억할 것**
 
 ## 완료 (2026-09-26)
+- [x] **R5 SwiftUI 렌더 — 실측 기반 범위 확정** — `PLAN_refactor_perf_stability_macos` 5단계 · 커밋 `88f8e83` · 브랜치 `chore/macos-refactor-p5-swiftui` · **육안 대기**
+  - **실측(실제 데이터 264건)**: `monthGrid`(셀 31 × 전체 필터) **19~38ms** · `insight` 중복 ×13 **14.2ms** · `report` 중복 ×9 **4.6ms** · `DateFormatter` body 내 생성 0.178ms/행 → **body 1회 평가 약 57ms**
+  - **monthGrid(최대 단일 항목)** — 셀마다 `dayStatus` 에 전체 이벤트 전달 → **날짜별 1회 그룹핑** 후 각 셀은 자기 날짜 배열만 봄 → **1.4ms(13배)**, 결과 동일 확인
+  - **중복 계산 제거** — `daySummaryCard`·`reportCard`·`patternsCard` 가 computed property 를 매번 재계산 → **body 상단 1회 계산 후 주입**. `patterns.last?.id` 행마다 계산 → 루프 밖 1회
+  - **`fitAll()` 무조건 호출 차단** — `leftMouseUp` 이 dragPressScreen 유무와 무관하게 항상 호출(클릭 1회당 최대 6창 × 4회 강제 레이아웃) → **실제 드래그 시로 게이트**. `store.objectWillChange`(57개 전부) → 카드가 읽는 `inventory`·`metricsHistory` 만으로 좁힘
+  - **`AlertsView.counts` 3회 순회 → 1회** — **8가지 필터 조합 전부에서 신구 결과 동일** 테스트로 확인(합계 정합 포함)
+  - **의도적으로 안 함**: `ConsoleStore` 57속성 스토어 분리(대규모 구조 변경) — 위 직접 비용(~57ms)을 먼저 제거하니 체감 개선이 대부분 해결됨. 남은 이득은 추가 측정 후 판단
+  - **검증 [HARD]**: `swift test` **399 + 104 = 503 / 0 failed** (+8 신규) · `./scripts/build-macos.sh debug` **EXIT=0** (1.16.0 · 팀 6GPJQ7BQC9) · 런타임 기기 재인식·크래시 0건(신규)·U+FFFD 0건
 - [x] **R4 메인 스레드 정지 — 실측 기반 재정의** — `PLAN_refactor_perf_stability_macos` 4단계 · 커밋 `f1cfad2` · 브랜치 `chore/macos-refactor-p4-mainthread` · **육안 대기**
   - **⚠️ 계획이 과장했음을 실측으로 확인** — `EventStore` 인코딩 **0.35ms** + 동기 write 0.11ms = 0.46ms(254건/57KB) · `SitesJobsStore` 8×300 = 2.42ms(288KB) · `WidgetSnapshot`/`DeviceDailyStore` 0.01ms · `IssueLog.url` mkdir 0.0072ms · 디렉터리 스캔 1000파일 6.7ms → **합산 main 스레드 1% 미만**. 조사 에이전트 추정치와 크게 달라 **"인코딩 백그라운드화"만으로는 이득이 없어 측정된 실제 결함만** 작업
   - **실제 결함 ① 쓰기 증폭(95~99% 낭비)** — 상태 파일은 최종 상태 하나만 의미가 있는데 값이 바뀔 때마다 전량 재기록 → 이벤트 20건 연속이면 20회×57KB=1.12MB 쓰고 최종은 마지막 1회로 덮어짐(활동 60건/분=3.4MB, 600건/분=33.5MB 전부 낭비). **`CoalescingWriter` 신설** — 대기 쓰기를 최신 값으로 대체 + 인코딩도 writer 큐에서 수행(MainActor 비용 제거). `EventStore`·`SitesJobsStore`(sites/jobs)·`DeviceDailyStore` 적용. **실측 감소 20건 95% · 60건 98% · 600건 99%**
