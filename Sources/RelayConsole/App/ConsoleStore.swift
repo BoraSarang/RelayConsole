@@ -12,6 +12,11 @@ final class ConsoleStore: ObservableObject {
     @Published var recentEvents: [String] = []
     /// 구조화 감시 이벤트 (PLAN_v0.5) — 심각도·fingerprint 보존, 팝오버 우선 표시용
     @Published private(set) var recentWatchEvents: [WatchEvent] = []
+
+    /// 감시 이벤트 보관 상한 (EventStore.maxEvents 와 동일)
+    nonisolated static let maxWatchEvents = 500
+    /// 최근 로그 텍스트 상한
+    nonisolated static let maxRecentEvents = 20
     @Published var lastError: String?
     /// serial → DroidMetrics 링 60점 (5s × 60 = 5분)
     @Published private(set) var metricsHistory: [String: DroidMetrics] = [:]
@@ -658,6 +663,11 @@ final class ConsoleStore: ObservableObject {
         ScrcpyController.shared.stop()
         DeviceDailyStore.shared.flushPending(force: true)
         ConnectionSessionStore.shared.flush()
+        // CoalescingWriter 는 대기 중인 쓰기를 **대체**하므로, 종료 전에 진행 중 쓰기를
+        // 반드시 동기 로 끝내야 마지막 상태가 기록된다. (기다리는 쓰기는 의도적으로 버린다)
+        EventStore.shared.flushSync()
+        SitesJobsStore.shared.flushSync()
+        DeviceDailyStore.shared.flushSync()
         let group = DispatchGroup()
         group.enter()
         Task.detached {
@@ -838,16 +848,28 @@ final class ConsoleStore: ObservableObject {
     }
 
     func pushEvent(_ text: String) {
-        recentEvents.insert(text, at: 0)
-        if recentEvents.count > 20 { recentEvents.removeLast() }
+        // 1회 대입 — 중간 상태(21건) 관측 방지 (@Published 는 대입마다 willChange 발화)
+        var next = recentEvents
+        next.insert(text, at: 0)
+        if next.count > Self.maxRecentEvents {
+            next.removeLast(next.count - Self.maxRecentEvents)
+        }
+        recentEvents = next
     }
 
     // MARK: - Watch events (PLAN_v0.5)
 
     /// WatchEngine emit 수신 → 이력 + fingerprint 쿨다운 + 시스템 알림
     func ingestWatch(_ event: WatchEvent, forceNotify: Bool = false) {
-        recentWatchEvents.insert(event, at: 0)
-        if recentWatchEvents.count > 500 { recentWatchEvents.removeLast() }
+        // @Published 는 대입마다 objectWillChange 를 발화하므로,
+        // insert 와 trim 을 나눠 하면 **상한(501건)을 넘긴 중간 상태**가 관측된다.
+        // (그 상태로 렌더되면 대시보드/인사이트가 전부 다시 계산된다 — 비용이 배수로 붙는다)
+        var next = recentWatchEvents
+        next.insert(event, at: 0)
+        if next.count > Self.maxWatchEvents {
+            next.removeLast(next.count - Self.maxWatchEvents)
+        }
+        recentWatchEvents = next
         pushEvent(event.summary)
         EventStore.shared.save(recentWatchEvents)
         maybeCaptureIncident(event)
