@@ -327,12 +327,19 @@ final class FloatingGraphController: ObservableObject {
         installDragMonitor()
         // 콘텐츠 높이 변화(수집 직후 카드 늘어남 등) → 디바운스 재적합
         // (구버전: store 변경마다 즉시 fit 2회 layout → 레이아웃 폭주)
-        storeCancellable = store.objectWillChange
-            .receive(on: DispatchQueue.main)
-            .debounce(for: .milliseconds(400), scheduler: DispatchQueue.main)
-            .sink { [weak self] _ in
-                self?.fitAll()
-            }
+        // 카드(FloatingGraphView) 가 실제로 읽는 값은 `inventory` 와 `metricsHistory` 뿐이다.
+        // 종전엔 `store.objectWillChange`(관측 가능 프로퍼티 57개 전부)를 구독해서
+        // 5초 폴링마다 fitAll() 이 돌았다. 알림 테스트 결과나 선택 기기 변경처럼
+        // 카드와 무관한 변경에도 강제 레이아웃이 발생했다 → 필요한 신호만 구독한다.
+        storeCancellable = Publishers.Merge(
+            store.$inventory.map { _ in () },
+            store.$metricsHistory.map { _ in () }
+        )
+        .receive(on: DispatchQueue.main)
+        .debounce(for: .milliseconds(400), scheduler: DispatchQueue.main)
+        .sink { [weak self] _ in
+            self?.fitAll()
+        }
     }
 
     // MARK: - 저장/마이그레이션
@@ -712,6 +719,8 @@ final class FloatingGraphController: ObservableObject {
                 )
                 panel.setFrameOrigin(clamped)
             case .leftMouseUp:
+                // 실제 드래그를 시도했는지를 먼저 기록한다
+                let didDragOnPanel = self.dragPressScreen != nil
                 if self.dragPressScreen != nil, let panel, self.isFloatPanel(panel),
                    let dragID = self.id(of: panel) {
                     self.persistFrame(id: dragID, frame: panel.frame)
@@ -720,7 +729,13 @@ final class FloatingGraphController: ObservableObject {
                 self.dragOriginAtPress = nil
                 self.dragSkippedControl = false
                 self.isDragging = false
-                self.fitAll()
+                // [표시②]/성능 — 종전엔 **앱 내 모든 마우스 클릭**에서 무조건 fitAll() 이 돌았다.
+                // fitAll 은 창마다 layoutSubtreeIfNeeded 2회 + fittingSize 2회 + setFrame(display:true)
+                // → 플로팅 그래프를 켜둔 사용자는 클릭 1회당 최대 6창 × 4회 강제 레이아웃을 치른다.
+                // 실제로 플로팅 패널을 드래그한 경우에만 높이를 다시 재적합한다.
+                if didDragOnPanel {
+                    self.fitAll()
+                }
             default:
                 break
             }
