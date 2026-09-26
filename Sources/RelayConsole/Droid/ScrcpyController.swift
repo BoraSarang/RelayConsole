@@ -320,6 +320,10 @@ final class ScrcpyController: ObservableObject {
         process?.terminate()
         process = nil
         runningSerial = nil
+        // scrcpy 프로세스만 정리하고 5초 주기 파일시스템 폴링 타이머는 남겨뒀다.
+        // 종료 후에도 타이머가 살아 있으면 이벤트 없는데도 경로 탐색이 계속 돈다.
+        refreshTimer?.invalidate()
+        refreshTimer = nil
     }
 
     func isRunning(serial: String) -> Bool {

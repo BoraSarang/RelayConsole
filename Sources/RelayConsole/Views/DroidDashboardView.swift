@@ -57,6 +57,11 @@ struct DroidDashboardView: View {
                         if let d = device, let err = d.lastError, !err.isEmpty {
                             lastErrorBanner(err)
                         }
+                        // [표시②] 저장/로드 실패는 UI 는 정상인데 재시작 시 소실된다 —
+                        // 조용히 두면 사용자가 알 수 없다
+                        if let problem = store.storeProblem {
+                            storeProblemBanner(problem)
+                        }
                         if devices.count > 1 {
                             devicePicker
                         }
@@ -185,6 +190,32 @@ struct DroidDashboardView: View {
                 }
             }
             .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+        }
+        .padding(OPSpace.md)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(OPColor.bad.opacity(0.12), in: RoundedRectangle(cornerRadius: 10))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(OPColor.bad.opacity(0.45), lineWidth: 1)
+        )
+    }
+
+    /// 저장소 문제 배너 — 읽기/쓰기 실패 (UI 정상인데 재시작 시 소실되는 상태)
+    private func storeProblemBanner(_ problem: ConsoleStore.StoreProblem) -> some View {
+        let key: String
+        switch problem {
+        case .readFailed: key = "store.read.failed"
+        case .writeFailed: key = "store.write.failed"
+        }
+        return HStack(spacing: OPSpace.sm) {
+            Image(systemName: "externaldrive.badge.exclamationmark")
+                .font(OPFont.body(12))
+                .foregroundStyle(OPColor.bad)
+            Text(L10n.string(key))
+                .font(OPFont.body(12))
+                .foregroundStyle(OPColor.ink)
+                .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
         }
         .padding(OPSpace.md)

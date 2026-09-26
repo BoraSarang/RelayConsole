@@ -50,6 +50,7 @@ final class ConsoleStore: ObservableObject {
     /// Sites 체크 루프 / Job overdue 추적
     private var sitesCheckTask: Task<Void, Never>?
     private var jobsSweepTask: Task<Void, Never>?
+    private var storeHealthTask: Task<Void, Never>?
     private var lastSiteUp: [UUID: Bool] = [:]
     private var lastJobOverdue: [UUID: Bool] = [:]
     /// SSL 만료 경고 전이 (A5) — true면 경고 중
@@ -142,9 +143,19 @@ final class ConsoleStore: ObservableObject {
         }
         WatchEngine.shared.ident = identResolver
         // EventStore 1차 — 앱 시작 시 이력 복원 (JSON 영구화)
+        //
+        // [표시②] 종전엔 로드 실패가 빈 배열로 조용히 대체됐다. 그 상태로 다음 저장이
+        // 일어나면 **기존 데이터가 전부 덮어써져 복구 불가**가 된다.
+        // 파일은 남겨 두고(백업) 실패 사실만 노출한다 — 파괴적 자동 복구는 하지 않는다.
         recentWatchEvents = EventStore.shared.load()
+        if EventStore.shared.loadFailed {
+            recordStoreProblem(.readFailed(ErrorCode.storeReadFailed))
+        }
         sites = SitesJobsStore.shared.loadSites()
         jobs = SitesJobsStore.shared.loadJobs()
+        if let reason = SitesJobsStore.shared.loadFailed {
+            recordStoreProblem(.readFailed(reason))
+        }
         // Phase1 스토어 로드
         _ = ConnectionSessionStore.shared
         _ = DeviceDailyStore.shared
@@ -262,6 +273,7 @@ final class ConsoleStore: ObservableObject {
     private func startSitesJobs() {
         startSiteChecks()
         startJobSweep()
+        startStoreHealthCheck()
         let port = UserDefaults.standard.object(forKey: "relay.hb.port") as? UInt16 ?? 8787
         heartbeatPort = port
         HeartbeatServer.shared.start(
@@ -305,6 +317,35 @@ final class ConsoleStore: ObservableObject {
                     await self.runSiteCheck(site)
                 }
                 try? await Task.sleep(nanoseconds: 5_000_000_000)
+            }
+        }
+    }
+
+    /// 저장 실패 감시 (2분 주기) — 조용한 저장 실패를 사용자에게 노출한다.
+    ///
+    /// [HARD]/[표시②] 디스크가 가득 차면 UI 는 정상 반영되지만 재시작 시 전부 소실된다.
+    /// `E-MAC-STORE-0002` 가 정의돼 있었으나 미사용이었다.
+    private func startStoreHealthCheck() {
+        storeHealthTask?.cancel()
+        storeHealthTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 120_000_000_000)   // 2분
+                guard !Task.isCancelled, let self else { return }
+                let writers = [
+                    EventStore.shared.lastSaveError,
+                    SitesJobsStore.shared.lastSaveError,
+                    DeviceDailyStore.shared.lastSaveError,
+                ]
+                let failed = writers.contains { $0 != nil }
+                if failed {
+                    // 같은 문제를 반복 기록하지 않는다 (경보가 사라지므로)
+                    if self.storeProblem != .writeFailed(.storeWriteFailed) {
+                        self.recordStoreProblem(.writeFailed(.storeWriteFailed))
+                    }
+                } else if case .writeFailed = self.storeProblem {
+                    // 복구되면 해제 — 배너가 계속 남지 않게
+                    self.storeProblem = nil
+                }
             }
         }
     }
@@ -654,6 +695,7 @@ final class ConsoleStore: ObservableObject {
     func stopSitesJobs() {
         sitesCheckTask?.cancel()
         jobsSweepTask?.cancel()
+        storeHealthTask?.cancel()
         HeartbeatServer.shared.stop()
     }
 
@@ -679,7 +721,13 @@ final class ConsoleStore: ObservableObject {
             await AppleDeviceMonitor.shared.stop()
             group.leave()
         }
-        _ = group.wait(timeout: .now() + 0.5)
+        // 종료를 0.5초까지 **메인 스레드에서 대기**하고 있다가 포기했는데,
+        // 결과를 버려서 "모니터가 정지했는지"를 알 수 없었다.
+        // timeout 이면 조용히 넘어가지 않고 로그로 남긴다([표시②] — 조용한 실패 금지).
+        if group.wait(timeout: .now() + 0.5) == .timedOut {
+            let msg = L10n.string("shutdown.monitorTimeout")
+            DebugLogger.shared.warn("Store", "[WARN] \(msg)")
+        }
         DebugLogger.shared.info("Store", "[INFO] ConsoleStore shutdown 완료")
     }
 
@@ -1384,6 +1432,26 @@ final class ConsoleStore: ObservableObject {
         )
     }
 #endif
+
+    /// 저장소 문제 (읽기/쓰기 실패) — [표시②] 조용한 실패 금지
+    enum StoreProblem: Equatable {
+        case readFailed(ErrorCode)
+        case writeFailed(ErrorCode)
+    }
+
+    /// 감시 대상 저장소 문제 (nil 이면 정상)
+    @Published private(set) var storeProblem: StoreProblem?
+
+    /// 저장소 문제를 기록하고 로그로 남긴다 — 파일은 지우지 않는다(복구 가능성 보존)
+    private func recordStoreProblem(_ problem: StoreProblem) {
+        storeProblem = problem
+        switch problem {
+        case .readFailed(let code):
+            DebugLogger.shared.error("Store", "[ERROR] \(code.rawValue) \(code.koMessage)")
+        case .writeFailed(let code):
+            DebugLogger.shared.error("Store", "[ERROR] \(code.rawValue) \(code.koMessage)")
+        }
+    }
 
     /// 오프라인 기기 보관 기간 — 이만큼 지나도 안 reconnect 되면 목록에서 제거
     /// (충분히 길게 잡아 USB 허브 일시적 떨림으로 기기가 사라지지 않게 한다)
