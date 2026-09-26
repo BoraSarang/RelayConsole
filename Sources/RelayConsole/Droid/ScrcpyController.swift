@@ -240,7 +240,10 @@ final class ScrcpyController: ObservableObject {
                 .last ?? ""
             Task { @MainActor in
                 guard let self else { return }
-                if self.process === p || self.runningSerial == serial {
+                // 프로세스 identity로만 판정한다. serial 비교를 포함하면
+                // launch → stop → 즉시 launch(같은 serial) 시 옛 프로세스의 핸들러가
+                // 새 프로세스 상태를 nil로 덮어써 "실행 중인데 미실행"으로 표시된다.
+                if self.process === p {
                     self.process = nil
                     self.runningSerial = nil
                     if p.terminationStatus != 0 && p.terminationStatus != 15 {

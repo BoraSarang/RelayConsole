@@ -319,7 +319,15 @@ final class ConsoleStore: ObservableObject {
     /// 단건 체크 (DEBUG/수동 즉시 실행용)
     func runSiteCheck(_ site: Site) async {
         guard let idx = sites.firstIndex(where: { $0.id == site.id }) else { return }
+        let target = sites[idx].target
         let check = await SiteChecker.shared.check(sites[idx])
+        // await 동안 removeSite·updateSite·addSite·clearSitesJobsDebug가 sites를 재배열할 수 있다.
+        // 이전 인덱스로 기록하면 A 사이트의 결과가 B 사이트 이력에 섞이므로, id와 대상을 재확인한다.
+        guard let idx = sites.firstIndex(where: { $0.id == site.id }),
+              sites[idx].target == target else {
+            DebugLogger.shared.warn("Sites", "[WARN] 체크 결과 폐기 — 대기 중 대상 변경/삭제됨 id=\(site.id)")
+            return
+        }
         sites[idx].appendCheck(check)
         if let exp = check.sslExpiresAt {
             sites[idx].sslExpiresAt = exp
@@ -563,7 +571,8 @@ final class ConsoleStore: ObservableObject {
         }
         jobs.append(job)
         SitesJobsStore.shared.saveJobs(jobs)
-        DebugLogger.shared.info("Jobs", "[INFO] [FEATURE] 작업 추가 \(job.name) token=\(job.token)")
+        // [HARD] 로그 마스킹 — 토큰은 원격 curl 호출이 가능한 비밀값이라 평문 금지
+        DebugLogger.shared.info("Jobs", "[INFO] [FEATURE] 작업 추가 \(job.name) token=\(NotifyChannel.maskSecret(job.token))")
         return job
     }
 

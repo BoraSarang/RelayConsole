@@ -2,7 +2,11 @@
 > 작업 추적 — bd 연동 (이슈 prefix: RelayConsole)
 
 ## 진행 중 (bd ready)
-- (없음 — 리서치 §8 백로그 P1~P3 전수 완료)
+- [ ] **R2 ADB 배치화 + 폴링 구조** — slow 틱 25회→13회(`/proc` 6회 342ms→1회 125ms **2.7배 실측**) · 기기별 병렬 tick · 실제 주기 왜곡 정직화
+- [ ] **R3 신선도·정직성** — `try?` 39회 중 38회가 실패 미기록 · `lastSampleAt` 항상 갱신(위장) 위장 제거 · logcat 4회 전수 스캔→1회 · **오프라인 기기 제거(1단계에서 ratios만 바꾼 근본 · R1-7과 짝)** · 기기 해제 시 dict 정리
+- [ ] **R4 메인 스레드 정지** — `EventStore` 이벤트마다 500건 전량 인코딩을 메인에서 · `SitesJobsStore` 14,400 레코드 5초마다 · `WidgetSnapshotStore` 유일한 동기 atomic write
+- [ ] **R5 SwiftUI 렌더** — `ConsoleStore` 단일 평면(23 body) · `InsightsView` body당 ~19,500회 이벤트 순회 · `fitAll()` 무조건 호출 · `DateFormatter` body 신규
+- [ ] **R6 종료·누수·디스크** — 종료 flush 미보관(0.5s wait 결과 버림) · `NSPanel isReleasedWhenClosed=false` + `teardown`가 `close()` 안 함 · `IssueLog` 무한 append · 저장/로드 실패 무음(`E-MAC-STORE-0001~0003` 미사용) · `IssueLog.url`이 알림마다 mkdir syscall
 
 ## 다음 스프린트 (리서치 §8 잔여 · 미착수)
 - [ ] **S3 관제 규칙 Rules as Code (로컬 YAML)** — TIER S 중 유일 미착수
@@ -18,6 +22,12 @@
 - [ ] **Apple 실기 Trust 육안** — iPad USB 데이터 불량(안드로이드 동일 케이블 OK·복구도 미인식). 기기 확보 후 `brew install libimobiledevice` → 배터리/스토리지 카드
 - [ ] **Apple Phase 2** — Developer Mode·sysmon 등 — 위 기기 확보 후 착수 (A9)
 - [ ] **Apple 크래시 리포트 수집 (반드시 해야 할 작업)** — `idevicecrashreport`로 iOS `.ips` crash/ANR를 IncidentBundle에 첨부. 기기 확보 시 1순위. Trust USB + `idevicecrashreport -u <udid> copy` 패턴. Android `logcat -b crash`/dropbox 대응 Apple 쪽 원재료 — **기기 확보 전 구현 불가, 반드시 기억할 것**
+
+## 완료 (2026-09-26)
+- [x] **R1 어댑버 안전화 + 즉시 결함 9건** — `PLAN_refactor_perf_stability_macos` 1단계 · 커밋 `7c4f8bb` · 브랜치 `chore/macos-refactor-p1-adapter-safety` · **육안 대기**
+  ① **앱 정지(Hang) 근본 제거** `Utils/ProcessRunner.swift` 신설 — `DeviceMonitor.run`이 `standardError = Pipe()`만 만들고 읽지 않아 adb가 64KB 넘기면 자식이 write에서 블로킹 → stdout EOF 미도달 → `readDataToEndOfFile()` **영구 대기**·타임아웃 없어 half-open TCP에서 **actor 전체 정지**(복구 수단 없음). 동시 소진 + 데드라인 20s + `terminate`→`interrupt` escalation + 대기도 유한 + **stderr 원문 보존**. 같은 저장소의 안전한 `SiteChecker.run`을 모델로 삼음 ② 폴링 루프 취소 후 tick 1회 추가 실행(`try?`가 `CancellationError` 삼킴) ③ `ConnectionSessionStore.flush()` **영구 no-op**(`dirty=true` 대입 0건) + `save()` 비동기 큐 미배출 → **동기 flush**로 교체·함정 플래그 제거·테스트용 `init(url:)` 주입 ④ `runSiteCheck` await 전 인덱스 캡처 → **A 사이트 결과가 B에 기록**(업타임·SSL·위젯 오염) → await 후 id+target 재확인 ⑤ `ScrcpyController` terminationHandler 세대 race(`|| serial ==` 제거 → identity만) ⑥ **[HARD] 하트비트 토큰 평문 로그**(`ConsoleStore:566`) → `NotifyChannel.maskSecret` ⑦ 기기 0대인데 메뉴바 "Online"(`isEmpty` → `contains(\.isOnline)`) ⑧ `WifiAdb.disconnect` 성공인데 오류 스타일 → `statusIsError` 리셋 ⑨ 버전 하드코딩 3곳 낡음(설정 1.14.0·MCP 1.14.0·로그 1.15.0) → **`Utils/AppVersion.swift`** 신설(Info.plist 단일 소스)·MCP는 테스트로 대조 고정 · 부수: `MenuBarPopoverView:822` 주석 U+FFFD 문자 손상 복구(기존 결함)
+  - **검증 [HARD]**: `swift test` **345(swift-testing) + 104(XCTest) = 449 / 0 failed** (+13 신규 — 교착·데드라인·stderr 보존 회귀 포함, 타임아웃 테스트 1.031s에 종료 확인) · `./scripts/build-macos.sh debug` **EXIT=0** (1.16.0 · 팀 6GPJQ7BQC9 일치) · 신규 파일 경고 0 · U+FFFD 0건
+  - **런타임**: 기기 재인식(`device.connected 02:33:09Z` — 새 ProcessRunner로 fast-tick 6회 adb 실제 성공) · 위젯 스냅샷 기록 · **CPU 1.7%**(12초 샘플, 정지 0% 아님) · RSS 96.7MB
 
 ## 완료 (2026-09-25)
 - [x] **파일 탐색기 핫픽스 (1.16.0)** — ① **공백/한글/일본어 폴더 실패 수정**: `adb shell`이 argv를 인용 없이 공백 연결 → 원격 sh 재분리 (`ls: …/Windows: No such file` 재현) → `FileBrowserLogic.shellQuote`(POSIX 싱글쿼트 `'`→`'\''`) + `listArgs`를 **단일 명령 1argv**로 변경 · push/push는 sync 프로토콜이라 무관(공백·한글 roundtrip 실측 OK) · `Windows 11`·`테스트 폴더`·`サブ フォルダ`·`O'Brien's Files` 4종 실기기 검증 OK · RESEARCH §2 **함정 3건으로 갱신** ② **팝오버 푸터 아이콘화**: 한/영 라벨 길이 차이로 줄바꿈 깨짐 → `footerIcon`(콘솔=macwindow cta · 로그=doc.text · 디버그=ladybug · 탐색기=folder · 설정·종료) 32×32 통일 · tooltip=L10n 유지 · 테스트 **+1 → 332 통과** · `build-macos` **EXIT=0**

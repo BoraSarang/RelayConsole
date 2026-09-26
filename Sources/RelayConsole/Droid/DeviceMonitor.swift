@@ -94,6 +94,10 @@ actor DeviceMonitor {
         timer = Task { [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: 5_000_000_000)
+                // try? 가 CancellationError를 삼킨 뒤 루프 조건을 다시 보지 않으므로
+                // 여기서 한 번 더 검사해야 종료 시 tick이 1회 더 실행되지 않는다.
+                // (slow 틱이면 기기당 최대 25회 adb spawn이 그대로 날아간다)
+                guard !Task.isCancelled else { break }
                 guard let self else { break }
                 await self.tick()
             }
@@ -980,19 +984,14 @@ actor DeviceMonitor {
     }
 
     private func run(_ path: String, _ args: [String]) throws -> String {
-        let proc = Process()
-        proc.executableURL = URL(fileURLWithPath: path)
-        proc.arguments = args
-        let out = Pipe()
-        proc.standardOutput = out
-        proc.standardError = Pipe()
-        try proc.run()
-        let data = out.fileHandleForReading.readDataToEndOfFile()
-        proc.waitUntilExit()
-        guard proc.terminationStatus == 0 else {
-            throw ErrorCode.adbConnectFailed
-        }
-        return String(decoding: data, as: UTF8.self)
+        // ProcessRunner: stderr 소진 + 데드라인 + 원인 보존을 한곳에서 처리한다.
+        // 이전 구현은 stderr 파이프를 읽지 않아 adb가 64KB를 넘기면 교착했고,
+        // 타임아웃이 없어 half-open TCP에서 actor 전체가 영구 정지했다.
+        try ProcessRunner.run(
+            path,
+            args,
+            failure: .init(base: ErrorCode.adbConnectFailed.koMessage, reason: "")
+        )
     }
 
     private func logLast(_ message: String) async {
