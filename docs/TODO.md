@@ -2,9 +2,8 @@
 > 작업 추적 — bd 연동 (이슈 prefix: RelayConsole)
 
 ## 진행 중 (bd ready)
-- [ ] **R4 메인 스레드 정지** — `EventStore` 이벤트마다 500건 전량 인코딩을 메인에서 · `SitesJobsStore` 14,400 레코드 5초마다 · `WidgetSnapshotStore` 유일한 동기 atomic write · 저장/로드 실패 무음(`E-MAC-STORE-0001~0003` 미사용) · `IssueLog.url`이 알림마다 mkdir syscall
 - [ ] **R5 SwiftUI 렌더** — `ConsoleStore` 단일 평면(23 body) · `InsightsView` body당 ~19,500회 이벤트 순회 · `fitAll()` 무조건 호출 · `DateFormatter` body 신규
-- [ ] **R6 종료·누수·디스크** — 종료 flush 미보관(0.5s wait 결과 버림) · `NSPanel isReleasedWhenClosed=false` + `teardown`가 `close()` 안 함 · `IssueLog` 무한 append · `EventStore` 비원자적 publish(501건 중간 상태 관측)
+- [ ] **R6 종료·누수·디스크** — 종료 flush 미보관(0.5s wait 결과 버림) · `NSPanel isReleasedWhenClosed=false` + `teardown`가 `close()` 안 함 · `IssueLog` 무한 append · 저장/로드 실패 무음(`E-MAC-STORE-0001~0003` 미사용)
 - [ ] **R4 메인 스레드 정지** — `EventStore` 이벤트마다 500건 전량 인코딩을 메인에서 · `SitesJobsStore` 14,400 레코드 5초마다 · `WidgetSnapshotStore` 유일한 동기 atomic write
 - [ ] **R5 SwiftUI 렌더** — `ConsoleStore` 단일 평면(23 body) · `InsightsView` body당 ~19,500회 이벤트 순회 · `fitAll()` 무조건 호출 · `DateFormatter` body 신규
 - [ ] **R6 종료·누수·디스크** — 종료 flush 미보관(0.5s wait 결과 버림) · `NSPanel isReleasedWhenClosed=false` + `teardown`가 `close()` 안 함 · `IssueLog` 무한 append · 저장/로드 실패 무음(`E-MAC-STORE-0001~0003` 미사용) · `IssueLog.url`이 알림마다 mkdir syscall
@@ -25,6 +24,14 @@
 - [ ] **Apple 크래시 리포트 수집 (반드시 해야 할 작업)** — `idevicecrashreport`로 iOS `.ips` crash/ANR를 IncidentBundle에 첨부. 기기 확보 시 1순위. Trust USB + `idevicecrashreport -u <udid> copy` 패턴. Android `logcat -b crash`/dropbox 대응 Apple 쪽 원재료 — **기기 확보 전 구현 불가, 반드시 기억할 것**
 
 ## 완료 (2026-09-26)
+- [x] **R4 메인 스레드 정지 — 실측 기반 재정의** — `PLAN_refactor_perf_stability_macos` 4단계 · 커밋 `f1cfad2` · 브랜치 `chore/macos-refactor-p4-mainthread` · **육안 대기**
+  - **⚠️ 계획이 과장했음을 실측으로 확인** — `EventStore` 인코딩 **0.35ms** + 동기 write 0.11ms = 0.46ms(254건/57KB) · `SitesJobsStore` 8×300 = 2.42ms(288KB) · `WidgetSnapshot`/`DeviceDailyStore` 0.01ms · `IssueLog.url` mkdir 0.0072ms · 디렉터리 스캔 1000파일 6.7ms → **합산 main 스레드 1% 미만**. 조사 에이전트 추정치와 크게 달라 **"인코딩 백그라운드화"만으로는 이득이 없어 측정된 실제 결함만** 작업
+  - **실제 결함 ① 쓰기 증폭(95~99% 낭비)** — 상태 파일은 최종 상태 하나만 의미가 있는데 값이 바뀔 때마다 전량 재기록 → 이벤트 20건 연속이면 20회×57KB=1.12MB 쓰고 최종은 마지막 1회로 덮어짐(활동 60건/분=3.4MB, 600건/분=33.5MB 전부 낭비). **`CoalescingWriter` 신설** — 대기 쓰기를 최신 값으로 대체 + 인코딩도 writer 큐에서 수행(MainActor 비용 제거). `EventStore`·`SitesJobsStore`(sites/jobs)·`DeviceDailyStore` 적용. **실측 감소 20건 95% · 60건 98% · 600건 99%**
+  - **종료 유실 방지** — `flushSync()`(진행 중 쓰기 + 대기 값 동기 기록) 신설 후 `shutdown()` 에 3개 스토어 flush 연결(R1 `ConnectionSessionStore` 와 동일 결함 방지). **SIGTERM 종료 후 파일 md5 불변 + 259건 정상 디코딩으로 유실 없음 실증**
+  - **저장 실패 보존** — `lastSaveError` + `DebugLogger` 기록 (조용한 실패 0건)
+  - **실제 결함 ② 비원자적 `@Published` publish** — `ingestWatch`/`pushEvent` 가 insert·trim 을 나눠 대입해 **상한 초과 중간 상태**(501건/21건)가 관측될 수 있었음(그 상태 렌�� 시 대시보드·인사이트 전부 재계산 — 1단계 단일 평면과 결합해 배수 비용) → 로컬 계산 후 **1회만 대입**, 상한을 `maxWatchEvents`/`maxRecentEvents` 상수로화
+  - **변경하지 않기로 근거 있게 결정**: `WidgetSnapshotStore`(60초 주기·총 0.12ms — 측정 근거 없음) · 디렉터리 스캔 백그라운드화(현재 gallery 0개·incidents 3개)
+  - **검증 [HARD]**: `swift test` **391 + 104 = 495 / 0 failed** (+9 신규) · `./scripts/build-macos.sh debug` **EXIT=0** (1.16.0 · 팀 6GPJQ7BQC9) · 런타임: 기기 재인식·크래시 0건(신규)·종료 후 md5 불변·재기동 정상
 - [x] **R3 신선도·정직성** — `PLAN_refactor_perf_stability_macos` 3단계 · 커밋 `6efd4d4` · 브랜치 `chore/macos-refactor-p3-freshness` · **육안 대기**
   - **신선도 위장 제거(핵심)** — `pollDevice`가 `isOnline=true` 무조건 세팅 → `merge`가 그걸 보고 `lastSampleAt` 갱신 → **adb 전부 실패에도 "방금 측정" 으로 위장**. `DeviceSnapshot.measuredAt`/`failureStreak` 신설로 **실제 응답이 있을 때만** 신선도 상승, 무응답 시 마지막 정상 시각 유지 + 연속 실패 증가 + `lastError` 에 실제 원인 기록(`DeviceState.lastPollError`, 성공 시 초기화)
   - **측정 실패를 오프라인과 구분 표시** — `DroidDashboardView.staleBanner`(경고 배너 + 연속 실패 횟수 + **실제 마지막 정상 수집 시각**). 종전엔 구분 수단 없었음 · L10n **729 → 733**(`adb.error.noResponse`·`adb.error.pollFailed`·`droid.stale.banner`·`droid.stale.count`, en/ko 1:1)
