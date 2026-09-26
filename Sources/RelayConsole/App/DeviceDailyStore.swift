@@ -9,39 +9,48 @@ final class DeviceDailyStore {
     static let debounceSeconds: TimeInterval = 60
 
     private let url: URL
-    private let queue = DispatchQueue(label: "relay.devicedailystore", qos: .utility)
+    private let writer: CoalescingWriter<[String: DeviceDaily]>
     /// serial|dayKey → DeviceDaily
     private(set) var map: [String: DeviceDaily] = [:]
     /// serial → 마지막 저장 시각 (1분 디바운스)
     private var lastFlushAt: [String: Date] = [:]
     private var pending: Set<String> = []
 
+    /// 저장 실패 사유 (nil 이면 정상)
+    var lastSaveError: String? { writer.lastError }
+
     private init() {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? FileManager.default.temporaryDirectory
         let dir = base.appendingPathComponent("RelayConsole", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        url = dir.appendingPathComponent("device-daily.json")
-        map = loadFromDisk()
+        let target = dir.appendingPathComponent("device-daily.json")
+        url = target
+        map = Self.loadFromDisk(target)
+        writer = CoalescingWriter(url: target, name: "DeviceDailyStore", queueLabel: "relay.devicedailystore") { value in
+            let enc = JSONEncoder()
+            enc.dateEncodingStrategy = .iso8601
+            enc.outputFormatting = [.sortedKeys]
+            return try enc.encode(value)
+        }
     }
 
-    private func loadFromDisk() -> [String: DeviceDaily] {
+    private static func loadFromDisk(_ url: URL) -> [String: DeviceDaily] {
         guard let data = try? Data(contentsOf: url) else { return [:] }
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         return (try? decoder.decode([String: DeviceDaily].self, from: data)) ?? [:]
     }
 
+    /// 저장 — 인코딩·쓰기 모두 백그라운드, 대기 쓰기는 합쳐진다
     func save() {
         pending.removeAll()
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
-        encoder.outputFormatting = [.sortedKeys]
-        guard let data = try? encoder.encode(map) else { return }
-        let target = url
-        queue.async {
-            try? data.write(to: target, options: .atomic)
-        }
+        writer.submit(map)
+    }
+
+    /// 진행 중 쓰기를 동기 완료 — 앱 종료 전에 호출
+    func flushSync() {
+        writer.flushSync()
     }
 
     // MARK: - API
