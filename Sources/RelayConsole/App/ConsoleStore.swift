@@ -706,6 +706,10 @@ final class ConsoleStore: ObservableObject {
 
     private func ingest(_ snapshot: DeviceSnapshot) {
         inventory.merge(snapshot)
+        // 오래 오프라인인 기기는 목록에서 제거한다.
+        // 종전엔 한번 연결된 기기가 영구히 남아(무선 ADB 는 IP 변경 시 새 항목 추가)
+        // 메뉴바 아이콘이 기기 0대인데 Online로 표시되고 기기 수 비율이 무의미해졌다.
+        inventory.pruneOffline(olderThan: Self.offlineRetention, now: .now)
         guard snapshot.isOnline else { return }
 
         // 선택 기기 없으면 첫 온라인 자동 선택
@@ -1359,7 +1363,26 @@ final class ConsoleStore: ObservableObject {
     }
 #endif
 
+    /// 오프라인 기기 보관 기간 — 이만큼 지나도 안 reconnect 되면 목록에서 제거
+    /// (충분히 길게 잡아 USB 허브 일시적 떨림으로 기기가 사라지지 않게 한다)
+    private static let offlineRetention: TimeInterval = 60 * 30   // 30분
+
+    /// 기기 해제 처리 — 오프라인 표시 + **serial 키 자료구조 정리**
+    ///
+    /// 종전엔 inventory 의 플래그만 바뀌고 serial 키 딕셔너리들은 그대로 남았다.
+    /// 네트워크 ADB 는 serial 이 `IP:PORT` 라 DHCP 가 바뀌면(192.168.0.11 → .12)
+    /// 새 키가 생겨 이전 키가 영구 잔류했다. 상시 실행 앱이므로 시간이 갈수록
+    /// `metricsHistory`(기기당 60×8 Double 링)와 throttle/daily 딕셔너리가 무한 증가했다.
     func markDeviceOffline(_ serial: String) {
         inventory.markOffline(serial: serial)
+        releaseDeviceState(for: serial)
+    }
+
+    /// 기기 고유 상태 정리 — 링 버퍼와 throttle/daily 키를 함께 해제한다.
+    /// 이벤트·일일 집계(과거 기록)는 지우지 않는다 — 분석 가치가 있는 영구 데이터다.
+    private func releaseDeviceState(for serial: String) {
+        metricsHistory[serial] = nil
+        lastNetPushAt[serial] = nil
+        lastDailyIngestAt[serial] = nil
     }
 }

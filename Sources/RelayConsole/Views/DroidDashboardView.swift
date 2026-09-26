@@ -48,6 +48,12 @@ struct DroidDashboardView: View {
                         if let d = device, !d.isOnline {
                             offlineBanner(d)
                         }
+                        // [표시②] 측정 실패(adb 무응답)는 오프라인과 **다른 상태**다.
+                        // 기기가 연결돼 있어도 측정이 안 되면 값이 이전 정상값 그대로이므로
+                        // 사용자가 알 수 없으면 "정상"으로 오해한다.
+                        if let d = device, d.failureStreak > 0 {
+                            staleBanner(d)
+                        }
                         if let d = device, let err = d.lastError, !err.isEmpty {
                             lastErrorBanner(err)
                         }
@@ -187,6 +193,40 @@ struct DroidDashboardView: View {
         .overlay(
             RoundedRectangle(cornerRadius: 10)
                 .stroke(OPColor.bad.opacity(0.45), lineWidth: 1)
+        )
+    }
+
+    /// 측정 실패 배너 — 기기는 연결돼 있으나 adb 응답이 없는 상태.
+    /// 오프라인과는 **구분되는 별개 상태**로 표시한다([표시②] — 성공/실패/미측정 분리).
+    private func staleBanner(_ d: DeviceSnapshot) -> some View {
+        HStack(spacing: OPSpace.sm) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(OPFont.body(12))
+                .foregroundStyle(OPColor.warn)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(L10n.string("droid.stale.banner"))
+                    .font(OPFont.body(12))
+                    .foregroundStyle(OPColor.ink)
+                HStack(spacing: 6) {
+                    Text(L10n.format("droid.stale.count", d.failureStreak))
+                        .font(OPFont.number(10))
+                        .foregroundStyle(OPColor.inkDim)
+                    if let at = d.lastSampleAt {
+                        Text(L10n.format("droid.lastSample.at", Self.timeString(at)))
+                            .font(OPFont.number(10))
+                            .foregroundStyle(OPColor.inkDim)
+                    }
+                }
+            }
+            .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+        }
+        .padding(OPSpace.md)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(OPColor.warn.opacity(0.12), in: RoundedRectangle(cornerRadius: 10))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(OPColor.warn.opacity(0.45), lineWidth: 1)
         )
     }
 

@@ -505,8 +505,61 @@ enum AdbClient {
         return hits.sorted { $0.key < $1.key }.map { (keyword: $0.key, count: $0.value) }
     }
 
-    // MARK: - Crash context extraction
+    /// logcat 키워드 집합 구분자
+    enum KeywordSet: Hashable, Sendable {
+        case logcat
+        case anr
+        case crash
+    }
 
+    /// 여러 키워드 집합을 **한 번의 순회**로 함께 센다.
+    ///
+    /// 종전에는 집합마다 `countLogcatHits` 를 따로 호출해 출력을 여러 번 전수 순회했다
+    /// (ANR·crash 각각 → 최소 2회 추가, `lastLogcatTimestamp` 까지 합치면 4회).
+    /// 절전 후 깨어난 직후에는 버퍼가 수십만 줄이 될 수 있어 순회 비용이 그대로 배가된다.
+    struct KeywordScanResult: Sendable {
+        var counts: [KeywordSet: Int] = [:]
+        /// 각 집합 내부의 키워드별 카운트
+        var breakdowns: [KeywordSet: [String: Int]] = [:]
+        /// 순회 중 마지막으로 본 유효 타임스탬프
+        var lastTimestamp: String?
+    }
+
+    /// 한 번의 줄 순회로 모든 키워드 집합을 집계한다.
+    /// 각 집합은 **첫 매칭 키워드에만 귀속**한다(중복 계상 방지 — `logcatHitBreakdown` 과 동일 규칙).
+    static func logcatKeywordScan(
+        _ text: String,
+        sets: [KeywordSet: [String]],
+        afterTimestamp: String? = nil
+    ) -> KeywordScanResult {
+        var result = KeywordScanResult()
+        guard !sets.isEmpty else { return result }
+
+        // 키워드 소문자화는 집합마다 1회만 (라인마다 재계산하지 않는다)
+        var needles: [KeywordSet: [(original: String, lower: String)]] = [:]
+        for (set, keywords) in sets {
+            needles[set] = keywords.map { (original: $0, lower: $0.lowercased()) }
+        }
+
+        var lastTs = afterTimestamp
+        for line in text.split(separator: "\n", omittingEmptySubsequences: true) {
+            let s = String(line)
+            if let cutoff = afterTimestamp, let ts = logcatLineTimestamp(s), ts <= cutoff {
+                continue
+            }
+            if let ts = logcatLineTimestamp(s) { lastTs = ts }
+            let lower = s.lowercased()
+            for (set, list) in needles where !list.isEmpty {
+                guard let hit = list.first(where: { lower.contains($0.lower) })?.original else { continue }
+                result.counts[set, default: 0] += 1
+                result.breakdowns[set, default: [:]][hit, default: 0] += 1
+            }
+        }
+        result.lastTimestamp = lastTs
+        return result
+    }
+
+    // MARK: - Crash context extraction
     /// 크래시 컨텍스트 — FATAL EXCEPTION 주변에서 추출한 구조화 정보
     struct CrashContext: Equatable, Sendable {
         /// 패키지명 (Process: com.xxx)
