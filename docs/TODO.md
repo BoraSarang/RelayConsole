@@ -2,7 +2,6 @@
 > 작업 추적 — bd 연동 (이슈 prefix: RelayConsole)
 
 ## 진행 중 (bd ready)
-- [ ] **R2 ADB 배치화 + 폴링 구조** — slow 틱 25회→13회(`/proc` 6회 342ms→1회 125ms **2.7배 실측**) · 기기별 병렬 tick · 실제 주기 왜곡 정직화
 - [ ] **R3 신선도·정직성** — `try?` 39회 중 38회가 실패 미기록 · `lastSampleAt` 항상 갱신(위장) 위장 제거 · logcat 4회 전수 스캔→1회 · **오프라인 기기 제거(1단계에서 ratios만 바꾼 근본 · R1-7과 짝)** · 기기 해제 시 dict 정리
 - [ ] **R4 메인 스레드 정지** — `EventStore` 이벤트마다 500건 전량 인코딩을 메인에서 · `SitesJobsStore` 14,400 레코드 5초마다 · `WidgetSnapshotStore` 유일한 동기 atomic write
 - [ ] **R5 SwiftUI 렌더** — `ConsoleStore` 단일 평면(23 body) · `InsightsView` body당 ~19,500회 이벤트 순회 · `fitAll()` 무조건 호출 · `DateFormatter` body 신규
@@ -24,6 +23,13 @@
 - [ ] **Apple 크래시 리포트 수집 (반드시 해야 할 작업)** — `idevicecrashreport`로 iOS `.ips` crash/ANR를 IncidentBundle에 첨부. 기기 확보 시 1순위. Trust USB + `idevicecrashreport -u <udid> copy` 패턴. Android `logcat -b crash`/dropbox 대응 Apple 쪽 원재료 — **기기 확보 전 구현 불가, 반드시 기억할 것**
 
 ## 완료 (2026-09-26)
+- [x] **R2 ADB 배치화 + 기기별 병렬 폴링** — `PLAN_refactor_perf_stability_macos` 2단계 · 커밋 `91d7732` · 브랜치 `chore/macos-refactor-p2-batching` (R1 위에 stacked) · **육안 대기**
+  - **`PollBatch` 마커 프로토콜** — 기기측 sh 가 `@@RLY<n>@@` 마커를 내면 호스트가 마커로 출력을 잘라 **종전과 동일한 문자열**을 각 순수 파서에 넘김 → **파서 무변경**(리스크 최소). 마커 없으면 전부 nil(조용한 오염 금지) · 빈 청크=종전 `try?` 실패와 동일 · **실기기 대조 21개 명령: 18개 줄 단위 완전 일치**, 3개는 실행 시점마다 변하는 누적 카운터라 개별 실행끼리도 다름 · 빈 청크 3건(GPU sysfs 미지원)도 개별 실행과 동일 확인
+  - **기기별 병렬 폴링(Head-of-Line 해소)** — 종전 기기마다 순차라 느린 기기가 전체 지연 → `tick()`이 `withTaskGroup`으로 기기별 adb 실행을 겹쳐 돌림(actor 격리 밖 `detached`), 상태 갱신은 순차 보존
+  - **측정(동일 방법 전/후 비교 · 고유 PID 30초 샘플)**: fast 틱 **361~401ms → 171~174ms(2.1배)** · slow 틱 **1378~1518ms → 546~551ms(2.6배)** · **adb 프로세스 분당 313 → 47(85% 절감)**
+  - **그 외**: `logcatHitBreakdown` 키워드 소문자화 진입 시 1회화 · `DroidMetrics`에 `firstAt/lastAt`+`windowSeconds/actualInterval` 추가(**"5s×60=5분" 주석이 실제와 불일치하나 아무도 몰랐음** → 9초 주기면 9초로 보고하도록 정직화, 테스트 고정) · `ProcessRunner` 동시 var 캡처 경고 제거(DataBox)·`captureAsync`·`describe` 추가
+  - **검증 [HARD]**: `swift test` **367 + 104 = 471 / 0 failed** (+22 신규) · `./scripts/build-macos.sh debug` **EXIT=0** (1.16.0 · 팀 6GPJQ7BQC9) · 런타임: 기기 재인식·크래시 0건(신규)·`device-daily.json` 실값 파싱(`memUsedPctAvg 56.9`·`tempMax 53.3`·`netUp 6544MB`·`rsrpMin -103`·`psiMax 17.86` — 배치 파싱이 끝까지 정상) · `pollDevice` 내 `tickCount` 잔존 0 · 남은 직접 shell 3건은 전부 1회성/조건부로 의도적
+  - **육안 확인 필요**: 대시보드 8카드 값 정상 · 그래프 스파크라인 정상 · 센서/thermal zone/네트워크/스토리지 값 정상
 - [x] **R1 어댑버 안전화 + 즉시 결함 9건** — `PLAN_refactor_perf_stability_macos` 1단계 · 커밋 `7c4f8bb` · 브랜치 `chore/macos-refactor-p1-adapter-safety` · **육안 대기**
   ① **앱 정지(Hang) 근본 제거** `Utils/ProcessRunner.swift` 신설 — `DeviceMonitor.run`이 `standardError = Pipe()`만 만들고 읽지 않아 adb가 64KB 넘기면 자식이 write에서 블로킹 → stdout EOF 미도달 → `readDataToEndOfFile()` **영구 대기**·타임아웃 없어 half-open TCP에서 **actor 전체 정지**(복구 수단 없음). 동시 소진 + 데드라인 20s + `terminate`→`interrupt` escalation + 대기도 유한 + **stderr 원문 보존**. 같은 저장소의 안전한 `SiteChecker.run`을 모델로 삼음 ② 폴링 루프 취소 후 tick 1회 추가 실행(`try?`가 `CancellationError` 삼킴) ③ `ConnectionSessionStore.flush()` **영구 no-op**(`dirty=true` 대입 0건) + `save()` 비동기 큐 미배출 → **동기 flush**로 교체·함정 플래그 제거·테스트용 `init(url:)` 주입 ④ `runSiteCheck` await 전 인덱스 캡처 → **A 사이트 결과가 B에 기록**(업타임·SSL·위젯 오염) → await 후 id+target 재확인 ⑤ `ScrcpyController` terminationHandler 세대 race(`|| serial ==` 제거 → identity만) ⑥ **[HARD] 하트비트 토큰 평문 로그**(`ConsoleStore:566`) → `NotifyChannel.maskSecret` ⑦ 기기 0대인데 메뉴바 "Online"(`isEmpty` → `contains(\.isOnline)`) ⑧ `WifiAdb.disconnect` 성공인데 오류 스타일 → `statusIsError` 리셋 ⑨ 버전 하드코딩 3곳 낡음(설정 1.14.0·MCP 1.14.0·로그 1.15.0) → **`Utils/AppVersion.swift`** 신설(Info.plist 단일 소스)·MCP는 테스트로 대조 고정 · 부수: `MenuBarPopoverView:822` 주석 U+FFFD 문자 손상 복구(기존 결함)
   - **검증 [HARD]**: `swift test` **345(swift-testing) + 104(XCTest) = 449 / 0 failed** (+13 신규 — 교착·데드라인·stderr 보존 회귀 포함, 타임아웃 테스트 1.031s에 종료 확인) · `./scripts/build-macos.sh debug` **EXIT=0** (1.16.0 · 팀 6GPJQ7BQC9 일치) · 신규 파일 경고 0 · U+FFFD 0건
