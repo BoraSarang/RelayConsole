@@ -278,6 +278,11 @@ enum WatchEventAlerts {
         }
     }
 
+    /// 상태별 건수 집계.
+    ///
+    /// 종전엔 `AlertsState.allCases`(3종)마다 `filter` 를 다시 돌려 전체 이벤트를 **3회 순회**했다.
+    /// state 판정에 관여하는 조건은 `filter` 와 동일하므로, **state 를 뺀 base 필터를 1회** 적용한 뒤
+    /// 분류만 하면 결과가 같다. (동일성은 `alertsCountsMatchPerStateFilter` 테스트로 고정)
     static func counts(
         _ events: [WatchEvent],
         filteredBy base: AlertsFilter,
@@ -286,10 +291,10 @@ enum WatchEventAlerts {
         var f = base
         f.state = nil
         var out: [AlertsState: Int] = [:]
-        for s in AlertsState.allCases {
-            var sf = f
-            sf.state = s
-            out[s] = filter(events, by: sf, now: now).count
+        for s in AlertsState.allCases { out[s] = 0 }
+        // 1회 필터 → 각 이벤트를 state 로 분류 (이중 루프 제거)
+        for e in filter(events, by: f, now: now) {
+            out[e.state(now: now), default: 0] += 1
         }
         return out
     }
