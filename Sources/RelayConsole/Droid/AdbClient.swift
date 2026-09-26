@@ -489,6 +489,9 @@ enum AdbClient {
         afterTimestamp: String? = nil
     ) -> [(keyword: String, count: Int)] {
         guard !keywords.isEmpty else { return [] }
+        // 키워드 소문자화는 **함수 진입 시 1회만** — 종전엔 라인마다 키워드마다 재계산했다
+        // (키워드 3~4종 × 수천 줄이면 매 tick 수천 번의 String 할당)
+        let needles = keywords.map { (original: $0, lower: $0.lowercased()) }
         var hits: [String: Int] = [:]
         for line in text.split(separator: "\n", omittingEmptySubsequences: true) {
             let s = String(line)
@@ -496,7 +499,7 @@ enum AdbClient {
                 continue
             }
             let lower = s.lowercased()
-            guard let hit = keywords.first(where: { lower.contains($0.lowercased()) }) else { continue }
+            guard let hit = needles.first(where: { lower.contains($0.lower) })?.original else { continue }
             hits[hit, default: 0] += 1
         }
         return hits.sorted { $0.key < $1.key }.map { (keyword: $0.key, count: $0.value) }
