@@ -764,6 +764,16 @@
 "wifi.reconnect.notReachable" = "%@ 에 닿지 않습니다 — 같은 Wi-Fi 에 있는지 확인하세요";
 "wifi.reconnect.failed" = "재연결 실패 — %@";
 "settings.wifi.section" = "Wi-Fi ADB";
-"droid.logs.exclude" = "노이즈 태그 제외";
 "droid.logs.excluded" = "기기에서 %d개 태그 제외";
 "droid.logs.exclude.tip" = "같은 줄을 초당 수천 번 반복하는 태그를 기기에서 제외합니다. 끄면 전부 표시됩니다.";
+"droid.logs.picker.title" = "태그별 반복 상위";
+"droid.logs.picker.scope" = "창을 연 뒤 기준";
+"droid.logs.picker.empty" = "아직 집계된 로그가 없습니다";
+"droid.logs.picker.capped" = "집계 한도 도달 · %d줄에서 멈춤";
+"droid.logs.picker.count" = "기기에서 제외 %d개 태그";
+"droid.logs.picker.countN" = "%d줄";
+"droid.logs.picker.msgs" = "%d종";
+"droid.logs.picker.msgs.more" = "%d종 이상";
+"droid.logs.picker.row.excluded" = "제외 중 — 마지막 %d줄";
+"droid.logs.picker.row.visible" = "표시 중 — %d줄";
+"droid.logs.picker.restore" = "기본값 복원";

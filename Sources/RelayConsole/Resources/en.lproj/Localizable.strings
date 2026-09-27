@@ -764,6 +764,16 @@
 "wifi.reconnect.notReachable" = "%@ is unreachable — check that you are on the same Wi-Fi";
 "wifi.reconnect.failed" = "Reconnect failed — %@";
 "settings.wifi.section" = "Wi-Fi ADB";
-"droid.logs.exclude" = "Noisy tags";
 "droid.logs.excluded" = "excluded %d tags on device";
 "droid.logs.exclude.tip" = "Tags repeating the same line thousands of times per second are excluded on the device. Turn this off to show everything.";
+"droid.logs.picker.title" = "Most repeated tags";
+"droid.logs.picker.scope" = "since this window opened";
+"droid.logs.picker.empty" = "No logs counted yet";
+"droid.logs.picker.capped" = "Count limit reached · stopped at %d lines";
+"droid.logs.picker.count" = "%d tags excluded on device";
+"droid.logs.picker.countN" = "%d";
+"droid.logs.picker.msgs" = "%d kinds";
+"droid.logs.picker.msgs.more" = "%d+ kinds";
+"droid.logs.picker.row.excluded" = "Excluded — last %d lines";
+"droid.logs.picker.row.visible" = "Shown — %d lines";
+"droid.logs.picker.restore" = "Restore defaults";
