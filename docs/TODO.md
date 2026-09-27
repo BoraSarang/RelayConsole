@@ -2,7 +2,8 @@
 > 작업 추적 — bd 연동 (이슈 prefix: RelayConsole)
 
 ## 진행 중 (bd ready)
-- (0건)
+- **PR #55** `fix/macos-orphan-adb-logcat` — 강제 종료 정리 (검토 대기)
+- bd 이슈: (0건 — 이번 작업은 TODO T-번호로 관리)
 
 ## 다음 스프린트 (리서치 §8 잔여 · 미착수)
 - [ ] **로그 창 VoiceOver 노출** — `System Events` 의 `entire contents` 가 **0개**.
@@ -42,6 +43,30 @@
 - [ ] **Apple 크래시 리포트 수집 (반드시 해야 할 작업)** — `idevicecrashreport`로 iOS `.ips` crash/ANR를 IncidentBundle에 첨부. 기기 확보 시 1순위. Trust USB + `idevicecrashreport -u <udid> copy` 패턴. Android `logcat -b crash`/dropbox 대응 Apple 쪽 원재료 — **기기 확보 전 구현 불가, 반드시 기억할 것**
 
 ## 완료 (2026-09-28)
+- [x] **T-2026-09-28-4 강제 종료(SIGTERM)에서도 정리 — 고아 adb · 저장 유실** — 테스트 3건 신규
+  - **계측으로 갈라놓은 것** — 종료 경로가 둘이었고 **하나는 멀쩡했다**
+    - ⏎ 정상 종료 → 앱의 adb 자식 사라짐(`onDisappear` → `stop()`). **이 경로에는 결함이 없었다**
+    - `pkill`(SIGTERM) → **AppKit 이 `applicationWillTerminate` 를 부르지 않는다** →
+      adb 자식 **PPID 1 로 잔존**(13초 후에도 살아 있음)
+  - **기기 쪽 정리까지 필요 없었다** — 고아를 죽이면 **기기 쪽 `logcat` 도 함께 사라진다**
+    (기기 PID → 0건 실측). 맥 쪽만 막으면 된다
+  - **★ 같은 경로에서 또 하나 잃고 있었다 — 저장 flush**
+    - `CoalescingWriter` 는 최대 2분 분량을 모아 쓰므로, `flushSync()`(R4)가 지켜야 할
+      마지막 상태가 SIGTERM 경로에서는 유실됐다. **`build-macos.sh` 가 매번 pkill 하니
+      매번 잃을 수 있었다**
+    - 실측: pkill 시각 03:27:19 에 두 스토어 mtime 이 03:26:54·03:26:56 → **03:27:19** 로 갱신
+  - **정리를 한 곳에 모았다** — `AppDelegate.terminateWork()` 하나를 정상 종료와 시그널이 함께 탄다.
+    두 벌로 두면 벌써 갈라진다는 것이 이번 결함의 원인
+  - **`signal()` 핸들러를 안 쓴 이유** — C 핸들러 안에서는 할당·락·ObjC 호출이 금지되고,
+    전역 PID 를 저장해 `kill` 하면 **PID 재사용 시 엉뚱한 프로세스를 죽인다**
+  - **막을 수 없는 것을 코드에 적었다** — `SIGKILL`·크래시는 정리 경로를 타지 않는다.
+    남는 고아는 사용자가 정리해야 한다 (테스트로 고정)
+  - **★ 머지 순서 주의** — 이 PR 은 #54 와 `docs/TODO.md` 를 함께 건드린다(소스는 겹치지 않음).
+    **#54 를 먼저 머지**하고 나면 충돌 1건만 남는다 (본 브랜치를 rebase 하면 자동 해결됨)
+  - **검증 [HARD]**: `swift test` **511 + 104 = 615 / 0 failed** (main +3) ·
+    `./scripts/build-macos.sh debug` **EXIT=0** · pkill 후 **adb 자식 0 · 기기 logcat 0** ·
+    ⏎ quit 회귀 없음 · U+FFFD 0건
+
 - [x] **T-2026-09-28-3 로그 창 태그 선택 UI — 제외 판단을 사용자에게** — `PLAN_log_tag_picker` ·
       테스트 20건 신규 · 1.16.0 유지
   - **무엇이 달라졌나** — 기본 제외 목록(3종)을 **코드가 정하던 것**에서 **사용자가 고르는 것**으로.
