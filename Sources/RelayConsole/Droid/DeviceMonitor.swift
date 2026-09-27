@@ -5,7 +5,19 @@ import Foundation
 actor DeviceMonitor {
     static let shared = DeviceMonitor()
     /// SKILLPACK §4 고정 키워드
-    static let logcatKeywords = ["accelerometer_rotation", "wm_user_rotation_changed", "thermal"]
+    ///
+    /// **2026-09-27 — 의도적으로 비었다.**
+    ///
+    /// 종전엔 `accelerometer_rotation` / `wm_user_rotation_changed` / `thermal` 을 썼으나
+    /// 이건 에러 신호가 아니라 **센서·회전·발열 상태 변화**다. 폰이 가만히 있어도 5분마다
+    /// +140 건씩 찍혀 `탐지` 카드가 "문제 142건" 처럼 읽혔다 — 실제로는 센서 잡음이라
+    /// 의미가 없었고, `logcat 적중` 칩과 `>` 클릭 → Alerts(같은 카운트 반복) → 로그 창
+    /// (아래 LogViewerView 교착으로 빈 화면) 으로 이어지며 **세 화면 연속으로 아무것도
+    /// 보여주지 못하는 장식**이 되었다.
+    ///
+    /// 감지 대상은 ANR·크래시(`anrKeywords` / `crashKeywords`)처럼 **실패 신호**만 남긴다.
+    /// 원시 로그 줄이 필요하면 로그 창의 `W` 이상 필터를 쓴다.
+    static let logcatKeywords: [String] = []
     /// v0.8 — ANR / 크래시 감지 (대소문자 무시 부분 매칭)
     static let anrKeywords = ["anr in", "am_anr", "application not responding", "input dispatching timed out"]
     static let crashKeywords = ["fatal exception", "fatal signal", "has died", "force finishing"]

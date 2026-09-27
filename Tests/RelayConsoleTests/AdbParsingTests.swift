@@ -320,6 +320,11 @@ struct AdbParsingTests {
 
     // MARK: - LogcatWatch (countLogcatHits / timestamp)
 
+    /// 파서 검증용 고정 키워드 — 실제 감지 대상(`DeviceMonitor.logcatKeywords`)이 아니라
+    /// **매칭 규칙 자체**를 검사하는 표본이다. 실제 감지 키워드는 2026-09-27 에
+    /// 센서 잡음(accelerometer_rotation·thermal)이라 전부 제거됐다.
+    private let sampleKeywords = ["accelerometer_rotation", "wm_user_rotation_changed", "thermal"]
+
     @Test func countLogcatHitsKeywords() {
         let sample = """
         09-23 19:30:04.962  1235  1235 I WindowManager: accelerometer_rotation set to 1
@@ -327,17 +332,17 @@ struct AdbParsingTests {
         09-23 19:30:05.200  1235  1235 I ThermalEngine: thermal level changed
         09-23 19:30:05.300  1235  1235 I unrelated: hello world
         """
-        #expect(AdbClient.countLogcatHits(sample) == 3)
+        #expect(AdbClient.countLogcatHits(sample, keywords: sampleKeywords) == 3)
     }
 
     @Test func countLogcatHitsEmptyNilKeywords() {
-        #expect(AdbClient.countLogcatHits("") == 0)
+        #expect(AdbClient.countLogcatHits("", keywords: sampleKeywords) == 0)
         #expect(AdbClient.countLogcatHits("any line", keywords: []) == 0)
     }
 
     @Test func countLogcatHitsCaseInsensitive() {
         let sample = "09-23 10:00:00.000  1  1 I T: THERMAL throttling"
-        #expect(AdbClient.countLogcatHits(sample) == 1)
+        #expect(AdbClient.countLogcatHits(sample, keywords: ["thermal"]) == 1)
     }
 
     @Test func logcatTimestampParses() {
@@ -367,11 +372,15 @@ struct AdbParsingTests {
         09-23 19:30:10.100  1  1 I b: thermal hit
         """
         // cursor = first line ts → first line 제외, second만 카운트
-        #expect(AdbClient.countLogcatHits(text, afterTimestamp: "09-23 19:30:04.962") == 1)
+        #expect(AdbClient.countLogcatHits(
+            text, keywords: sampleKeywords, afterTimestamp: "09-23 19:30:04.962"
+        ) == 1)
         // cursor 없음 → 둘 다
-        #expect(AdbClient.countLogcatHits(text) == 2)
+        #expect(AdbClient.countLogcatHits(text, keywords: sampleKeywords) == 2)
         // cursor가 마지막보다 같거나 큼 → 0
-        #expect(AdbClient.countLogcatHits(text, afterTimestamp: "09-23 19:30:10.100") == 0)
+        #expect(AdbClient.countLogcatHits(
+            text, keywords: sampleKeywords, afterTimestamp: "09-23 19:30:10.100"
+        ) == 0)
     }
 
     // MARK: - Inventory merge (watch counts)

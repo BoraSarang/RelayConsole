@@ -118,6 +118,10 @@ struct DashboardLayoutTests {
 
     // MARK: - logcat 키워드 분해
 
+    /// 분해 규칙 검증용 표본 키워드 — 실제 감지 대상과 무관하다
+    /// (실제 감지 키워드는 2026-09-27 에 센서 잡음이라 제거됐다)
+    private let breakdownKeywords = ["accelerometer_rotation", "wm_user_rotation_changed", "thermal"]
+
     @Test func logcatHitBreakdownMatchesCount() {
         let sample = """
         09-23 19:30:04.962  1235  1235 I WindowManager: accelerometer_rotation set to 1
@@ -125,8 +129,11 @@ struct DashboardLayoutTests {
         09-23 19:30:05.200  1235  1235 I ThermalEngine: thermal level changed
         09-23 19:30:05.300  1235  1235 I unrelated: hello world
         """
-        let breakdown = AdbClient.logcatHitBreakdown(sample)
-        #expect(breakdown.reduce(0) { $0 + $1.count } == AdbClient.countLogcatHits(sample))
+        let breakdown = AdbClient.logcatHitBreakdown(sample, keywords: breakdownKeywords)
+        #expect(
+            breakdown.reduce(0) { $0 + $1.count }
+                == AdbClient.countLogcatHits(sample, keywords: breakdownKeywords)
+        )
         #expect(breakdown.first { $0.keyword == "accelerometer_rotation" }?.count == 1)
         #expect(breakdown.first { $0.keyword == "wm_user_rotation_changed" }?.count == 1)
         #expect(breakdown.first { $0.keyword == "thermal" }?.count == 1)
@@ -137,7 +144,7 @@ struct DashboardLayoutTests {
     @Test func logcatHitBreakdownCountsLineOnce() {
         // 한 줄이 여러 키워드에 걸려도 1줄 = 1건 (첫 매칭 키워드에 귀속)
         let multi = "09-23 19:30:04.962 I T: thermal accelerometer_rotation"
-        let breakdown = AdbClient.logcatHitBreakdown(multi)
+        let breakdown = AdbClient.logcatHitBreakdown(multi, keywords: breakdownKeywords)
         #expect(breakdown.reduce(0) { $0 + $1.count } == 1)
         #expect(breakdown.first?.keyword == "accelerometer_rotation")
     }

@@ -472,9 +472,13 @@ enum AdbClient {
 
     /// 키워드 적중 수 — 대소문자 무시, 부분 문자열 매칭
     /// `afterTimestamp`가 있으면 그 타임스탬프와 같거나 이전인 라인은 제외 (`-T`는 inclusive)
+    ///
+    /// `keywords` 는 **의도적으로 기본값이 없다.** 종전엔 `DeviceMonitor.logcatKeywords` 를
+    /// 기본값으로 뒀는데 그 상수가 이제 빈 배열이라, 기본값에 기대면 조용히 0 이 된다.
+    /// 호출부가 대상 키워드를 명시하게 강제한다.
     static func countLogcatHits(
         _ text: String,
-        keywords: [String] = DeviceMonitor.logcatKeywords,
+        keywords: [String],
         afterTimestamp: String? = nil
     ) -> Int {
         logcatHitBreakdown(text, keywords: keywords, afterTimestamp: afterTimestamp)
@@ -485,7 +489,7 @@ enum AdbClient {
     /// 한 줄은 **첫 매칭 키워드에만** 귀속 → 합계가 `countLogcatHits`와 일치
     static func logcatHitBreakdown(
         _ text: String,
-        keywords: [String] = DeviceMonitor.logcatKeywords,
+        keywords: [String],
         afterTimestamp: String? = nil
     ) -> [(keyword: String, count: Int)] {
         guard !keywords.isEmpty else { return [] }
@@ -681,9 +685,110 @@ enum AdbClient {
             }
         }
 
-        guard found else { return nil }
+        guard found else {
+            // FATAL EXCEPTION / fatal signal 이 없었다면 **프로세스 사망 라인**을 본다.
+            // 감지 키워드(`crashKeywords`)는 4개인데 파서는 2개만 봤다 — 그래서
+            // `has died` / `force finishing` 으로 적중한 이벤트는 패키지·예외가 전부 null 로
+            // 기록되었다("크래시 적중 1건" 만 남고 누가 죽었는지 알 수 없음).
+            return extractProcessDeathContext(text, afterTimestamp: afterTimestamp)
+        }
         ctx.rawBlock = crashLines.joined(separator: "\n")
         return ctx
+    }
+
+    // MARK: - Process death context
+
+    /// 프로세스 사망 라인 파서 — `has died` / `force finishing` 키워드 대응.
+    ///
+    /// 실제 logcat 형식:
+    /// - `ActivityManager: Process com.foo.bar (pid 12345) has died.`
+    /// - `ActivityManager: Process com.foo.bar (pid 12345) has died. Reason: SIGSEGV`
+    /// - `ActivityManager: Force finishing activity com.foo.bar/.MainActivity`
+    /// - `ActivityManager: ANR in com.foo.bar (com.foo.bar/.MainActivity)`
+    static func extractProcessDeathContext(
+        _ text: String,
+        afterTimestamp: String? = nil
+    ) -> CrashContext? {
+        var ctx = CrashContext(stackTrace: [], rawBlock: "")
+        var raw: [String] = []
+        var found = false
+
+        for line in text.split(separator: "\n", omittingEmptySubsequences: false).map(String.init) {
+            if let cutoff = afterTimestamp, let ts = logcatLineTimestamp(line), ts <= cutoff {
+                continue
+            }
+            let lower = line.lowercased()
+            guard lower.contains("has died")
+                || lower.contains("force finishing")
+                || lower.contains("anr in")
+            else { continue }
+
+            found = true
+            if raw.count < 20 { raw.append(line) }
+
+            if ctx.packageName == nil {
+                if let pkg = deathPackage(in: line) { ctx.packageName = pkg }
+            }
+            if ctx.pid == nil {
+                ctx.pid = deathPID(in: line)
+            }
+            if ctx.exceptionClass == nil {
+                // 사망 사유가 명시돼 있으면 그걸 예외 클래스 자리에 둔다
+                if let reason = deathReason(in: line) {
+                    ctx.exceptionClass = reason
+                } else {
+                    ctx.exceptionClass = "ProcessDeath"
+                }
+            }
+        }
+
+        guard found else { return nil }
+        ctx.rawBlock = raw.joined(separator: "\n")
+        return ctx
+    }
+
+    /// `Process com.foo.bar (pid 123)` / `Force finishing activity com.foo.bar/.Act` / `ANR in com.foo.bar (…)`
+    static func deathPackage(in line: String) -> String? {
+        for marker in ["Process ", "Force finishing activity ", "ANR in "] {
+            guard let range = line.range(of: marker) else { continue }
+            var rest = String(line[range.upperBound...])
+            // 뒤따르는 구분자로 잘라낸다
+            for sep in [" (", "/", " has", ":", "\n"] {
+                if let cut = rest.range(of: sep) {
+                    rest = String(rest[rest.startIndex..<cut.lowerBound])
+                }
+            }
+            let pkg = rest.trimmingCharacters(in: .whitespacesAndNewlines)
+            // 패키지명 최소 형태 검사 — `com.x.y` 형태만 인정
+            guard pkg.count >= 3, pkg.contains("."), !pkg.contains(" ") else { continue }
+            return pkg
+        }
+        return nil
+    }
+
+    /// `(pid 12345)` → `12345`
+    static func deathPID(in line: String) -> String? {
+        guard let range = line.range(of: "(pid ") else { return nil }
+        let rest = line[range.upperBound...]
+        let digits = rest.prefix { $0.isNumber }
+        return digits.isEmpty ? nil : String(digits)
+    }
+
+    /// 사망 사유 추출.
+    ///
+    /// 실측 형식이 둘이라 **둘 다** 처리한다 (2026-09-27, 10.233.247.205:5555 실기 로그):
+    /// - `Process com.x (pid 1) has died. Reason: SIGSEGV`
+    /// - `Process com.x (pid 14384) has died: cch+5 CEM (926,1457)`
+    ///   두 번째는 lmkd/CEM 킬러 사유다 — "왜 죽었는지"의 유일한 단서인데
+    ///   종전엔 `Reason:` 만 찾으므로 통째로 놓치고 있었다.
+    static func deathReason(in line: String) -> String? {
+        for marker in ["Reason:", "has died:"] {
+            guard let range = line.range(of: marker) else { continue }
+            let rest = line[range.upperBound...].trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !rest.isEmpty, rest.count <= 96 else { continue }
+            return rest
+        }
+        return nil
     }
 
     // MARK: - ANR context extraction

@@ -216,9 +216,8 @@ struct AlertsFilterTests {
 
     // MARK: - ConsoleStore 업데이트
 
-    @Test func storeAckAndMutePersistInMemory() {
+    @Test func storeAckAndMutePersistInMemory() throws {
         let store = ConsoleStore.shared
-        let before = store.recentWatchEvents.count
         let id = UUID()
         var injected = WatchEvent(
             kind: .throttling,
@@ -230,17 +229,28 @@ struct AlertsFilterTests {
         )
         // id 고정 비교용 — debugIngestWatchQuietly는 새 UUID 유지
         store.debugIngestWatchQuietly(injected)
-        #expect(store.recentWatchEvents.count == before + 1)
-        let storedId = store.recentWatchEvents[0].id
+        // 건수 델타(`before + 1`)나 인덱스(`[0]`)로 검증하지 않는다.
+        // `ConsoleStore.shared` 는 프로세스 전역 싱글턴이고 Swift Testing 은 병렬 실행하므로
+        // 같은 스위트의 다른 테스트가 사이클에 이벤트를 끼워 넣는다(간헐 실패).
+        // 또 링 상한 500 에 걸리면 삽입 후에도 개수가 그대로여서 델타가 성립하지 않는다.
+        // → 이 테스트가 넣은 이벤트를 id로 찾아 그 이벤트만 검증한다.
+        let storedId = try? #require(
+            store.recentWatchEvents.first(where: { $0.serial == "DEBUG-ALERTS" })?.id
+        )
+        let sid = try #require(storedId)
         _ = id
         _ = injected
-        store.ackWatchEvent(id: storedId, at: t0)
-        #expect(store.recentWatchEvents[0].ackAt == t0)
-        store.muteWatchEvent(id: storedId, until: t0.addingTimeInterval(3600))
-        #expect(store.recentWatchEvents[0].state(now: t0) == .muted)
-        store.setWatchNote(id: storedId, note: "n")
-        #expect(store.recentWatchEvents[0].note == "n")
-        store.muteWatchEvent(id: storedId, until: nil)
-        #expect(store.recentWatchEvents[0].state(now: t0) == .active)
+        // 이 테스트 소유 이벤트만 골라낸다 (타 테스트가 끼어들어도 영향 없음)
+        func mine() -> WatchEvent? {
+            store.recentWatchEvents.first { $0.id == sid }
+        }
+        store.ackWatchEvent(id: sid, at: t0)
+        #expect(mine()?.ackAt == t0)
+        store.muteWatchEvent(id: sid, until: t0.addingTimeInterval(3600))
+        #expect(mine()?.state(now: t0) == .muted)
+        store.setWatchNote(id: sid, note: "n")
+        #expect(mine()?.note == "n")
+        store.muteWatchEvent(id: sid, until: nil)
+        #expect(mine()?.state(now: t0) == .active)
     }
 }
