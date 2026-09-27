@@ -2,7 +2,7 @@
 > 작업 추적 — bd 연동 (이슈 prefix: RelayConsole)
 
 ## 진행 중 (bd ready)
-- (없음 — 성능·안정성 리팩토링 6단계 전부 완료. 아래 완료 항목 참조)
+- (없음 — 아래 완료 항목 참조)
 
 ## 다음 스프린트 (리서치 §8 잔여 · 미착수)
 - [ ] **S3 관제 규칙 Rules as Code (로컬 YAML)** — TIER S 중 유일 미착수
@@ -18,6 +18,18 @@
 - [ ] **Apple 실기 Trust 육안** — iPad USB 데이터 불량(안드로이드 동일 케이블 OK·복구도 미인식). 기기 확보 후 `brew install libimobiledevice` → 배터리/스토리지 카드
 - [ ] **Apple Phase 2** — Developer Mode·sysmon 등 — 위 기기 확보 후 착수 (A9)
 - [ ] **Apple 크래시 리포트 수집 (반드시 해야 할 작업)** — `idevicecrashreport`로 iOS `.ips` crash/ANR를 IncidentBundle에 첨부. 기기 확보 시 1순위. Trust USB + `idevicecrashreport -u <udid> copy` 패턴. Android `logcat -b crash`/dropbox 대응 Apple 쪽 원재료 — **기기 확보 전 구현 불가, 반드시 기억할 것**
+
+## 완료 (2026-09-27)
+- [x] **logcat 정직성 + 프로세스 사망 파싱 + incident 덤프 상한** — 커밋 `706daa0` · 브랜치 `fix/logcat-honesty-incident-cap` · **육안 대기**
+  - **LogcatStreamer 교착 근본 제거** — `stderr 미배출` 이 원인. 64KB 파이프가 차면 adb 가 `write()` 에서 블로킹돼 **stdout 생산이 멎고** 프로세스도 안 죽어 `terminationHandler` 도 안 불림 = 초록 점 + 빈 화면 영구 지속. stderr 배수 + 알림 펌프 → `readabilityHandler`(전용 스레드, 경합 없음)
+  - **LIVE 거짓말 제거** [표시②] — `isLive`(흐르는 중) / `isSilent`(기동됐으나 0바이트) / `isStalled`(3초간 무수신) 구분. 멈춤 시 **adb stderr 원인을 그대로 노출**
+  - **볼륨** — 실측 무필터 **초당 약 3만 줄**(6초에 20MB). `MinLevel`(D/I/W/E) 필터를 adb 쪽에 적용 + 링 200 → **2000행** + 안정 id(`offset` id 는 플러시마다 전 줄 재렌더) + 수신 총 줄 수 표시
+  - **"크래시 적중 1건"만 남던 문제** — 감지 키워드는 4개인데 파서는 2개만 봄 → `has died` / `force finishing` / `anr in` 대응 추가(`extractProcessDeathContext`). **실기 형식 2종** 처리: `has died. Reason: SIGSEGV` · `has died: cch+5 CEM (926,1457)`(lmkd 킬러 사유 — 종전 `Reason:` 만 찾으므로 통째로 누락)
+  - **`logcatKeywords` 의도적으로 비움** — `accelerometer_rotation`·`wm_user_rotation_changed`·`thermal` 은 에러가 아니라 **센서·회전·발열 상태 변화**. 가만히 있어도 5분에 +140건 → `탐지` 카드가 "문제 142건" 처럼 읽힘 + `>` 클릭 → Alerts(같은 카운트 반복) → 로그 창(교착으로 빈 화면) **세 화면 연속으로 장식**. 실패 신호만 남김
+  - **IncidentBundle — 스택이 하나도 안 들어가던 문제** — ① crash 버퍼 덤프 신설(`-b crash`, `hasCrashLogcat` 필드) ② main 덤프를 `-T` 시각 앵커로 전환(종전 `-t 500` 은 이 기기에서 **약 2초분**이라 캡처 시점엔 이미 롤아웃) ③ **앵커 60초 리드** — `event.at` 은 크래시 그 자체가 **아니다**(폴링 5초 + 캡처 지연). 실측 이벤트 10:00:12 vs 실제 `has died` **10:00:06** → 앵커를 `event.at` 에 두면 크래시 라인이 창 밖으로 밀려남(실측 18건 → 19건)
+  - **39MB 회귀 차단** — 실측 `-T 5분분` = **39.0MB / 33만 줄**(종전 52KB, 750배). adb 쪽에서 못 자름: **`-T` 에 `-t` 를 같이 주면 `-T` 가 이김**(실측 336,024줄) → 읽는 쪽에서 뒤를 자르는 `TailBuffer`(2MB, 이벤트에 가까운 끝 보존). **잘린 양은 파일 첫 줄에 명시**(숨기지 않음). `runCaptureTail` 로 전환하며 stderr 배수 — 종전 `runCaptureData` 에 **같은 함정이 남아 있었음**
+  - **검증 [HARD]**: `swift test` **420 + 104 = 524 / 0 failed** (+13 신규) · `./scripts/build-macos.sh debug` **EXIT=0** (1.16.0 · 팀 6GPJQ7BQC9) · L10n **744키 en/ko 1:1** · U+FFFD 0건
+  - **실기 계측 (10.233.247.205:5555 · SM-S901N)**: `*:W` 필터 후에도 **55,166줄/6초(초당 9천)** — 상위 태그는 `E/HeatmapThread`(22,851)·`E/SemApTrafficData`(19,061)로 삼성 기기 특유 오류 스팸. **crash 버퍼는 이 기기에서 0줄**(덤프는 유지 — 버퍼를 쓰는 기기를 위해) · 번들 34개 23MB(스크린샷 占 대부분)
 
 ## 완료 (2026-09-26)
 - [x] **성능·안정성 리팩토링 6단계 전체 완료** — `PLAN_refactor_perf_stability_macos` · PR #45~#50 · 태그 `pre-refactor-perf` 롤백 지점
