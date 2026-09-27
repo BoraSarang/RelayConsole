@@ -1,8 +1,13 @@
 #!/usr/bin/env python3
-"""한자(CJK 한자) 혼입 + U+FFFD 전수 스캔 — 2026-09-28
+"""커밋 전 문자 위생 검사 — 한자 혼입 · U+FFFD · **남은 충돌 마커** (2026-09-28)
 
 왜 이게 필요한가: 문서에 한자가 섞여 들어가는 일이 한 세션에 4회 재발했다.
 기억으로 하는 점검이 안 된다. 커밋 훅으로 승격하기 전이라도 스크립트로 고정한다.
+
+충돌 마커를 검사하는 이유 — 2026-09-28 에 **마커가 커밋에 들어갔다.**
+rebase 충돌을 "해결"했다고 생각하고 `git add` 했는데 마커가 파일에 남아 있었고,
+`swift test` 가 문법 에러로 잡아낼 뿐 **원인이 수백 줄 뒤에 있었다.**
+충돌이 났다는 사실 자체는 눈에 보이는데, **해결이 덜었다는 사실은 눈에 보이지 않는다.**
 
 사용: scripts/scan-cjk.py [경로…]   (인자 없으면 git tracked 파일 전체)
 """
@@ -19,6 +24,9 @@ RANGES = (
     (0x20000, 0x2A6DF),
 )
 ALLOW_MARKER = "scan-cjk: allow"  # 이 표기가 있는 줄은 검사에서 제외한다
+# 충돌 마커 — `<<<<<<< HEAD` / `>>>>>>> branch` 형태만 잡는다.
+# `=======` 단독 줄은 마크다운 제목 밑줄과 겹치므로 **쓰지 않는다** (오탐)
+CONFLICT_MARKERS = ("<<<<<<< ", ">>>>>>> ")
 REPLACEMENT = "\ufffd"  # U+FFFD — 리터럴을 쓰면 이 파일이 자기 자신을 잡는다
 
 
@@ -38,7 +46,7 @@ def targets(paths: list[str]) -> list[Path]:
 
 def main() -> int:
     skip_suffix = {".png", ".jpg", ".jpeg", ".gif", ".pdf", ".xcassets", ".stringsdict"}
-    hanja_hits, fffd_hits = [], []
+    hanja_hits, fffd_hits, conflict_hits = [], [], []
 
     for path in targets(sys.argv[1:]):
         if not path.is_file() or path.suffix in skip_suffix:
@@ -54,6 +62,8 @@ def main() -> int:
                 continue
             if REPLACEMENT in line:
                 fffd_hits.append((path, lineno, REPLACEMENT))
+            if line.startswith(CONFLICT_MARKERS):
+                conflict_hits.append((path, lineno, line.rstrip()))
             for ch in line:
                 if is_hanja(ch):
                     name = unicodedata.name(ch, "?")
@@ -68,9 +78,13 @@ def main() -> int:
         for path, lineno, ch in fffd_hits:
             print(f"  {path}:{lineno}")
 
-    if hanja_hits or fffd_hits:
+    if conflict_hits:
+        print(f"★ 충돌 마커 {len(conflict_hits)}건 — **이대로 커밋되면 안 된다**:")
+        for path, lineno, line in conflict_hits:
+            print(f"  {path}:{lineno}  {line}")
+    if hanja_hits or fffd_hits or conflict_hits:
         return 1
-    print("한자 혼입 0건 · U+FFFD 0건")
+    print("한자 혼입 0건 · U+FFFD 0건 · 충돌 마커 0건")
     return 0
 
 

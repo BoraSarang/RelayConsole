@@ -508,5 +508,5 @@ struct LogLineParserBoundaryTests {
         #expect(p.tag == "dumpsys")
         #expect(p.pid == 25283)
         #expect(p.message == "Thread Pool max thread count is 0.")
-    }
+}
 }
