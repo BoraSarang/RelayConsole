@@ -764,3 +764,6 @@
 "wifi.reconnect.notReachable" = "%@ is unreachable — check that you are on the same Wi-Fi";
 "wifi.reconnect.failed" = "Reconnect failed — %@";
 "settings.wifi.section" = "Wi-Fi ADB";
+"droid.logs.exclude" = "Noisy tags";
+"droid.logs.excluded" = "excluded %d tags on device";
+"droid.logs.exclude.tip" = "Tags repeating the same line thousands of times per second are excluded on the device. Turn this off to show everything.";

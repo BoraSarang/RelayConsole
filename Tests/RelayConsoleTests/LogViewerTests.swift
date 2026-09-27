@@ -70,10 +70,49 @@ struct LogcatFilterTests {
         #expect(LogcatFilter.pattern(for: "a+b*c?", caseInsensitive: false) == #"a\+b\*c\?"#)
     }
 
-    @Test func caseInsensitivePrefixesInlineFlag() {
-        // logcat --regex 는 Java Pattern 이므로 (?i) 로 접두한다
-        #expect(LogcatFilter.pattern(for: "anr", caseInsensitive: true) == #"(?i)anr"#)
+    @Test func caseInsensitiveExpandsToCharacterClasses() {
+        // libutils RegExp 는 inline 플래그를 못 읽는다 — `(?i)` 는 쓰지 않는다 (2026-09-28 실측)
+        #expect(LogcatFilter.pattern(for: "anr", caseInsensitive: true) == "[aA][nN][rR]")
         #expect(LogcatFilter.pattern(for: "ANR", caseInsensitive: false) == "ANR")
+    }
+
+    /// 회귀 고정 — `(?i)` 로 되돌려 놓으면 **이 기기에서 adb 가 죽어 검색이 항상 0건** 이 된다
+    @Test func caseInsensitiveNeverUsesInlineFlags() {
+        for q in ["anr", "FATAL EXCEPTION", "has died", "dropbox", "a.b"] {
+            let p = LogcatFilter.pattern(for: q, caseInsensitive: true) ?? ""
+            #expect(!p.contains("(?i"), "inline 플래그는 이 기기의 logcat 이 못 읽는다: \(q) → \(p)")
+            #expect(!p.contains("(?s"), "inline 플래그는 이 기기의 logcat 이 못 읽는다: \(q) → \(p)")
+        }
+    }
+
+    /// 문자클래스 패턴이 **양쪽 대소문자를 실제로 찾는다** — ICU 로 확인(기기와 같은 의미인지는 별도 실측)
+    @Test func caseInsensitivePatternMatchesBothCases() throws {
+        let p = try #require(LogcatFilter.pattern(for: "anr in", caseInsensitive: true))
+        for line in [
+            "09-27 19:30:04.962  1235  1235 E ActivityManager: ANR in com.example.app",
+            "09-27 19:30:04.962  1235  1235 E ActivityManager: anr in com.example.app",
+        ] {
+            let hit = try NSRegularExpression(pattern: p)
+                .firstMatch(in: line, range: NSRange(line.startIndex..., in: line))
+            #expect(hit != nil, "\(p) 가 '\(line)' 를 찾아야 한다")
+        }
+        let miss = "09-27 19:30:04.962  1235  1235 E ActivityManager: nothing here"
+        let none = try NSRegularExpression(pattern: p)
+            .firstMatch(in: miss, range: NSRange(miss.startIndex..., in: miss))
+        #expect(none == nil, "일치하지 않을 때는 걸러야 한다")
+    }
+
+    /// 대소문자가 같은 글자는 리터럴로 남는다 (한글 검색이 깨지지 않아야 한다)
+    @Test func caselessScriptsStayLiteral() {
+        #expect(LogcatFilter.pattern(for: "가나다", caseInsensitive: true) == "가나다")
+        #expect(LogcatFilter.pattern(for: "안녕 123", caseInsensitive: true) == "안녕 123")
+    }
+
+    /// 글자별로 나눠 이스케이프해도 **메타문자는 그대로 이스케이프된다**
+    @Test func caseInsensitiveStillEscapesMetacharacters() {
+        #expect(LogcatFilter.pattern(for: "a.b", caseInsensitive: true) == #"[aA]\.[bB]"#)
+        #expect(LogcatFilter.pattern(for: "FATAL (Exception)", caseInsensitive: true)
+                == #"[fF][aA][tT][aA][lL] \([eE][xX][cC][eE][pP][tT][iI][oO][nN]\)"#)
     }
 
     /// 공백이 들어간 검색어가 한 인자로 전달되어야 한다 (셸 인용은 Process 배열 인자가 담당)
@@ -150,5 +189,79 @@ struct LogcatFilterTests {
                 .firstMatch(in: line, range: NSRange(line.startIndex..., in: line))
             #expect(hit != nil, "프리셋 '\(p)' → 패턴 '\(pattern)' 이 자기 자신을 찾아야 한다")
         }
+    }
+}
+
+/// 소음 태그 기기 측 제외 — 2026-09-28 · PLAN_log_cpu_noise_filter
+///
+/// 이 테스트의 존재 이유: 제외는 **adb 인자 한 칸**(`'<tag>:S'`)이라 앱 안에서 흐려진다.
+/// 인자가 잘못되면 **앱이 조용히 아무것도 안 보여주는** 상태가 된다 — [표시②] 위반이자 최악의 실패.
+struct LogcatNoiseFilterTests {
+    // MARK: - 필터식 조립
+
+    @Test func levelFilterComesFirstAndExclusionsFollow() {
+        let specs = LogcatFilter.filterSpecs(minLevel: "*:W", excludedTags: LogcatFilter.noisyTags)
+        #expect(specs.first == "*:W", "레벨 필터가 첫 칸이어야 인자가 한 줄로 읽힌다")
+        #expect(specs == ["*:W", "SemApTrafficData:S", "HeatmapThread:S"])
+    }
+
+    @Test func noExclusionLeavesLevelFilterAlone() {
+        // 토글을 끈 상태 = 종전 동작 그 자체 (회귀 0)
+        #expect(LogcatFilter.filterSpecs(minLevel: "*:D", excludedTags: []) == ["*:D"])
+    }
+
+    /// 실측으로 확인된 값을 코드에 고정한다 — 목록이 조용히 바뀌면 효과도 조용히 사라진다
+    @Test func noisyTagsMatchTheMeasuredOffenders() {
+        #expect(LogcatFilter.noisyTags == ["SemApTrafficData", "HeatmapThread"])
+        // 20초 전수 스캔: 282,655줄 중 SemAp 261,521(92.5%) · 서로 다른 메시지는 1종류
+        // (PLAN_log_cpu_noise_filter §1)
+    }
+
+    // MARK: - 명령을 망가뜨리는 값 방어
+
+    /// `*` 를 제외하면 **모든 로그가 사라진다.** 전부 조용히 — 체감상으로는 "기기 로그가 없네" 가 된다
+    @Test func wildcardTagIsNeverExcluded() {
+        #expect(LogcatFilter.safeTags(["*"]) == [])
+        #expect(LogcatFilter.filterSpecs(minLevel: "*:W", excludedTags: ["*"]) == ["*:W"])
+    }
+
+    /// 공백·콜론이 섞이면 필터식이 깨진다 — 조용히 버린다 (표시를 잃는 게 명령이 깨지는 것보다 낫다)
+    @Test func malformedTagsAreDropped() {
+        let bad = ["Sem Ap", "Tag:Extra", "a*b", "c,d", "  ", "  OK_tag  "]
+        #expect(LogcatFilter.safeTags(bad) == ["OK_tag"])
+    }
+
+    /// 비-ASCII 태그는 필터식 문법의 전제 밖이다 — **제외가 안 되는 것**이 실패 방향이다
+    @Test func nonAsciiTagsAreDropped() {
+        #expect(LogcatFilter.safeTags(["세미엽트래픽", "Tag_"]) == ["Tag_"])
+    }
+
+    /// 태그 이름이 필터식 문법과 충돌하지 않는다는 **가정** 자체를 고정한다
+    @Test func noisyTagsAreFilterSafe() {
+        #expect(LogcatFilter.safeTags(LogcatFilter.noisyTags) == LogcatFilter.noisyTags)
+    }
+
+    // MARK: - 제외가 무엇을 건드리지 않는가
+
+    /// 제외는 **로그 창의 실시간 스트림에만** 적용된다.
+    /// incident 덤프(`logcat -d`)와 키워드 스캔까지 얇아지면
+    /// "증거를 뽑아 보면 저게 보인다" 가 거짓말이 된다
+    @Test func incidentCaptureIsNotFiltered() {
+        let text = (try? String(contentsOf: Self.incidentURL, encoding: .utf8)) ?? ""
+        #expect(!text.isEmpty, "IncidentBundle.swift 를 못 읽었다 — 테스트가 조용히 통과하면 안 된다")
+        for raw in text.split(separator: "\n") {
+            let line = raw.trimmingCharacters(in: .whitespaces)
+            // 주석은 건너뛴다 — `logcat -T` 형식 설명(`HH:MM:SS.mmm`)에 `:S` 가 우연히 있다
+            guard !line.hasPrefix("//"), line.contains("logcat") else { continue }
+            #expect(!line.contains(":S"), "incident 캡처에 소음 제외가 새어 들어갔다: \(line)")
+        }
+    }
+
+    private static var incidentURL: URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()   // RelayConsoleTests
+            .deletingLastPathComponent()   // Tests
+            .deletingLastPathComponent()   // 저장소 루트
+            .appendingPathComponent("Sources/RelayConsole/Incident/IncidentBundle.swift")
     }
 }
