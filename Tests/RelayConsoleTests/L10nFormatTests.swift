@@ -90,7 +90,8 @@ struct L10nFormatTests {
             .deletingLastPathComponent()
     }
 
-    private static func stringsTable(_ lproj: String) throws -> [String: String] {
+    /// en/ko 문자열 표 — **다른 테스트도 재사용한다** (같은 파서를 두 번 쓰면 표가 갈라진다)
+    static func stringsTable(_ lproj: String) throws -> [String: String] {
         let url = root
             .appendingPathComponent("Sources/RelayConsole/Resources")
             .appendingPathComponent("\(lproj).lproj/Localizable.strings")

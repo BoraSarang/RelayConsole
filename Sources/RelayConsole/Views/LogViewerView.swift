@@ -80,14 +80,20 @@ enum LogcatFilter {
     /// - **범위가 좁다** — 로그 창의 실시간 스트림에만 적용된다.
     ///   `IncidentBundle` 캡처(`logcat -d`)와 `logcatKeywords` 스캔은 **전량 그대로**다.
     ///   "incident 를 뽑아 보면 저게 보인다" 는 사실이 유지된다
-    static let noisyTags: [String] = [
+    /// 기본 시드 — 계측으로 고른 3종 (사용자가 지우고 더할 수 있다)
+    ///
+    /// 2026-09-28 실측 (SM-S901N) 근거는 위 표와 같다. 이 목록은 **시드일 뿐이고,
+    /// 사용자가 푸터 배지를 눌러 태그마다 바꾼다** (PLAN_log_tag_picker §0).
+    static let defaultExcludedTags: [String] = [
         "SemApTrafficData",
         "HeatmapThread",
         "ThermalManagerService$ThermalHalWrapper",
     ]
 
-    /// 제외 토글 저장 키 — 기본 ON
-    static let excludeNoisyKey = "relay.logs.excludeNoisyTags"
+    /// 사용자 선택 목록 저장 키
+    static let excludedTagsKey = "relay.logs.excludedTags"
+    /// 종전 `Bool` 키 — 마이그레이션에서만 읽는다 (PLAN_log_tag_picker §2)
+    static let legacyExcludeNoisyKey = "relay.logs.excludeNoisyTags"
 
     /// 제외 태그 목록이 adb 인자로 안전하게 변환되는지 — **명령을 망가뜨릴 값은 조용히 버린다.**
     ///
@@ -121,6 +127,188 @@ enum LogcatFilter {
     /// "무엇이 걸린 것" 이 한 줄로 보여야 해서 고정한다.
     static func filterSpecs(minLevel: String, excludedTags: [String]) -> [String] {
         [minLevel] + safeTags(excludedTags).map { "\($0):S" }
+    }
+
+    // MARK: - 태그 집계 (2026-09-28 · PLAN_log_tag_picker)
+
+    /// `adb logcat -v time` 한 줄 — `09-28 02:03:02.326 W/dumpsys( 25283): 메시지`
+    struct ParsedLine: Equatable {
+        let level: String   // W · E · I · D …
+        let tag: String
+        let pid: Int?
+        let message: String
+    }
+
+    /// 한 줄에서 태그를 뽑는다 — **정규식 없이** 인덱스로 찾는다.
+    ///
+    /// 왜 정규식을 안 쓰나: 이 함수는 **들어오는 모든 줄**에서 호출된다
+    /// (최악 2.2만 줄/초). 정규식 컴파일·매칭 비용을 볼륨에 곱하면
+    /// **측정 대상인 CPU 를 늘리는 방향**이 된다.
+    ///
+    /// 구획선(`--------- beginning of main`)은 태그가 없으므로 `nil`.
+    ///
+    /// ## 모든 인덱스 이동은 경계를 먼저 본다 (2026-09-28 크래시)
+    ///
+    /// 첫 구현은 `line.index(after: close)` 를 무조건 불렀다 → **메시지가 빈 줄**
+    /// (`E/Tag( 1):` 처럼 `)` 가 마지막 글자)에서 트랩이 났다.
+    /// ```
+    /// RelayConsole-2026-09-28-024513.ips
+    ///   exception : EXC_BREAKPOINT · SIGTRAP
+    ///   frames    : _StringGuts.validateCharacterIndex ← String.index(after:)
+    ///               ← LogcatFilter.LineParser.parse ← LogcatStreamer.append
+    /// ```
+    /// 로그 줄은 **기기에서 오는 데이터**다 — 내 문법이 맞다고 가정할 수 없다.
+    /// 단위 테스트는 **내가 만든 정상 형식만** 넣어 이 결함을 통과시켰다.
+    enum LineParser {
+        /// 접두부만 본다 — 태그는 시각 필드 다음에 온다. 뒤를 볼 필요가 없다
+        static let scanLimit = 48
+
+        static func parse(_ line: String) -> ParsedLine? {
+            // ① `/` 앞에는 **반드시 한 글자**가 있어야 한다(레벨). 맨 앞 `/` 면 뒤로 갈 수 없다
+            guard let slash = line.firstIndex(of: "/"),
+                  slash > line.startIndex,
+                  slash < line.index(line.startIndex, offsetBy: min(scanLimit, line.count)),
+                  let open = line[slash...].firstIndex(of: "("),
+                  let close = line[line.index(after: open)...].firstIndex(of: ")"),
+                  open > line.index(after: slash)
+            else { return nil }
+
+            // ② 태그 앞의 마지막 글자가 레벨이다 (` W/` → W). 붙어 있지 않으면 형식이 아니다
+            let levelStart = line.index(before: slash)
+            let level = String(line[levelStart])
+            guard level.rangeOfCharacter(from: .uppercaseLetters) != nil else { return nil }
+
+            let tag = String(line[line.index(after: slash)..<open])
+            guard !tag.isEmpty, !tag.contains(" ") else { return nil }
+
+            let pidText = String(line[line.index(after: open)..<close])
+                .trimmingCharacters(in: .whitespaces)
+            return ParsedLine(
+                level: level,
+                tag: tag,
+                pid: Int(pidText),
+                message: message(of: line, after: close)
+            )
+        }
+
+        /// `)` 다음의 `": "` 를 건너뛴다 — **경계를 넘지 않는다**
+        ///
+        /// `)` 가 줄의 마지막 글자일 수 있다(`E/Tag( 1):`). 이때 메시지는 빈 문자열이고,
+        /// 무조건 `index(after:)` 를 부르면 트랩이다(위 크래시).
+        private static func message(of line: String, after close: String.Index) -> String {
+            var i = line.index(after: close)
+            var skipped = 0
+            while i < line.endIndex, skipped < 2, line[i] == ":" || line[i] == " " {
+                i = line.index(after: i)
+                skipped += 1
+            }
+            return i < line.endIndex ? String(line[i...]) : ""
+        }
+    }
+
+    /// 태그별 반복 집계 — "이 태그를 숨겨라" 의 입력이 되는 표
+    ///
+    /// ## 왜 순수 자료구조인가
+    ///
+    /// 스트리머·뷰·저장소를 한데 엮으면 **집계가 고장 났을 때 UI 탓인지 계산 탓인지 구분되지 않는다.**
+    /// 판단만 여기서 끝내고(`record` · `snapshot` · `setExcluded`) 나머지는 배선만 한다.
+    ///
+    /// ## 왜 "얼어붙음" 이 핵심인가 (PLAN_log_tag_picker §1-②)
+    ///
+    /// 제외는 **기기에서** 일어나므로 제외한 태그의 줄은 더 이상 도착하지 않는다.
+    /// 값을 버리면 사용자는 **자기가 뭘 숨겼는지 기억으로 되돌려야 한다.**
+    /// → 제외해도 **마지막 집계값을 유지**한다. 되돌리기가 정보가 된다.
+    struct TagStats {
+        /// 태그 1개의 집계
+        struct Entry: Equatable {
+            var count: Int = 0
+            /// 서로 다른 메시지 표본 (상한 `messageSampleLimit`)
+            var messages: Set<String> = []
+            /// 표본이 상한에 닿았는지 — 이때 "N종" 이 아니라 "N종 이상" 으로 말해야 한다
+            var messagesSaturated = false
+            /// 제외 중인가 — **집계값은 유지한 채 상태만 다르다**
+            var excluded = false
+        }
+
+        var entries: [String: Entry] = [:]
+        /// 집계한 총 줄 수 — 상한 도달 여부를 정직하게 알리기 위해 남긴다
+        private(set) var totalRecorded = 0
+        private(set) var capped = false
+
+        /// 상한은 **인스턴스 값**이다 — 테스트에서 수십만 줄을 채울 수는 없으므로
+        /// 스텁으로 줄인다. 상한이 상수가 되면 상한 동작을 검증할 방법이 사라진다.
+        var messageSampleLimit = TagStats.defaultMessageSampleLimit
+        var totalLimit = TagStats.defaultTotalLimit
+        var tagLimit = TagStats.defaultTagLimit
+
+        /// 표본 상한 — 넘으면 "N종" 이 아니라 "N종 이상" 으로 표기한다
+        static let defaultMessageSampleLimit = 5
+        /// 집계 총 줄 상한 — 제외를 꺼 둔 2.2만 줄/초 환경에서 집계가 비용이 되지 않도록
+        static let defaultTotalLimit = 200_000
+        /// 표에 남길 태그 수 — 버퍼가 수천 개로 불어나지 않게
+        static let defaultTagLimit = 60
+
+        mutating func record(_ line: ParsedLine) {
+            guard !capped else { return }
+            var e = entries[line.tag] ?? Entry()
+            e.count += 1
+            if e.messages.count < messageSampleLimit {
+                e.messages.insert(line.message)
+            } else if !e.messages.contains(line.message) {
+                e.messagesSaturated = true
+            }
+            entries[line.tag] = e
+            totalRecorded += 1
+            if totalRecorded >= totalLimit { capped = true }
+            // **매 줄마다 자르지 않는다.** 표가 가득 찬 순간부터 정렬·축출을 반복하면
+            // (실측: 태그가 수백 개 섞이는 구간에서) 줄마다 O(n log n) 이 붙고,
+            // 건수가 1인 새 태그가 동률에서 즉시 밀려나 **"조용해졌다가 다시 시끄러워지는"
+            // 태그를 영영 못 잡는다.** 상한의 2배까지 쌓였다 한 번만 자른다.
+            if entries.count > tagLimit * 2 { trimRareTags() }
+        }
+
+        /// 개수가 적은 태그를 지운다 — 표의 크기를 상한에 묶는다
+        private mutating func trimRareTags() {
+            let keep = entries
+                .sorted { $0.value.count > $1.value.count }
+                .prefix(tagLimit)
+                .map(\.key)
+            entries = entries.filter { keep.contains($0.key) }
+        }
+
+        /// 제외 상태를 반영한다 — **값은 그대로 두고 상태만 바꾼다**
+        mutating func setExcluded(_ tags: [String]) {
+            let set = Set(tags)
+            for (tag, var e) in entries {
+                e.excluded = set.contains(tag)
+                entries[tag] = e
+            }
+        }
+
+        /// 건수 내림차순 상위 N — **제외된 태그도 그대로 둔다.**
+        /// 기기에서 걸러 버린 태그는 더 이상 도착하지 않으므로, 감추면
+        /// "내가 뭘 숨겼는지" 를 기억으로 되돌려야 한다. (PLAN_log_tag_picker §1-②)
+        func snapshot(limit: Int = 8) -> [(tag: String, entry: Entry)] {
+            entries
+                .map { (tag: $0.key, entry: $0.value) }
+                .sorted { $0.entry.count > $1.entry.count }
+                .prefix(limit)
+                .map { $0 }
+        }
+
+        /// 태그가 몇 개나 집계됐나 (빈 상태와 "데이터 없음" 을 구분하기 위해)
+        var isEmpty: Bool { entries.isEmpty }
+    }
+
+    /// 팝오버가 태그 한 줄에 보여줄 문구 — **뷰는 이 함수만 호출한다**
+    ///
+    /// 문자열을 뷰 안에 두면 "N종" 과 "N종 이상" 의 구분 규칙이 테스트 밖에 놓인다.
+    /// 구분 규칙은 **정직성 규칙**이라(표본이 5개를 넘으면 "N" 이 아니라 "N 이상" 이다)
+    /// 반드시 테스트가 있어야 한다.
+    static func messageSummary(_ e: TagStats.Entry) -> (key: String, args: [CVarArg]) {
+        e.messagesSaturated
+            ? ("droid.logs.picker.msgs.more", [e.messages.count])
+            : ("droid.logs.picker.msgs", [e.messages.count])
     }
 
     /// adb `logcat --regex=<패턴>` 에 넘길 값.
@@ -272,16 +460,43 @@ final class LogcatStreamer: ObservableObject {
     @Published var query: String = ""
     /// 대소문자 무시
     @Published var caseInsensitive: Bool = false
-    /// 반복 소음 태그를 **기기에서** 제외 — 기본 ON (`E` 레벨 줄을 감추므로 배지로 항상 밝힌다)
+    /// 반복 소음 태그 — **사용자가 고른다** (기본 시드 3종)
     ///
-    /// `bool(forKey:)` 로 읽으면 **저장 전 값이 false** 가 되어 기본 ON 이 깨진다.
-    /// `WifiAdbLogic.autoModeKey` 와 같은 이유로 `object(forKey:)` + `?? true` 로 읽는다.
-    @Published var excludeNoisyTags: Bool {
-        didSet { UserDefaults.standard.set(excludeNoisyTags, forKey: LogcatFilter.excludeNoisyKey) }
-    }
+    /// 종전에는 `Bool` 하나("소음 태그 제외" 켜기/끄기)였다. 목록을 고를 수 없었기 때문이다
+    /// (PLAN_log_tag_picker §0). 이제 **배열**이며 푸터 배지를 눌러 태그마다 켜고 끈다.
+    ///
+    /// 읽을 때 `bool(forKey:)` 를 쓰면 **저장 전 값이 false** 가 되어 기본값이 깨진다.
+    /// `object(forKey:) as? [String]` 로 읽고, `nil`(저장 전)일 때만 시드를 넣는다.
+    @Published private(set) var excludedTags: [String] = []
 
     /// 지금 adb 에 실제로 적용된 제외 태그 — 배지와 tooltip 의 진실원천
     @Published private(set) var appliedExcludedTags: [String] = []
+    /// 태그별 반복 집계 — 배지 클릭 시 표를 그린다
+    @Published private(set) var tagStats = LogcatFilter.TagStats()
+
+    /// 태그 하나를 켜고 끈다 — 저장 후 스트림을 다시 띄운다
+    func toggleTag(_ tag: String) {
+        var next = excludedTags
+        if let idx = next.firstIndex(of: tag) {
+            next.remove(at: idx)
+        } else {
+            next.append(tag)
+        }
+        setExcludedTags(next)
+    }
+
+    /// 기본 시드로 되돌린다 (사용자가 지운 기본 태그를 되살린다)
+    func restoreDefaultExcludedTags() {
+        setExcludedTags(LogcatFilter.defaultExcludedTags)
+    }
+
+    /// 제외 목록을 저장한다 — **안전 필터를 통과한 것만** (명령을 망가뜨리는 값이 여기서 막힌다)
+    func setExcludedTags(_ tags: [String]) {
+        let safe = LogcatFilter.safeTags(tags)
+        UserDefaults.standard.set(safe, forKey: LogcatFilter.excludedTagsKey)
+        excludedTags = safe
+        tagStats.setExcluded(safe)
+    }
 
     /// `isLive` 판정용 틱 — 시간이 지나면 스스로 갱신되어야 "정지"를 감지한다
     @Published private var tick = Date()
@@ -310,7 +525,18 @@ final class LogcatStreamer: ObservableObject {
     static let searchDebounce: TimeInterval = 0.3
 
     private init() {
-        excludeNoisyTags = UserDefaults.standard.object(forKey: LogcatFilter.excludeNoisyKey) as? Bool ?? true
+        let defaults = UserDefaults.standard
+        if let stored = defaults.object(forKey: LogcatFilter.excludedTagsKey) as? [String] {
+            // 저장된 배열이 비어 있으면 그것이 **사용자의 선택**(아무것도 숨기지 않기)이다
+            excludedTags = LogcatFilter.safeTags(stored)
+        } else {
+            // 마이그레이션 (PLAN_log_tag_picker §2) — 종전 Bool 키를 존중한다.
+            // `false` 로 껐던 사용자는 "기본 시드도 원하지 않다" 고 말한 것이므로 빈 배열.
+            let legacyOff = (defaults.object(forKey: LogcatFilter.legacyExcludeNoisyKey) as? Bool) == false
+            excludedTags = legacyOff ? [] : LogcatFilter.defaultExcludedTags
+            defaults.set(excludedTags, forKey: LogcatFilter.excludedTagsKey)
+        }
+        tagStats.setExcluded(excludedTags)
     }
 
     // MARK: - 상태 판정 (LIVE 표시의 정직한 정의)
@@ -346,7 +572,12 @@ final class LogcatStreamer: ObservableObject {
 
     // MARK: - 수명 주기
 
-    func start(serial: String, adbPath: String?) {
+    /// 스트림을 다시 띄운다
+    ///
+    /// - Parameter resetStats: **true 면 태그 집계를 비운다** — 창을 *연* 시점에만 true.
+    ///   필터 변경(레벨·검색·제외 토글)으로 재기동할 때는 false 다.
+    ///   팝오버를 열어 태그를 켜는 순간 목록이 비어버리면 **사용자는 무엇을 고르는지 볼 수 없다.**
+    func start(serial: String, adbPath: String?, resetStats: Bool = false) {
         stop()
         guard let adb = adbPath, !serial.isEmpty else {
             lastError = ErrorCode.adbBinaryMissing.koMessage
@@ -359,6 +590,8 @@ final class LogcatStreamer: ObservableObject {
         totalLines = 0
         lastDataAt = nil
         tick = .now
+        if resetStats { tagStats = LogcatFilter.TagStats() }
+        tagStats.setExcluded(excludedTags)
 
         let proc = Process()
         proc.executableURL = URL(fileURLWithPath: adb)
@@ -373,7 +606,7 @@ final class LogcatStreamer: ObservableObject {
         // 반복 소음 태그는 **기기에서** 제외한다 (2026-09-28 실측).
         // 이 기기는 초당 1.3만 줄의 92.5% 가 `SemApTrafficData` 의 **동일한 한 줄**이었다.
         // 클라이언트에서 걸러도 파싱·디코드 비용은 이미 incurred 라 **전송량부터 줄여야 한다.**
-        let tags = excludeNoisyTags ? LogcatFilter.noisyTags : []
+        let tags = LogcatFilter.safeTags(excludedTags)
         appliedExcludedTags = tags
         var args = ["-s", serial, "logcat", "-v", "time"]
         args.append(contentsOf: LogcatFilter.filterSpecs(minLevel: minLevel.filterSpec, excludedTags: tags))
@@ -511,10 +744,17 @@ final class LogcatStreamer: ObservableObject {
 
     private func append(_ batch: [String]) {
         var next = lines
+        var stats = tagStats
         for text in batch {
             next.append(Line(id: nextID, text: text))
             nextID &+= 1
+            // 태그 집계는 **들어온 모든 줄**에서 — 로컬 검색 필터보다 앞에서 센다.
+            // (검색 중에도 "무엇이 시끄러운가" 는 변하지 않는다)
+            if let parsed = LogcatFilter.LineParser.parse(text) {
+                stats.record(parsed)
+            }
         }
+        if stats.entries != tagStats.entries { tagStats = stats }
         totalLines &+= batch.count
         lastDataAt = .now
         if next.count > maxLines {
@@ -573,6 +813,8 @@ struct LogViewerContent: View {
     var windowMode: Bool = false
 
     @State private var follow = true
+    /// 태그 선택 팝오버 — 배지를 눌러 연다
+    @State private var showingTagPicker = false
 
     private var serial: String { store.selectedSerial ?? "" }
     private var adbPath: String? { DeviceMonitor.adbPathNow() }
@@ -647,7 +889,8 @@ struct LogViewerContent: View {
 
     private func restart(_ s: String) {
         guard !s.isEmpty else { streamer.stop(); return }
-        streamer.start(serial: s, adbPath: adbPath)
+        // 창을 **열었을 때만** 집계를 초기화한다 (필터 변경 재기동은 유지 — PLAN_log_tag_picker §1-③)
+        streamer.start(serial: s, adbPath: adbPath, resetStats: true)
     }
 
     // MARK: - 검색 (PLAN_log_search)
@@ -826,16 +1069,6 @@ struct LogViewerContent: View {
                 .toggleStyle(.checkbox)
                 .font(OPFont.body(11))
 
-            // 소음 태그 제외 — `E` 레벨 줄을 기기에서 거르므로 **무엇이 걸렸는지 반드시 밝힌다** [표시②]
-            // 이 기기는 `SemApTrafficData` 의 동일 줄이 초당 1.3만 회 → 로그 창 CPU 102%
-            Toggle(L10n.string("droid.logs.exclude"), isOn: $streamer.excludeNoisyTags)
-                .toggleStyle(.checkbox)
-                .font(OPFont.body(11))
-                .help(excludeTip)
-                .onChange(of: streamer.excludeNoisyTags) { _, _ in
-                    streamer.start(serial: serial, adbPath: adbPath)
-                }
-
             Spacer()
             // "어디서 거르는가" 를 숨기지 않는다 — adb 측 필터는 **기기에서** 걸러온 결과다
             // (필터 중에는 그 이전 구간이 되돌아오지 않는다)
@@ -844,18 +1077,145 @@ struct LogViewerContent: View {
                 .foregroundStyle(streamer.appliedPattern == nil ? OPColor.inkDim : OPColor.cta)
                 .lineLimit(1)
                 .truncationMode(.middle)
-            // 제외가 걸리고 있으면 **몇 개를 기기에서 뺐는지** — 개수만 말해도 "아무것도 안 보였구나" 와
-            // "기기에서 걸렸다" 를 구분된다. 끈 상태(0개)에서는 배지를 내보내지 않는다 = 아무것도 안 숨겼다
-            if !streamer.appliedExcludedTags.isEmpty {
-                Text(L10n.format("droid.logs.excluded", streamer.appliedExcludedTags.count))
-                    .font(OPFont.number(10))
-                    .foregroundStyle(OPColor.cta)
-                    .lineLimit(1)
-                    .fixedSize()          // 옆 라벨이 줄어들어도 배지는 잘리지 않는다
-                    .help(excludeTip)
+
+            // **배지를 버튼으로** — "몇 개를 뺐는가" 를 넘어 **무엇을 뺄지 고르게** 한다.
+            // 제외는 기기에서 일어나므로 태그를 켜도 이 자리(배지)가 유일한 안내가 된다 [표시②]
+            Button {
+                showingTagPicker = true
+            } label: {
+                HStack(spacing: 4) {
+                    Text(L10n.format("droid.logs.excluded", streamer.appliedExcludedTags.count))
+                        .font(OPFont.number(10))
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(.system(size: 7, weight: .semibold))
+                }
+                .foregroundStyle(streamer.appliedExcludedTags.isEmpty ? OPColor.inkDim : OPColor.cta)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 3)
+                .background(OPColor.card, in: Capsule())
+                .overlay(Capsule().stroke(
+                    streamer.appliedExcludedTags.isEmpty ? OPColor.border : OPColor.cta.opacity(0.5),
+                    lineWidth: 1))
+            }
+            .buttonStyle(.plain)
+            .help(excludeTip)
+            .accessibilityLabel(L10n.format("droid.logs.excluded", streamer.appliedExcludedTags.count))
+            .popover(isPresented: $showingTagPicker, arrowEdge: .bottom) {
+                LogTagPickerView(
+                    stats: streamer.tagStats,
+                    excluded: streamer.excludedTags,
+                    onToggle: { tag in
+                        streamer.toggleTag(tag)
+                        // 집계는 유지한다 — 태그를 켜고 끄는 동안 목록이 비면 무엇을 고르는지 안 보인다
+                        streamer.start(serial: serial, adbPath: adbPath)
+                    },
+                    onRestoreDefaults: {
+                        streamer.restoreDefaultExcludedTags()
+                        streamer.start(serial: serial, adbPath: adbPath)
+                    }
+                )
             }
         }
         .padding(OPSpace.sm)
+    }
+}
+
+/// 태그 선택 팝오버 — "이 태그를 숨겨라" 를 **사용자에게** 돌려준다
+///
+/// 종전에는 목록을 코드가 정했다. 계측 근거는 문서에 남겼지만 **선택은 없었고**,
+/// 그만큼 [표시②] 는 AI 의 판단에 의존했다 (PLAN_log_tag_picker §0).
+///
+/// **제외된 태그도 목록에 남긴다** — 집계는 얼어붙은 채로 보여준다.
+/// 기기에서 걸러 버린 태그는 더 이상 도착하지 않으므로, 표시하지 않으면
+/// 사용자는 **자기가 뭘 숨겼는지 기억으로 되돌려야 한다.**
+struct LogTagPickerView: View {
+    let stats: LogcatFilter.TagStats
+    let excluded: [String]
+    let onToggle: (String) -> Void
+    let onRestoreDefaults: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text(L10n.string("droid.logs.picker.title"))
+                    .font(OPFont.body(11))
+                    .foregroundStyle(OPColor.ink)
+                Spacer()
+                // 집계의 기준을 밝힌다 — "전체" 가 아니라 **이 창을 연 뒤**다 [표시②]
+                Text(L10n.string("droid.logs.picker.scope"))
+                    .font(OPFont.number(9))
+                    .foregroundStyle(OPColor.inkDim)
+            }
+
+            if stats.isEmpty {
+                // 0건이라고 쓰지 않는다 — "아직 모른다" 와 "없다" 는 다르다
+                Text(L10n.string("droid.logs.picker.empty"))
+                    .font(OPFont.body(11))
+                    .foregroundStyle(OPColor.inkDim)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                VStack(alignment: .leading, spacing: 2) {
+                    ForEach(stats.snapshot(), id: \.tag) { row in
+                        rowView(row)
+                    }
+                }
+                if stats.capped {
+                    // 상한에 닿으면 조용히 멈추지 않는다
+                    Text(L10n.format("droid.logs.picker.capped", stats.totalRecorded))
+                        .font(OPFont.number(9))
+                        .foregroundStyle(OPColor.warn)
+                }
+            }
+
+            Divider().overlay(OPColor.border)
+            HStack {
+                Button(L10n.string("droid.logs.picker.restore")) { onRestoreDefaults() }
+                    .buttonStyle(.plain)
+                    .font(OPFont.body(10))
+                    .foregroundStyle(OPColor.cta)
+                Spacer()
+                Text(L10n.format("droid.logs.picker.count", excluded.count))
+                    .font(OPFont.number(9))
+                    .foregroundStyle(OPColor.inkDim)
+            }
+        }
+        .padding(12)
+        .frame(width: 296)
+        .background(OPColor.popBG)
+        .preferredColorScheme(ThemeManager.shared.mode.preferred)
+    }
+
+    private func rowView(_ row: (tag: String, entry: LogcatFilter.TagStats.Entry)) -> some View {
+        let isExcluded = row.entry.excluded
+        return Button {
+            onToggle(row.tag)
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: isExcluded ? "checkmark.square.fill" : "square")
+                    .font(.system(size: 11))
+                    .foregroundStyle(isExcluded ? OPColor.cta : OPColor.inkDim)
+                Text(row.tag)
+                    .font(OPFont.number(11))
+                    .foregroundStyle(isExcluded ? OPColor.inkDim : OPColor.ink)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                Spacer()
+                // 몇 종류의 메시지가 있었는지 — 반복도 판단의 근거를 사용자에게 준다
+                Text(L10n.format(LogcatFilter.messageSummary(row.entry).key,
+                                 LogcatFilter.messageSummary(row.entry).args))
+                    .font(OPFont.number(9))
+                    .foregroundStyle(OPColor.inkDim)
+                Text(L10n.format("droid.logs.picker.countN", row.entry.count))
+                    .font(OPFont.number(10))
+                    .foregroundStyle(OPColor.inkDim)
+            }
+            .padding(.vertical, 2)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(isExcluded
+              ? L10n.format("droid.logs.picker.row.excluded", row.entry.count)
+              : L10n.format("droid.logs.picker.row.visible", row.entry.count))
     }
 }
 

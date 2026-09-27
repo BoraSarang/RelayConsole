@@ -200,7 +200,7 @@ struct LogcatNoiseFilterTests {
     // MARK: - 필터식 조립
 
     @Test func levelFilterComesFirstAndExclusionsFollow() {
-        let specs = LogcatFilter.filterSpecs(minLevel: "*:W", excludedTags: LogcatFilter.noisyTags)
+        let specs = LogcatFilter.filterSpecs(minLevel: "*:W", excludedTags: LogcatFilter.defaultExcludedTags)
         #expect(specs.first == "*:W", "레벨 필터가 첫 칸이어야 인자가 한 줄로 읽힌다")
         #expect(specs == [
             "*:W",
@@ -217,7 +217,7 @@ struct LogcatNoiseFilterTests {
 
     /// 실측으로 확인된 값을 코드에 고정한다 — 목록이 조용히 바뀌면 효과도 조용히 사라진다
     @Test func noisyTagsMatchTheMeasuredOffenders() {
-        #expect(LogcatFilter.noisyTags == [
+        #expect(LogcatFilter.defaultExcludedTags == [
             "SemApTrafficData",
             "HeatmapThread",
             "ThermalManagerService$ThermalHalWrapper",
@@ -254,7 +254,7 @@ struct LogcatNoiseFilterTests {
 
     /// 태그 이름이 필터식 문법과 충돌하지 않는다는 **가정** 자체를 고정한다
     @Test func noisyTagsAreFilterSafe() {
-        #expect(LogcatFilter.safeTags(LogcatFilter.noisyTags) == LogcatFilter.noisyTags)
+        #expect(LogcatFilter.safeTags(LogcatFilter.defaultExcludedTags) == LogcatFilter.defaultExcludedTags)
     }
 
     // MARK: - 제외가 무엇을 건드리지 않는가
@@ -279,5 +279,234 @@ struct LogcatNoiseFilterTests {
             .deletingLastPathComponent()   // Tests
             .deletingLastPathComponent()   // 저장소 루트
             .appendingPathComponent("Sources/RelayConsole/Incident/IncidentBundle.swift")
+    }
+}
+
+/// 태그 선택 UI 의 판단 로직 — 2026-09-28 · PLAN_log_tag_picker
+///
+/// 이 테스트들이 지키는 것: **"사용자가 고른 것"이 기기 명령에 정확히 반영되고,
+/// 숨긴 태그의 기록이 사라지지 않는 것.** 후자가 없으면 사용자는 기억으로 되돌린다.
+struct LogTagPickerTests {
+    // MARK: - 한 줄 파싱
+
+    @Test func parsesTimeFormatLine() throws {
+        let line = "09-28 02:03:02.326 W/dumpsys( 25283): Thread Pool max thread count is 0."
+        let p = try #require(LogcatFilter.LineParser.parse(line))
+        #expect(p.level == "W")
+        #expect(p.tag == "dumpsys")
+        #expect(p.pid == 25283)
+        #expect(p.message == "Thread Pool max thread count is 0.")
+    }
+
+    @Test func parsesTagWithDollarAndLongName() throws {
+        let line = "09-28 02:03:02.326 E/ThermalManagerService$ThermalHalWrapper( 2395): no cooling device"
+        let p = try #require(LogcatFilter.LineParser.parse(line))
+        #expect(p.tag == "ThermalManagerService$ThermalHalWrapper")
+        #expect(p.level == "E")
+    }
+
+    /// 파싱 실패는 `nil` — **집계에서 조용히 빠진다.** 구획선·형식 외 줄이 여기 걸린다
+    @Test func nonLogLinesAreNotCounted() {
+        for line in [
+            "--------- beginning of main",
+            "",
+            "메시지 처럼 생긴 줄",
+            "09-28 02:03:02.326 W/ ( 1): 태그가 비었다",
+        ] {
+            #expect(LogcatFilter.LineParser.parse(line) == nil, "집계되면 안 되는 줄: \(line)")
+        }
+    }
+
+    /// pid 를 못 읽어도 **태그가 유효하면 집계한다** — 줄은 실제로 존재하므로 세는 게 맞다.
+    /// 조용히 버리면 "이 기기가 뱉는 태그 목록" 이 틀어진다
+    @Test func unknownPidStillCounts() throws {
+        let p = try #require(LogcatFilter.LineParser.parse("09-28 02:03:02.326 E/SomeTag(  ): 메시지"))
+        #expect(p.tag == "SomeTag")
+        #expect(p.pid == nil)
+    }
+
+    /// 태그에 공백이 들어갈 수는 없다(형식이 깨진다) — 그런 줄은 세지 않는다
+    @Test func tagWithSpaceIsRejected() {
+        #expect(LogcatFilter.LineParser.parse("09-28 02:03:02.326 E/Bad Tag( 1): x") == nil)
+    }
+
+    // MARK: - 집계
+
+    @Test func countsLinesPerTag() {
+        var s = LogcatFilter.TagStats()
+        for _ in 0..<3 {
+            s.record(.init(level: "E", tag: "Noisy", pid: 1, message: "Empty traffic data"))
+        }
+        s.record(.init(level: "W", tag: "Other", pid: 2, message: "hello"))
+        #expect(s.entries["Noisy"]?.count == 3)
+        #expect(s.entries["Other"]?.count == 1)
+        #expect(s.entries["Noisy"]?.messages == ["Empty traffic data"])
+        #expect(s.entries["Noisy"]?.messagesSaturated == false, "1종류일 뿐인데 '이상' 이면 거짓말이다")
+        #expect(s.isEmpty == false)
+    }
+
+    /// 표본 상한에 닿으면 **"N종" 이 아니라 "N종 이상"** 이다
+    @Test func messageSaturationIsMarked() {
+        var s = LogcatFilter.TagStats()
+        s.messageSampleLimit = 2
+        for i in 0..<4 {
+            s.record(.init(level: "E", tag: "T", pid: 1, message: "m\(i)"))
+        }
+        #expect(s.entries["T"]?.messages.count == 2)
+        #expect(s.entries["T"]?.messagesSaturated == true)
+    }
+
+    /// 총 줄 상한 — **조용히 멈추지 않는다** (`capped` 로 알린다)
+    @Test func totalLimitStopsAndFlags() {
+        var s = LogcatFilter.TagStats()
+        s.totalLimit = 3
+        for _ in 0..<5 { s.record(.init(level: "E", tag: "T", pid: 1, message: "m")) }
+        #expect(s.capped == true)
+        #expect(s.totalRecorded == 3, "상한 이후에는 더 세지 않는다")
+    }
+
+    /// 표 크기 상한 — 드문 태그가 밀어내되, **조용해졌다 다시 시끄러지는 태그는 살아남아야 한다**
+    ///
+    /// 이 테스트가 처음 실패했다: 상한을 "꽉 찼으면 매 줄 자르기"로 구현해서,
+    /// 건수가 1인 새 태그가 동률에서 즉시 축출되며 `loud` 가 표에 **한 번도 남지 못했다.**
+    /// → 자르는 시점을 상한의 2배로 옮기고, 자르는 순간의 비용도 줄였다
+    @Test func loudTagSurvivesTagLimit() {
+        var s = LogcatFilter.TagStats()
+        s.tagLimit = 2
+        for i in 0..<5 { s.record(.init(level: "E", tag: "rare\(i)", pid: 1, message: "m")) }
+        for _ in 0..<10 { s.record(.init(level: "E", tag: "loud", pid: 1, message: "m")) }
+        #expect(s.entries["loud"]?.count == 10, "제일 시끄러운 태그는 살아남아야 한다")
+        #expect(s.entries.count <= 4, "상한의 2배까지만 쌓인다")
+    }
+
+    // MARK: - 제외 상태 = 얼어붙음 (핵심)
+
+    /// 제외해도 **집계값을 버리지 않는다** — 기기에서 걸린 태그는 더 이상 안 오니까
+    @Test func exclusionFreezesInsteadOfDropping() throws {
+        var s = LogcatFilter.TagStats()
+        for _ in 0..<7 {
+            s.record(.init(level: "E", tag: "Noisy", pid: 1, message: "Empty traffic data"))
+        }
+        s.setExcluded(["Noisy"])
+        let row = try #require(s.snapshot().first { $0.tag == "Noisy" })
+        #expect(row.entry.excluded == true)
+        #expect(row.entry.count == 7, "숨긴 태그의 건수는 마지막 값으로 남는다")
+        #expect(s.snapshot().contains { $0.tag == "Noisy" }, "숨긴 태그를 목록에서 지우면 되돌릴 수 없다")
+
+        s.setExcluded([])
+        let back = try #require(s.snapshot().first { $0.tag == "Noisy" })
+        #expect(back.entry.excluded == false)
+        #expect(back.entry.count == 7, "해제해도 집계는 이어진다")
+    }
+
+    @Test func snapshotIsSortedByCountDesc() {
+        var s = LogcatFilter.TagStats()
+        for (tag, n) in [("a", 2), ("b", 9), ("c", 5)] {
+            for _ in 0..<n { s.record(.init(level: "W", tag: tag, pid: 1, message: "m")) }
+        }
+        #expect(s.snapshot().map(\.tag) == ["b", "c", "a"])
+        #expect(s.snapshot(limit: 2).map(\.tag) == ["b", "c"])
+    }
+
+    @Test func freshStatsAreEmptyNotZero() {
+        // "0건" 과 "아직 모른다" 를 구분한다 — [표시②]
+        #expect(LogcatFilter.TagStats().isEmpty == true)
+    }
+}
+
+/// 팝오버가 **표시하는 문구**의 규칙 — 2026-09-28
+///
+/// 문자열이 뷰 안에 있으면 규칙이 테스트 밖에 놓인다. 표본이 5개를 넘었을 때
+/// "N종" 이라고 말하면 **거짓말**이므로 — 표가 아니라 **규칙**을 고정한다.
+struct LogTagPickerTextTests {
+    @Test func underCapSaysExactCount() {
+        var e = LogcatFilter.TagStats.Entry()
+        e.messages = ["a", "b", "c"]
+        let t = LogcatFilter.messageSummary(e)
+        #expect(t.key == "droid.logs.picker.msgs")
+        #expect(t.args.count == 1)
+    }
+
+    @Test func saturatedSaysAtLeast() {
+        var e = LogcatFilter.TagStats.Entry()
+        e.messages = ["a", "b", "c", "d", "e"]
+        e.messagesSaturated = true
+        let t = LogcatFilter.messageSummary(e)
+        #expect(t.key == "droid.logs.picker.msgs.more", "5개를 다 봤으면 'N종' 이 아니라 'N종 이상'")
+        #expect(t.args.count == 1)
+    }
+
+    /// 두 키 모두 en/ko 에 있어야 하고, 변환자가 `%d` 여야 한다 (L10nFormatTests 가 1:1 을 보지만
+    /// "두 키가 같은 형식인가" 는 여기서 고정한다)
+    @Test func bothMessageKeysExistInBothLocales() throws {
+        for key in ["droid.logs.picker.msgs", "droid.logs.picker.msgs.more"] {
+            for loc in ["en", "ko"] {
+                let text = try #require(
+                    try L10nFormatTests.stringsTable(loc)[key],
+                    "\(loc) 에 \(key) 없음")
+                #expect(text.contains("%d"), "\(key) 는 건수를 넣어야 한다: \(text)")
+            }
+        }
+    }
+}
+
+/// 파서의 **경계** — 2026-09-28 크래시 회귀 고정
+///
+/// `RelayConsole-2026-09-28-024513.ips` · `EXC_BREAKPOINT` / `SIGTRAP`
+/// `_StringGuts.validateCharacterIndex` ← `String.index(after:)` ← `LineParser.parse`
+/// 원인: **메시지가 빈 줄**에서 `)` 가 마지막 글자인데 무조건 `index(after:)` 를 불렀다.
+///
+/// 단위 테스트가 이 결함을 통과시킨 이유는 **내가 만든 정상 형식만** 넣었기 때문이다.
+struct LogLineParserBoundaryTests {
+    /// 실제로 크래시를 부른 형태
+    @Test func emptyMessageAtEndOfLineDoesNotTrap() throws {
+        for line in [
+            "09-28 02:45:13.000 E/Tag( 1)",
+            "09-28 02:45:13.000 E/Tag( 1):",
+        ] {
+            let p = try #require(LogcatFilter.LineParser.parse(line), "파싱되어야 한다: \(line)")
+            #expect(p.tag == "Tag")
+            #expect(p.message.isEmpty, "빈 메시지는 빈 문자열 — 트랩이 아니다: \(line)")
+        }
+    }
+
+    /// `/` 로 시작하는 줄 — `index(before:)` 가 범위를 벗어난다
+    @Test func leadingSlashDoesNotTrap() {
+        for line in ["/", "//", "/(1)", "/Tag(1)"] {
+            #expect(LogcatFilter.LineParser.parse(line) == nil, "세어지면 안 되는 줄: \(line)")
+        }
+    }
+
+    /// 괄호가 닫히지 않은 줄, 아주 짧은 줄, 구분자만 있는 줄
+    @Test func malformedShortLinesAreRejectedNotTrapped() {
+        for line in [
+            "W/Tag(", "W/Tag", "W/", "W", ")", "(", "E/Tag(1", "ㅏ/ㅓ(1): x", " ", "  ",
+        ] {
+            #expect(LogcatFilter.LineParser.parse(line) == nil, "세어지면 안 되는 줄: '\(line)'")
+        }
+    }
+
+    /// 임의 문자열을 넣어도 **죽지 않는지** — 기기가 보낸 데이터는 내 문법을 지킨다는 보장이 없다
+    @Test func arbitraryStringsNeverTrap() {
+        let samples = [
+            "", " ", "\n", "\t", "/", "()", ") (", "E/(1):", "E/Tag():", "E/Tag( ):x",
+            "12345678", "ㅁㅂㅅ", "E/Tag(9999999999999999999999): x",
+            "E/" + String(repeating: "T", count: 200) + "(1): x",
+            "---------- beginning of kernel",
+            "W/Tag(1):" + String(repeating: "가", count: 500),
+        ]
+        for line in samples {
+            _ = LogcatFilter.LineParser.parse(line)   // 죽지 않으면 통과
+        }
+    }
+
+    /// 구획선 처리를 죽이지 않았는지 — 실제 형식은 계속 잡힌다
+    @Test func normalLinesStillParse() throws {
+        let p = try #require(LogcatFilter.LineParser.parse(
+            "09-28 02:03:02.326 W/dumpsys( 25283): Thread Pool max thread count is 0."))
+        #expect(p.level == "W")
+        #expect(p.tag == "dumpsys")
+        #expect(p.pid == 25283)
+        #expect(p.message == "Thread Pool max thread count is 0.")
     }
 }
