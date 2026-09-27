@@ -764,3 +764,6 @@
 "wifi.reconnect.notReachable" = "%@ 에 닿지 않습니다 — 같은 Wi-Fi 에 있는지 확인하세요";
 "wifi.reconnect.failed" = "재연결 실패 — %@";
 "settings.wifi.section" = "Wi-Fi ADB";
+"droid.logs.exclude" = "노이즈 태그 제외";
+"droid.logs.excluded" = "기기에서 %d개 태그 제외";
+"droid.logs.exclude.tip" = "같은 줄을 초당 수천 번 반복하는 태그를 기기에서 제외합니다. 끄면 전부 표시됩니다.";

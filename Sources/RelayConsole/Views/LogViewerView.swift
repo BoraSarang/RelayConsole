@@ -19,7 +19,7 @@ import Combine
 ///    사람이 읽을 수 있는 정보가 전혀 없었다. 기본을 `W 이상`으로 좁히고 필터를 제공한다.
 ///
 /// 배수는 `readabilityHandler`(전용 백그라운드 스레드)로 통일했다. 종전의
-/// `NSFileHandleDataAvailable` 알림 펌프는 알림 注册/재무장 사이의 경쟁이 있었고,
+/// `NSFileHandleDataAvailable` 알림 펌프는 알림 등록/재무장 사이의 경쟁이 있었고,
 /// 알림 기반이므로 런루프 상태에 예민했다.
 /// 로그 검색 — 판단 로직을 **순수 함수**로 분리한다 (2026-09-27 · PLAN_log_search)
 ///
@@ -30,17 +30,141 @@ enum LogcatFilter {
     /// (2026-09-27: `thermal`·`accelerometer_rotation` 같은 상태 변화는 실패 신호가 아니다)
     static let presets: [String] = ["ANR", "FATAL EXCEPTION", "has died", "dropbox"]
 
+    // MARK: - 소음 태그 기기 측 제외 (2026-09-28 · PLAN_log_cpu_noise_filter)
+
+    /// 같은 메시지를 반복해 사람이 읽을 수 없게 만드는 태그.
+    ///
+    /// ## 왜 이 목록이 있는가 (2026-09-28 실측 · SM-S901N Android 15)
+    ///
+    /// `logcat -v time '*:W'` 20초 채집 = **282,655줄** 중:
+    ///
+    /// | 태그 | 건수 | 비중 | 서로 다른 메시지 |
+    /// |---|---:|---:|---:|
+    /// | `SemApTrafficData` | 261,521 | **92.5%** | **1** (`Empty traffic data`) |
+    /// | `HeatmapThread` | 1,178 | 0.4% | 3 (모두 `/efs/FactoryApp` 공장 EFS 접근 실패) |
+    /// | `ThermalManagerService$ThermalHalWrapper` | 2,874 | 1.5% | 2 (HAL 조회 실패 — 냉각기·임계값 없음) |
+    ///
+    /// 로그 창을 열면 **CPU 99%** 로 올라간다(부하가 100배 변하므로 "40%" 라는 수치는 믿지 않는다).
+    /// 1종류 메시지를 초당 1.3만 번 파싱·렌더하는 것이 비용의 대부분이다.
+    /// 더구나 원인은 **개방 순간의 링 버퍼 덤프**였다(231,982줄 → 16,763줄, 7.2%).
+    ///
+    /// ## 왜 `ActivityManager` 는 넣지 않았나 (판단을 넘기는 이유를 남긴다)
+    ///
+    /// 3종 제외 후 잔여 13,811줄 중 `ActivityManager` 가 **40.4%** 이고 그중 5,247줄(94%)이
+    /// **하나의 동일 메시지**다:
+    /// `Foreground service started from background … : service com.nisargjhaveri.netspeed/.IndicatorService`
+    /// 반복도로 보면 소음이지만, **이 줄은 범인 앱 이름을 담고 있다**(버퍼에 앱 7종).
+    /// `Empty traffic data` 와 달리 "무엇이 이 기기를 망가뜨리고 있는가" 를 말해주는 신호이므로
+    /// **기본 제외하지 않는다.** 사용자가 원하면 고를 수 있게 하는 것이 정답이며 — 태그 선택 UI 는 별도 과목.
+    /// `PermissionService`(590줄·1종류) · `DeviceStorageMonitorService`(332줄·2종류) 도
+    /// 순수 반복이지만, 이미 7% 로 줄인 잔여량에서 **6.7%** 뿐이라 뺄 이유가 부족하다
+    /// (숨기는 `E` 줄이 늘면 배지가 아니라 **침묵** 이 된다).
+    ///
+    /// ## 왜 `--regex` 로 안 됐나 (실측 3-way 비교)
+    ///
+    /// | 방법 | 결과 |
+    /// |---|---|
+    /// | `--regex='^(?!.*Tag)'` (부정 순방위) | ❌ **제외 안 됨** — SemAp 3,918건 잔존 |
+    /// | 기기 측 `logcat … \| grep -v -E 'Tag'` | ✅ 되지만 quoting·추가 프로세스 위험 |
+    /// | **필터식 `'<tag>:S'`** | ✅ **제외됨 0건** — adb 인자 한 칸, 위험 0 |
+    ///
+    /// `--regex` 는 ECMAScript 엔진이 아니라 libutils `RegExp` 라 **부정 순방위를 지원하지 않고
+    /// 컴파일 실패도 오류 없이 통과시킨다.** "수가 줄었다" 는 계측이 아니라 allowlist(검색어) 효과였고,
+    /// 검색이 잘 먹는 이유도 "`--regex` 가 강력해서" 가 아니라 **양의 일치만 쓰기 때문**이다.
+    ///
+    /// ## 이 목록이 정직한 이유
+    ///
+    /// - 제외 대상은 **"비율이 아니라 반복도"** 로 골랐다. `ActivityManager`(2.1%, 44종류)처럼
+    ///   사람이 읽을 정보가 있는 것은 남긴다
+    /// - **숨기지 않는다** — 푸터 배지로 항상 개수를, tooltip 으로 태그명을 밝힌다. 1클릭으로 해제 가능
+    /// - **범위가 좁다** — 로그 창의 실시간 스트림에만 적용된다.
+    ///   `IncidentBundle` 캡처(`logcat -d`)와 `logcatKeywords` 스캔은 **전량 그대로**다.
+    ///   "incident 를 뽑아 보면 저게 보인다" 는 사실이 유지된다
+    static let noisyTags: [String] = [
+        "SemApTrafficData",
+        "HeatmapThread",
+        "ThermalManagerService$ThermalHalWrapper",
+    ]
+
+    /// 제외 토글 저장 키 — 기본 ON
+    static let excludeNoisyKey = "relay.logs.excludeNoisyTags"
+
+    /// 제외 태그 목록이 adb 인자로 안전하게 변환되는지 — **명령을 망가뜨릴 값은 조용히 버린다.**
+    ///
+    /// 두 가지 실수를 막는다:
+    /// - `*` 를 넣으면 **모든 로그가 사라진다**(전부 조용히 — [표시②] 위반)
+    /// - 공백·`:` 등이 섞이면 필터식이 깨진다
+    ///
+    /// **비-ASCII 와 `$` 를 빼는 이유가 다르다.**
+    /// 비-ASCII 태그는 필터식 문법의 전제 밖이라 애초에 검증되지 않았다.
+    /// `$` 는 **검증된** 태그에 실제로 들어 있다(`ThermalManagerService$ThermalHalWrapper`).
+    /// 2026-09-28 실기 — 버퍼 2,874줄이 이 태그였고 `'<tag>:S'` 를 걸었더니 **0줄**,
+    /// 다른 태그는 194,910 → 185,309(딱 2,874줄만 감소)로 과잉 제외도 없었다.
+    /// 즉 `$` 는 필터식 문법에서 특별하지 않다. **검증된 걸로 막으면 된다가 아니라,
+    /// 검증된 예외는 예외로 들여다보다** — 이 성질이 문서에 없었다면 이 태그가 조용히 사라졌다.
+    static func safeTags(_ tags: [String]) -> [String] {
+        let allowed = CharacterSet(charactersIn:
+            "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_$")
+        var out: [String] = []
+        for tag in tags {
+            let t = tag.trimmingCharacters(in: .whitespaces)
+            guard !t.isEmpty, t != "*" else { continue }
+            guard t.unicodeScalars.allSatisfy({ allowed.contains($0) }) else { continue }
+            out.append(t)
+        }
+        return out
+    }
+
+    /// adb `logcat` 에 넘길 필터식 목록 — **레벨 필터가 항상 첫 칸**, 그 뒤에 `<tag>:S` 를 붙인다.
+    ///
+    /// 순서는 logd 필터 평가에 영향을 주지 않지만, 인자를 사람이 읽을 때
+    /// "무엇이 걸린 것" 이 한 줄로 보여야 해서 고정한다.
+    static func filterSpecs(minLevel: String, excludedTags: [String]) -> [String] {
+        [minLevel] + safeTags(excludedTags).map { "\($0):S" }
+    }
+
     /// adb `logcat --regex=<패턴>` 에 넘길 값.
     ///
     /// - 빈 검색어 → `nil` (= 기기 필터 없음)
     /// - **메타문자는 반드시 이스케이프한다** — 계약은 "단순 문자열" 이므로 `a.b` 가 `a 임의 문자 b` 로
     ///   해석돼서는 안 된다. 잘못 이스케이프를 빼면 사용자가 검색을 못 하는 것보다 나쁘다.
-    /// - 대소문자 무시 → `(?i)` 접두. logcat `--regex` 는 Java `Pattern` 이므로 지원된다.
+    /// - 대소문자 무시 → **글자별 문자클래스**(`anr` → `[aA][nN][rR]`), `(?i)` 접두를 쓰지 않는다
+    ///
+    /// ## 왜 `(?i)` 를 쓰지 않는가 (2026-09-28 실측 — 주석이 틀렸던 것을 계측이 잡았다)
+    ///
+    /// 종전 주석은 "logcat `--regex` 는 Java `Pattern` 이므로 지원된다" 라 적었으나 **거짓**이었다.
+    /// 이 기기(SM-S901N · Android 15) 실측:
+    /// ```
+    /// adb shell logcat -v time '*:W' 'SemApTrafficData:S' --regex=(?i)anr
+    ///   → 0줄 · stderr: regex_error was thrown in -fno-exceptions mode
+    /// ```
+    /// logcat 의 정규식 엔진은 ECMAScript/Java 이 아니라 **libutils `RegExp`** 다
+    /// (부정 순방위 미지원이 같은 근거로 증명됐다 — `noisyTags` 주석 참고).
+    /// inline 플래그를 못 읽으면 **adb 가 곧 죽고** 대소문자 무시 검색은 항상 0건이 된다.
+    ///
+    /// 문자클래스 `[aA]` 는 **어떤 엔진에서도** 뜻이 통한다.
+    /// 원인이 stderr 로 노출되므로 ([표시②] 덕분에 사용자는 "기기 오류" 라 이해했다) 이지만,
+    /// **검색이 안 먹는다** 는 사실 자체가 그대로 남는다.
     static func pattern(for query: String, caseInsensitive: Bool) -> String? {
         let trimmed = query.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return nil }
-        let escaped = NSRegularExpression.escapedPattern(for: trimmed)
-        return caseInsensitive ? "(?i)\(escaped)" : escaped
+        guard caseInsensitive else { return NSRegularExpression.escapedPattern(for: trimmed) }
+        return trimmed.map(characterClass).joined()
+    }
+
+    /// 한 글자를 "자기 자신 + 대소문자 반대 형태" 문자클래스로 바꾼다.
+    ///
+    /// - 대소문자가 같은 글자(한글·숫자·기호) → 이스케이프한 리터럴 그대로
+    /// - 대소문자가 다른 글자 → `[aA]`
+    /// - 대소문자 변환이 **여러 글자**로 늘어나는 경우(`ß` → `SS`)는 그대로 넣는다 —
+    ///   약간 넓게 잡는 것이 **좁게 잡는 것보다 안전하다**(기기가 더 많은 줄을 보내고
+    ///   2차 로컬 필터가 줄인다. 반대면 사용자가 못 찾는다)
+    static func characterClass(_ ch: Character) -> String {
+        let lower = ch.lowercased()
+        let escapedLower = NSRegularExpression.escapedPattern(for: lower)
+        let upper = ch.uppercased()
+        guard lower != upper else { return escapedLower }
+        return "[\(escapedLower)\(NSRegularExpression.escapedPattern(for: upper))]"
     }
 
     /// 링 버퍼 2차 필터 — adb 가 아직 따라오기 전(디바운스 중)에도 즉시 반응한다.
@@ -53,7 +177,7 @@ enum LogcatFilter {
             : text.contains(trimmed)
     }
 
-    /// 무数据显示 이유 — [표시②] 실제 상태를 구분해 그대로 말한다.
+    /// 무관한 값을 보여주는 이유 — [표시②] 실제 상태를 구분해 그대로 말한다.
     ///
     /// 핵심 구분: **검색 중인데 0줄** 과 **데이터가 안 옴** 은 다른 상태다.
     /// 검색 중인데 "데이터 없음" 이라 하면 기기가 멀쩡한데 사용자는 오류라고 읽는다.
@@ -148,6 +272,16 @@ final class LogcatStreamer: ObservableObject {
     @Published var query: String = ""
     /// 대소문자 무시
     @Published var caseInsensitive: Bool = false
+    /// 반복 소음 태그를 **기기에서** 제외 — 기본 ON (`E` 레벨 줄을 감추므로 배지로 항상 밝힌다)
+    ///
+    /// `bool(forKey:)` 로 읽으면 **저장 전 값이 false** 가 되어 기본 ON 이 깨진다.
+    /// `WifiAdbLogic.autoModeKey` 와 같은 이유로 `object(forKey:)` + `?? true` 로 읽는다.
+    @Published var excludeNoisyTags: Bool {
+        didSet { UserDefaults.standard.set(excludeNoisyTags, forKey: LogcatFilter.excludeNoisyKey) }
+    }
+
+    /// 지금 adb 에 실제로 적용된 제외 태그 — 배지와 tooltip 의 진실원천
+    @Published private(set) var appliedExcludedTags: [String] = []
 
     /// `isLive` 판정용 틱 — 시간이 지나면 스스로 갱신되어야 "정지"를 감지한다
     @Published private var tick = Date()
@@ -175,7 +309,9 @@ final class LogcatStreamer: ObservableObject {
     /// 검색어 입력 → adb 재기동 대기 — 사람 속도(초당 3~5자)면 한 번만 재기동된다
     static let searchDebounce: TimeInterval = 0.3
 
-    private init() {}
+    private init() {
+        excludeNoisyTags = UserDefaults.standard.object(forKey: LogcatFilter.excludeNoisyKey) as? Bool ?? true
+    }
 
     // MARK: - 상태 판정 (LIVE 표시의 정직한 정의)
 
@@ -234,7 +370,13 @@ final class LogcatStreamer: ObservableObject {
         // Process 배열 인자라 셸 인용 위험이 없다(패턴에 공백이 있어도 한 인자로 전달된다).
         let pattern = LogcatFilter.pattern(for: query, caseInsensitive: caseInsensitive)
         appliedPattern = pattern
-        var args = ["-s", serial, "logcat", "-v", "time", minLevel.filterSpec]
+        // 반복 소음 태그는 **기기에서** 제외한다 (2026-09-28 실측).
+        // 이 기기는 초당 1.3만 줄의 92.5% 가 `SemApTrafficData` 의 **동일한 한 줄**이었다.
+        // 클라이언트에서 걸러도 파싱·디코드 비용은 이미 incurred 라 **전송량부터 줄여야 한다.**
+        let tags = excludeNoisyTags ? LogcatFilter.noisyTags : []
+        appliedExcludedTags = tags
+        var args = ["-s", serial, "logcat", "-v", "time"]
+        args.append(contentsOf: LogcatFilter.filterSpecs(minLevel: minLevel.filterSpec, excludedTags: tags))
         if let pattern { args.append("--regex=\(pattern)") }
         proc.arguments = args
         let out = Pipe()
@@ -320,6 +462,7 @@ final class LogcatStreamer: ObservableObject {
         isRunning = false
         lastDataAt = nil
         appliedPattern = nil
+        appliedExcludedTags = []
         filterCache = nil
     }
 
@@ -639,6 +782,14 @@ struct LogViewerContent: View {
         return L10n.format("droid.logs.ring.filtered", streamer.query)
     }
 
+    /// 반복 소음 태그 tooltip — **제외하는 대상의 이름까지 밝힌다** (개수만 말하면 무엇이 사라졌는지 모른다)
+    private var excludeTip: String {
+        let base = L10n.string("droid.logs.exclude.tip")
+        let tags = streamer.appliedExcludedTags
+        guard !tags.isEmpty else { return base }
+        return base + "  ·  " + tags.joined(separator: ", ")
+    }
+
     private var footer: some View {        HStack(spacing: 12) {
             Button {
                 if streamer.isRunning {
@@ -675,6 +826,16 @@ struct LogViewerContent: View {
                 .toggleStyle(.checkbox)
                 .font(OPFont.body(11))
 
+            // 소음 태그 제외 — `E` 레벨 줄을 기기에서 거르므로 **무엇이 걸렸는지 반드시 밝힌다** [표시②]
+            // 이 기기는 `SemApTrafficData` 의 동일 줄이 초당 1.3만 회 → 로그 창 CPU 102%
+            Toggle(L10n.string("droid.logs.exclude"), isOn: $streamer.excludeNoisyTags)
+                .toggleStyle(.checkbox)
+                .font(OPFont.body(11))
+                .help(excludeTip)
+                .onChange(of: streamer.excludeNoisyTags) { _, _ in
+                    streamer.start(serial: serial, adbPath: adbPath)
+                }
+
             Spacer()
             // "어디서 거르는가" 를 숨기지 않는다 — adb 측 필터는 **기기에서** 걸러온 결과다
             // (필터 중에는 그 이전 구간이 되돌아오지 않는다)
@@ -683,6 +844,16 @@ struct LogViewerContent: View {
                 .foregroundStyle(streamer.appliedPattern == nil ? OPColor.inkDim : OPColor.cta)
                 .lineLimit(1)
                 .truncationMode(.middle)
+            // 제외가 걸리고 있으면 **몇 개를 기기에서 뺐는지** — 개수만 말해도 "아무것도 안 보였구나" 와
+            // "기기에서 걸렸다" 를 구분된다. 끈 상태(0개)에서는 배지를 내보내지 않는다 = 아무것도 안 숨겼다
+            if !streamer.appliedExcludedTags.isEmpty {
+                Text(L10n.format("droid.logs.excluded", streamer.appliedExcludedTags.count))
+                    .font(OPFont.number(10))
+                    .foregroundStyle(OPColor.cta)
+                    .lineLimit(1)
+                    .fixedSize()          // 옆 라벨이 줄어들어도 배지는 잘리지 않는다
+                    .help(excludeTip)
+            }
         }
         .padding(OPSpace.sm)
     }
