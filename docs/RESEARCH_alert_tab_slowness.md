@@ -101,7 +101,7 @@ static func dayKey(for date: Date, calendar: Calendar = .current) -> String {
                     ↓
        ┌────────────┬────────────┬────────────┐
     InsightsView  AlertsView  DroidDashboard  MenuBarPopover  … 14개
-       6.2ms      0.15ms       0.12ms        (팝오버는 常驻)
+       6.2ms      0.15ms       0.12ms        (팝오버는 상시 마운트)
                     ↓
        SwiftUI 는 **열려있는(마운트된) 탭만** 재평가 — 콘솔 창이 1개라
        현재 탭 + 상시 살아있는 메뉴바 팝오버가 같이 맞는다
@@ -157,7 +157,7 @@ static func dayKey(for date: Date, calendar: Calendar = .current) -> String {
   최소한 `recentWatchEvents` 를 **별도 ObservableObject** 로 뺀다
 - **위험**: 높음. 14개 View 의 의존성을 전부 다시 매핑해야 한다
 - **판단**: **하지 않는다.** 제안 1+2 로 체감 문제를 먼저 없앤 뒤, 측정 후 다시 판단한다.
-  (09-26 세션에서도 `ConsoleStore` 57속성 분리过一次 **보류** 로 남긴 전례가 있다)
+  (09-26 세션에서도 `ConsoleStore` 57속성 분리한 적이 있어 **보류** 로 남긴 전례가 있다)
 
 ### 하지 않는 것
 - **이벤트 상한을 500 → 100 으로 줄이기** — 되돌릴 수 없다. 데이터가 사라진다. **금지**
@@ -247,3 +247,71 @@ static func dayKey(for date: Date, calendar: Calendar = .current) -> String {
   SwiftUI 자체 재평가 비용은 남는다. 완전 제거는 `@Published` 세분화(제안 3)이며 **보류**
 - **체감 재확인** — Instruments 없이 코드만으로 프레임 정지 시간은 확정 불가.
   실제 앱에서 알림을 몰아넣고 체감 확인이 최종 증거다
+
+---
+
+## 8. 제안 3 재개 — 계측 후 축소판으로 착수 (2026-09-28)
+
+> §3 제안 3 은 **"제안 1·2 후 체감 재확인 → 통과하면 미착수"** 를 착수 조건으로 걸었다.
+> 그 측정이 끝났고 결과는 **"14개 재매핑은 불필요"** 였다. → `PLAN_published_split_recentevents_relayconsole`
+
+### 8-1. 계측 (추측 아님 — 임시 계측 테스트 실행 후 삭제, 트리 clean)
+
+격리 프로브로 Swift `@Published` 시맨틱을 분리 검증 + 실제 `ConsoleStore.shared` 를 관찰:
+
+| 항목 | 실측 |
+|---|---|
+| 실제 경로 `ingestWatch` | **2회** — `recentWatchEvents` 1 + `pushEvent` 1 · **§2 서술과 일치 ✅** |
+| `assignOnce` (복사 → 1회 대입) | 링 미만 **1** · 링 초과 **1** → **항상 1** |
+| `mutateInPlace` (in-place 변이) | 링 미만 **1** · 링 초과 **2** ⚠️ |
+| `recentEvents` 1회 대입 | 1 |
+| 무변화 시 자발 신호 | **0** (잡음 없음) |
+
+### 8-2. 결론 ① — 14개 View 재매핑은 필요 없었다
+
+중복 신호의 원인은 `recentEvents` 다. 필드별 읽는 곳을 전수 계측하면:
+
+| 필드 | 읽는 View | 분리 비용 |
+|---|---|---|
+| `recentWatchEvents` | AlertsView · MenuBarPopoverView · DroidDashboardView · InsightsView (+ 위젯 sync) | **14개** |
+| `recentEvents` | **MenuBarPopoverView 하나 (3곳)** | **1개** |
+
+→ **원인 필드만 자르면 된다.** `recentEvents` 를 `RecentEventsStore` 로 분리해
+View 1개만 재매핑. `pushEvent` 시그니처를 유지해 `DeviceMonitor` 는 무변경.
+`recentWatchEvents` 는 **여전히 분리하지 않는다** — 14개 재매핑의 근거가 없다.
+
+### 8-3. 결론 ② — 제안 1·2 가 이미 문제를 없앴다
+
+중복 2번째 신호의 계산 비용:
+- `InsightsView` — 캐시 키 9종에 `recentEvents` 가 **없다** → 신호가 와도 **캐시 적중, 재계산 0ms**
+- 나머지 View body — §1-1 실측 기준 `AlertsView 0.151 + Dashboard 0.122 + serials 0.162 ≈ 0.43ms`
+  = 프레임 예산(16.7ms)의 **2.6%**
+
+→ 착수 전 시점(§7)의 "6.4ms" 는 이미 사라졌다. **14개 재매핑은 없어진 문제를 향한 작업**이었다.
+
+### 8-4. 결론 ③ — 부수 발견: 디버그 경로가 실제보다 나빴다
+
+`debugIngestWatchQuietly`(DebugPanel 알림 주입 경로)가 in-place 변이라:
+
+- 링이 가득 차면 **3회** (실제 2회 대비 +1)
+- §2 가 경고한 **"상한 501건 중간 상태"가 이 경로에서는 관측된다** — 실제 경로는 1회 대입으로 회피 중
+
+→ **체감 재확인 도구가 실제보다 나쁜 경로를 재고 있었다.** DebugPanel 로 알림을 몰아넣으면
+실대와 다른 원인을 측정하게 된다. 실제 경로와 **같은 1회 대입 패턴**으로 통일했다.
+
+### 8-5. 왜 신호 횟수를 테스트로 고정했나
+
+중복 신호는 **되돌아오기 쉽다.** 필드 하나를 다시 `ConsoleStore` 에 붙이는 것만으로
+모든 View 가 다시 무효화되고, **눈에 보이지 않는다**(느려지는 게 아니라 원인이 사라진 것처럼 보인다).
+계측 없이는 못 잡는다 → `PublishedSignalTests` 5건으로 고정.
+
+**결정성 근거**: `ConsoleStore.init` 이 `private` 라 격리 인스턴스가 없다(컴파일 에러로 확인).
+`shared` 의 병렬 실행 잡음을 걱정할 수 있지만, **신호를 세는 구간이 동기 + `@MainActor` 이면**
+MainActor 는 조정하지 않으므로 `await` 이 없는 그 구간에 다른 태스크가 끼어들 수 없다.
+→ `swift-testing` 병렬 실행과 무관하게 결정적.
+
+### 8-6. 남은 것
+- **육안** — 알림 유입 시 다른 탭(설정·사이트)이 깜빡이지 않는지
+- **`recentWatchEvents` 분리는 계속 하지 않는다** — 계측 근거 없음. 되돌아오면 위 표를 먼저 볼 것
+- **`MenuBarPopoverView` 15초 타이머 비용** — §6 이 남긴 미측정 항목. 이번 범위 밖
+

@@ -2,11 +2,7 @@
 > 작업 추적 — bd 연동 (이슈 prefix: RelayConsole)
 
 ## 진행 중 (bd ready)
-- [ ] **`@Published` 20개 세분화** (2026-09-27 알림 지연 조사 제안 3) — 알림 1건이 여전히
-  `objectWillChange` **2회**를 발생시킨다. 계산 비용은 캐시로 없앴지만 SwiftUI 재평가 비용은 남는다.
-  최소한 `recentWatchEvents` 를 별도 ObservableObject 로 분리해 **이벤트 변경이 기기/설정 탭까지
-  무효화하지 않게** 한다. **14개 View 의존성 재매핑 필요** — 09-26 보류 전례 있음.
-  **제안 1·2 적용 후 체감 재확인 → 통과하면 미착수**
+- (0건)
 
 ## 다음 스프린트 (리서치 §8 잔여 · 미착수)
 - [ ] **★ 1순위 — 로그 창 CPU (개방 시 약 40%)** — 착수 첫 단계는 **계측, 추측 금지**
@@ -34,12 +30,31 @@
 - [ ] **Apple 크래시 리포트 수집 (반드시 해야 할 작업)** — `idevicecrashreport`로 iOS `.ips` crash/ANR를 IncidentBundle에 첨부. 기기 확보 시 1순위. Trust USB + `idevicecrashreport -u <udid> copy` 패턴. Android `logcat -b crash`/dropbox 대응 Apple 쪽 원재료 — **기기 확보 전 구현 불가, 반드시 기억할 것**
 
 ## 완료 (2026-09-28)
-- [x] **브랜치 정리 + PR #52** — 13커밋(`706daa0`~`71e3fad`)이 브랜치명 불일치 상태로 로컬에 방치돼 있었음
-  - `fix/logcat-honesty-incident-cap` → **`feat/macos-2026-09-27`** 로 rename (main 직접 push 는 [HARD] 금지였으므로
-    push 는 feature 브랜치로만) → **PR #52** 생성 · MERGEABLE · 13커밋 / 33파일 / +3855 −198
-  - 축별로 쪼개지 않고 1개 PR 로 올림 — 594개 테스트가 서로 묶여 있고 rewrite 시 검증 재수행 필요.
-    갈라낼 필요는 없다고 판단
-  - 상세: https://github.com/BoraSarang/RelayConsole/pull/52 · `.agent/session-2026-09-28-macos.md`
+- [x] **T-2026-09-28-1 `recentEvents` 분리 — 알림 유입 시 `objectWillChange` 2회 → 1회** —
+  `PLAN_published_split_recentevents_relayconsole` · 테스트 5건 신규 · **594 → 599**
+  - **착수 전에 계측했다** — TODO 는 "14개 View 재매핑"을 적었지만 **그건 필요 없었다.**
+    계측 두 가지가 계획을 바꿨다:
+    ① 중복 신호의 원인은 `recentEvents` 인데, 이 필드를 읽는 View 는 **MenuBarPopoverView 하나(3곳)**.
+    `recentWatchEvents` 를 빼야 하는 14개 재매핑은 **원인 필드가 아니었다**
+    ② 제안 1·2(dayKey 정수화 + 캐시)가 **2번째 신호의 비용을 이미 0으로 만들어 뒀다.**
+    인사이트 캐시 키 9종에 `recentEvents` 가 없어 `pushEvent` 는 캐시 적중(0ms)이다
+  - **실측** (격리 프로브 + 실제 `ConsoleStore.shared`): 실제 경로 2회 ✅ 문서 일치 ·
+    `assignOnce` 항상 1회 · **`mutateInPlace` 는 링이 가득 차면 2회**
+  - **부수 발견 — 디버그 경로가 실제보다 나빴다** — `debugIngestWatchQuietly`(DebugPanel 알림 주입)가
+    in-place 변이라 **실제 2회 vs 디버그 3회**였고, `ConsoleStore:912-914` 가 경고한
+    **"상한 501건 중간 상태"도 이 경로에서 관측**됐다. → 체감 검증 도구가 나쁜 경로를 재고 있었다.
+    실제 `ingestWatch` 와 **같은 1회 대입 패턴**으로 통일
+  - **변경 범위** — `RecentEventsStore` 신규 · `ConsoleStore` 4곳 · `MenuBarPopoverView` 3곳.
+    `pushEvent` 시그니처 유지 → `DeviceMonitor` **무변경**. `recentWatchEvents` 는 **분리하지 않음**
+  - **신호 횟수를 테스트로 고정** (`PublishedSignalTests` 5건) — 중복 신호는 필드 하나를 다시
+    붙이는 것만으로 **조용히 되돌아오고 눈에 보이지 않는다.** 계측 없이 못 잡는다
+  - **검증 [HARD]**: `swift test` **495 + 104 = 599 / 0 failed** (착수 시 594, +5) ·
+    `./scripts/build-macos.sh debug` **EXIT=0** (번들 재생성·재서명·앱 재시작) ·
+    L10n **766키 en/ko 1:1** · U+FFFD 0건
+  - **육안 대기**: 알림 유입 시 다른 탭(설정·사이트)이 깜빡이지 않는지
+  - **브랜치 정리 + PR #52** — 13커밋이 브랜치명 불일치 상태로 로컬에 방치돼 있었음
+    (`fix/logcat-honesty-incident-cap` → `feat/macos-2026-09-27` rename, main 직접 push 는 [HARD] 금지).
+    https://github.com/BoraSarang/RelayConsole/pull/52 · 커밋 8c97ed6
 
 ## 완료 (2026-09-27)
 - [x] **TCP 유실 시 자동 재연결** — `PLAN_wifi_reconnect_relayconsole` · 테스트 8건 신규
