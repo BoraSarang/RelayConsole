@@ -21,6 +21,41 @@ import Combine
 /// 배수는 `readabilityHandler`(전용 백그라운드 스레드)로 통일했다. 종전의
 /// `NSFileHandleDataAvailable` 알림 펌프는 알림 注册/재무장 사이의 경쟁이 있었고,
 /// 알림 기반이므로 런루프 상태에 예민했다.
+/// 기동 중인 프로세스 **한 개의 자리** — 종료 알림이 "이전 프로세스" 것인지 판별한다.
+///
+/// ## 왜 이 클래스가 있나 (2026-09-27 실측)
+///
+/// `Process.terminationHandler` 는 `Task { @MainActor }` 로 **나중에** 실행된다.
+/// 필터를 바꿀 때마다 일어나는 실제 순서는 이렇다:
+///
+/// ```
+/// stop()  → 이전 프로세스 terminate() → 이전 프로세스 죽음 → 슬롯 비움
+///                                                          └─ 이 알림이 메인액터에 **큐잉**
+/// start() → 새 프로세스 run() → 슬롯에 새 프로세스 adopt
+///                       ... 잠시 후 ...
+///                  이전 프로세스 알림 도착 → 슬롯을 비워버림
+/// ```
+///
+/// 마지막 한 줄이 범인이다. **살아 있는 새 프로세스의 참조가 사라져** 다음 필터 전환 때
+/// `stop()` 이 그 프로세스를 죽이지 못하고, adb logcat 가 전환 횟수만큼 **누적된다**.
+/// 실측: 필터 4회 전환 → adb logcat 4개가 동시 생존(규칙은 최대 1개).
+/// 셸에서 `kill -TERM` 은 즉시 죽으므로 adb 문제는 아니었다 — 참조가 사라진 것이 원인.
+final class LogcatProcessSlot {
+    /// 현재 기동 중(또는 기동 대상)인 프로세스
+    private(set) var current: Process?
+
+    func adopt(_ process: Process?) { current = process }
+
+    /// 종료 알림을 반영한다 — **내가 지금 들고 있는 그 프로세스** 일 때만 정리하고 `true`.
+    /// 이전 프로세스의 알림이면 아무것도 하지 않고 `false` (아래가 그 회귀 테스트의 대상).
+    @discardableResult
+    func release(_ dead: Process) -> Bool {
+        guard current === dead else { return false }
+        current = nil
+        return true
+    }
+}
+
 @MainActor
 final class LogcatStreamer: ObservableObject {
     static let shared = LogcatStreamer()
@@ -53,7 +88,8 @@ final class LogcatStreamer: ObservableObject {
     /// `isLive` 판정용 틱 — 시간이 지나면 스스로 갱신되어야 "정지"를 감지한다
     @Published private var tick = Date()
 
-    private var process: Process?
+    /// 기동 중인 프로세스의 자리 — 종료 알림이 **이전 프로세스** 것인지 판별한다
+    private let slot = LogcatProcessSlot()
     private var tickTask: Task<Void, Never>?
     private let stderrTail = StderrTail()
     private var nextID: UInt64 = 0
@@ -120,8 +156,12 @@ final class LogcatStreamer: ObservableObject {
             let reason = Self.terminationReason(proc)
             Task { @MainActor in
                 guard let self else { return }
+                // 알림은 `Task { @MainActor }` 로 **나중에** 도착한다. 그 사이에 필터를 바꿔
+                // 새 프로세스가 이미 자리를 잡았을 수 있다 — 이때 이전 프로세스 알림이
+                // 자리를 비우면 **살아 있는 새 프로세스의 참조가 사라져** adb 가 누적된다.
+                // `release` 는 내가 아직 들고 있는 그 프로세스일 때만 정리한다 (2026-09-27 실측).
+                guard self.slot.release(proc) else { return }
                 self.isRunning = false
-                self.process = nil
                 // 프로세스가 죽은 것은 실패다 — 원인을 남긴다 ([표시②])
                 if proc.terminationStatus != 0 || proc.terminationReason == .uncaughtSignal {
                     self.lastError = reason
@@ -135,7 +175,7 @@ final class LogcatStreamer: ObservableObject {
             lastError = ErrorCode.adbConnectFailed.koMessage
             return
         }
-        process = proc
+        slot.adopt(proc)
         isRunning = true
 
         // ① stderr **배수** — 이것이 교착의 근본 해법이다. 64KB 버퍼가 차면
@@ -182,10 +222,10 @@ final class LogcatStreamer: ObservableObject {
     func stop() {
         tickTask?.cancel()
         tickTask = nil
-        if let p = process, p.isRunning {
+        if let p = slot.current, p.isRunning {
             p.terminate()
         }
-        process = nil
+        slot.adopt(nil)
         isRunning = false
         lastDataAt = nil
     }
