@@ -293,3 +293,94 @@ struct WifiStaleTests {
         #expect(WifiAdbLogic.physicalIdProp == "ro.boot.serialno")
     }
 }
+
+/// TCP 유실 시 자동 재연결 — 2026-09-27 · `PLAN_wifi_reconnect`
+///
+/// ## 왜 필요한가
+/// "USB 를 뽑아도 IP 로 계속" 의 목표는 **IP 가 바뀌어도** 성립해야 한다.
+/// 핫스팟 이동·Wi-Fi 재연결로 IP 가 바뀌면 기존 엔드포인트가 죽고,
+/// USB 를 다시 꽂지 않으면 아무도 새 IP 로 붙지 않는다.
+///
+/// ## 최대 위험 = 무한 재시도
+/// 폴링이 5초 주기이므로 쿨다운이 없으면 **분당 12회** connect 시도 = adb 폭주 + 배터리.
+/// 그래서 쿨다운 판정을 테스트로 고정한다.
+struct WifiReconnectTests {
+    private let t0 = Date(timeIntervalSince1970: 1_700_000_000)
+
+    @Test func networkLossTriggersReconnect() {
+        #expect(WifiAdbLogic.shouldReconnect(
+            autoEnabled: true, lostSerial: "10.38.120.211:5555",
+            now: t0, lastAttemptAt: nil, failures: 0
+        ))
+    }
+
+    @Test func usbLossDoesNotTriggerThisPath() {
+        // USB 유실은 `autoEnableIfEnabled`(tcpip) 경로가 처리한다 — 여기로 오면 안 된다
+        #expect(!WifiAdbLogic.shouldReconnect(
+            autoEnabled: true, lostSerial: "R5CT215F4QK",
+            now: t0, lastAttemptAt: nil, failures: 0
+        ))
+    }
+
+    @Test func autoModeOffBlocksReconnect() {
+        // 사용자가 Wi-Fi ADB 를 끄고 싶은데 계속 붙으면 안 된다
+        #expect(!WifiAdbLogic.shouldReconnect(
+            autoEnabled: false, lostSerial: "10.38.120.211:5555",
+            now: t0, lastAttemptAt: nil, failures: 0
+        ))
+    }
+
+    /// ★ 핵심 — 쿨다운 안 지났으면 즉시 재시도 금지
+    @Test func cooldownBlocksImmediateRetry() {
+        let last = t0.addingTimeInterval(-10)  // 10초 전
+        #expect(!WifiAdbLogic.shouldReconnect(
+            autoEnabled: true, lostSerial: "10.38.120.211:5555",
+            now: t0, lastAttemptAt: last, failures: 0
+        ))
+    }
+
+    @Test func cooldownElapsedAllowsRetry() {
+        let last = t0.addingTimeInterval(-61)  // 61초 전 (기본 쿨다운 60초)
+        #expect(WifiAdbLogic.shouldReconnect(
+            autoEnabled: true, lostSerial: "10.38.120.211:5555",
+            now: t0, lastAttemptAt: last, failures: 0
+        ))
+    }
+
+    /// 연속 실패 시 간격이 2배씩 늘어나야 한다 — 확실히 없는 기기면 오래 시도하지 않는다
+    @Test func delayGrowsExponentiallyAndIsCapped() {
+        #expect(WifiAdbLogic.reconnectDelay(failures: 0) == 60)
+        #expect(WifiAdbLogic.reconnectDelay(failures: 1) == 120)
+        #expect(WifiAdbLogic.reconnectDelay(failures: 2) == 240)
+        // 상한 — 15분을 넘지 않는다
+        #expect(WifiAdbLogic.reconnectDelay(failures: 10) == 900)
+        #expect(WifiAdbLogic.reconnectDelay(failures: 100) == 900)
+        #expect(WifiAdbLogic.reconnectDelay(failures: -5) == 60, "음수 실패 횟수는 0 으로")
+    }
+
+    /// 실패가 쌓이면 쿨다운이 늘어나 **재시도 빈도도 떨어져야** 한다
+    @Test func manyFailuresReduceRetryFrequency() {
+        let last = t0.addingTimeInterval(-300)  // 5분 전
+        // 연속 2회 실패 → 지연 240초 → 5분 지났으니 재시도 가능
+        #expect(WifiAdbLogic.shouldReconnect(
+            autoEnabled: true, lostSerial: "10.38.120.211:5555",
+            now: t0, lastAttemptAt: last, failures: 2
+        ))
+        // 연속 10회 실패 → 지연 900초(15분) → 5분 지났으니 **아직 금지**
+        #expect(!WifiAdbLogic.shouldReconnect(
+            autoEnabled: true, lostSerial: "10.38.120.211:5555",
+            now: t0, lastAttemptAt: last, failures: 10
+        ))
+    }
+
+    /// 15분 지났다면 어떤 실패 횟수라도 다시 시도한다 — 영구 포기하면 안 된다
+    @Test func longElapsedAlwaysRetries() {
+        let last = t0.addingTimeInterval(-1000)  // 약 16분 전
+        for failures in [0, 1, 5, 20] {
+            #expect(WifiAdbLogic.shouldReconnect(
+                autoEnabled: true, lostSerial: "10.38.120.211:5555",
+                now: t0, lastAttemptAt: last, failures: failures
+            ), "실패 \(failures)회여도 15분 지나면 재시도해야 한다")
+        }
+    }
+}

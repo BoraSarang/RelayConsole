@@ -112,8 +112,45 @@ enum WifiAdbLogic {
         }.sorted()
     }
 
-    /// 자동 모드 설정 키 — 기본 ON (사용자 확정). 값이 바뀌면 사용자 설정이 조용히 초기화된다.
     static let autoModeKey = "relay.wifiAutoTcpip"
+
+    // MARK: - 재연결 (2026-09-27 · PLAN_wifi_reconnect)
+
+    /// 재연결 최소 간격 — **무한 재시도 방지**
+    ///
+    /// 폴링이 5초 주기이므로 쿨다운이 없으면 분당 **12회** connect 시도가 된다.
+    /// adb 폭주 + 배터리. 쿨다운은 선택이 아니라 필수다.
+    static let reconnectCooldown: TimeInterval = 60
+    /// 연속 실패 시 간격을 2배씩 늘린다 (최대 15분) — 확실히 없는 기기면 오래 시도하지 않는다
+    static let reconnectCooldownMax: TimeInterval = 900
+
+    /// 재연결 간격 계산 — 연속 실패 `failures` 회 기준
+    static func reconnectDelay(failures: Int) -> TimeInterval {
+        let factor = pow(2.0, Double(max(0, failures)))
+        return min(reconnectCooldown * factor, reconnectCooldownMax)
+    }
+
+    /// 재연결을 시도해야 하는가 — **판정만** (IO 없음, 테스트 가능)
+    ///
+    /// - TCP 엔드포인트가 유실된 경우만 대상 (USB 유실은 tcpip 경로가 따로 있다)
+    /// - 자동 모드가 켜져 있어야 하고
+    /// - 쿨다운이 지났어야 한다
+    static func shouldReconnect(
+        autoEnabled: Bool,
+        lostSerial: String,
+        now: Date,
+        lastAttemptAt: Date?,
+        failures: Int
+    ) -> Bool {
+        guard autoEnabled else { return false }
+        // TCP 엔드포인트만 — USB 는 autoEnableIfEnabled 경로가 처리한다
+        guard isNetworkEndpoint(lostSerial) else { return false }
+        if let last = lastAttemptAt {
+            let elapsed = now.timeIntervalSince(last)
+            guard elapsed >= reconnectDelay(failures: failures) else { return false }
+        }
+        return true
+    }
 
     /// adbd 재기동 대기 — 고정 대기 대신 재시도로 판정한다 (스크립트는 4초 고정 대기)
     static let connectAttempts = 3
@@ -256,8 +293,68 @@ final class WifiAdbController: ObservableObject {
     @Published private(set) var autoFailed = false
     /// 자동 실행 중인 시리얼 — 중복 실행 방지 (같은 기기에 tcpip 2번 걸면 adbd 2번 재시작)
     private var autoInFlight: Set<String> = []
+    /// 재연결 상태 — 쿨다운과 연속 실패 횟수
+    private var reconnectLastAttemptAt: Date?
+    private var reconnectFailures = 0
+    /// 추적 중인 기기의 물리 ID — TCP 엔드포인트가 IP 라 바뀌어도 "어느 폰" 이었는지 알 수 있다
+    private(set) var trackedPhysicalId: String?
 
     private init() {}
+
+    // MARK: - 재연결 (2026-09-27 · PLAN_wifi_reconnect)
+
+    /// TCP 엔드포인트가 사라졌을 때 자동 재연결을 시도한다.
+    ///
+    /// "USB 를 뽑아도 IP 로 계속" 의 목표는 **IP 가 바뀌어도** 성립해야 한다.
+    /// 핫스팟 이동이나 Wi-Fi 재연결로 IP 가 바뀌면 기존 엔드포인트가 죽고,
+    /// USB 를 다시 꽂지 않아도 앱이 스스로 새 IP 로 붙어야 한다.
+    ///
+    /// 실패해도 조용히 지나가지 않는다 — 사유를 상태로 남긴다 ([표시②])
+    func autoReconnect(lostSerial: String) async {
+        let now = Date()
+        let enabled = UserDefaults.standard.object(forKey: WifiAdbLogic.autoModeKey) as? Bool ?? true
+        guard WifiAdbLogic.shouldReconnect(
+            autoEnabled: enabled,
+            lostSerial: lostSerial,
+            now: now,
+            lastAttemptAt: reconnectLastAttemptAt,
+            failures: reconnectFailures
+        ) else { return }
+        guard !busy, !autoInFlight.contains(lostSerial) else { return }
+        guard let adb = DeviceMonitor.adbPathNow() else { return }
+
+        autoInFlight.insert(lostSerial)
+        reconnectLastAttemptAt = now
+        defer { autoInFlight.remove(lostSerial) }
+
+        // IP 는 **다시 판별**한다 — 옛 IP 로는 붙을 수 없다
+        guard let ip = MacRoute.defaultGateway().flatMap({ WifiAdbLogic.isIPv4($0) ? $0 : nil }) else {
+            reconnectFailures += 1
+            failAuto("wifi.reconnect.ipNotFound")
+            return
+        }
+        let endpoint = WifiAdbLogic.defaultEndpoint(ip: ip)
+        // adbd 가 이미 TCP 모드다(TCP 로 붙어 있었으니) — **tcpip 은 건드리지 않는다**
+        // tcpip 은 adbd 를 재시작해서 그 순간 연결을 **또** 끊는다
+        guard PingProbe.reachable(ip: ip) else {
+            reconnectFailures += 1
+            failAuto("wifi.reconnect.notReachable", detail: endpoint)
+            return
+        }
+        do {
+            try? WifiAdbRunner.run(adb, WifiAdbLogic.disconnectArgs(endpoint: endpoint))
+            try WifiAdbRunner.run(adb, WifiAdbLogic.connectArgs(endpoint: endpoint))
+            reconnectFailures = 0
+            lastEndpoint = endpoint
+            statusIsError = false
+            statusMessage = L10n.format("wifi.reconnect.done", endpoint)
+            DebugLogger.shared.info("WifiAdb", "[INFO] 재연결 성공 \(lostSerial) → \(endpoint)")
+            await disconnectStaleEndpoints(adb: adb, keep: endpoint)
+        } catch {
+            reconnectFailures += 1
+            failAuto("wifi.reconnect.failed", detail: cause(error))
+        }
+    }
 
     /// USB 기기: tcpip → IP 판별 → connect
     ///

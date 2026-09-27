@@ -759,4 +759,8 @@
 "wifi.auto.waiting" = "Waiting for adb connection… (%d/%d)";
 "wifi.auto.alreadyOpen" = "Already open over Wi-Fi — %@";
 "wifi.badge.autoFailed" = "auto-connect failed";
+"wifi.reconnect.done" = "Network changed — reconnected via %@";
+"wifi.reconnect.ipNotFound" = "Could not find the device IP — check Wi-Fi";
+"wifi.reconnect.notReachable" = "%@ is unreachable — check that you are on the same Wi-Fi";
+"wifi.reconnect.failed" = "Reconnect failed — %@";
 "settings.wifi.section" = "Wi-Fi ADB";

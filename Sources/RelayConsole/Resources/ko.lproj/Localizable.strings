@@ -759,4 +759,8 @@
 "wifi.auto.waiting" = "adb 연결 대기 중… (%d/%d)";
 "wifi.auto.alreadyOpen" = "이미 Wi-Fi 로 열려 있습니다 — %@";
 "wifi.badge.autoFailed" = "자동 연결 실패";
+"wifi.reconnect.done" = "네트워크가 바뀌어 %@ 로 다시 연결했습니다";
+"wifi.reconnect.ipNotFound" = "기기 IP 를 찾지 못했습니다 — Wi-Fi 를 확인하세요";
+"wifi.reconnect.notReachable" = "%@ 에 닿지 않습니다 — 같은 Wi-Fi 에 있는지 확인하세요";
+"wifi.reconnect.failed" = "재연결 실패 — %@";
 "settings.wifi.section" = "Wi-Fi ADB";

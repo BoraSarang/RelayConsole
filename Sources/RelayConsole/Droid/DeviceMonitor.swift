@@ -1040,6 +1040,17 @@ actor DeviceMonitor {
         for s in knownSerials where !foundSet.contains(s) {
             knownSerials.remove(s)
             states.removeValue(forKey: s)
+            // TCP 엔드포인트 유실 → 자동 재연결 (2026-09-27 · PLAN_wifi_reconnect)
+            //
+            // "USB 를 뽑아도 IP 로 계속" 의 목표는 **IP 가 바뀌어도** 성립해야 한다.
+            //핫스팟 이동하거나 Wi-Fi 를 껐다 켜면 IP 가 바뀌어 기존 엔드포인트가 죽는다.
+            // USB 를 다시 꽂지 않아도 앱이 스스로 새 IP 로 붙어야 하며,
+            // 그래야 stale 정리(같은 폰의 옛 IP 제거)까지 따라온다.
+            if AdbClient.parseConnection(s).kind == .network {
+                Task { @MainActor in
+                    await WifiAdbController.shared.autoReconnect(lostSerial: s)
+                }
+            }
             // serial 키 자료구조 정리 — 네트워크 ADB 는 IP 가 바뀌면 새 키가 생겨
             // 이전 키가 영구 잔류했다(상시 실행 앱의 느린 누수)
             dropboxScannedAt.removeValue(forKey: s)
