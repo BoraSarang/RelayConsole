@@ -2,6 +2,9 @@
 > 작업 추적 — bd 연동 (이슈 prefix: RelayConsole)
 
 ## 진행 중 (bd ready)
+- [ ] **브랜치 정리** — 8커밋(`0d053b9`~`b91e2a9`)이 `fix/logcat-honesty-incident-cap` 에 있고
+  **push/PR 안 함**(main 직접 push 는 [HARD] 금지). 브랜치명·내용 불일치 →
+  `feat/macos-2026-09-27` 로 rename 후 PR. 상세는 `.agent/session-2026-09-27-5-macos.md`
 - [ ] **`@Published` 20개 세분화** (2026-09-27 알림 지연 조사 제안 3) — 알림 1건이 여전히
   `objectWillChange` **2회**를 발생시킨다. 계산 비용은 캐시로 없앴지만 SwiftUI 재평가 비용은 남는다.
   최소한 `recentWatchEvents` 를 별도 ObservableObject 로 분리해 **이벤트 변경이 기기/설정 탭까지
@@ -9,6 +12,16 @@
   **제안 1·2 적용 후 체감 재확인 → 통과하면 미착수**
 
 ## 다음 스프린트 (리서치 §8 잔여 · 미착수)
+- [ ] **★ 1순위 — 로그 창 CPU (개방 시 약 40%)** — 착수 첫 단계는 **계측, 추측 금지**
+  - 근거(2026-09-27 실측): 5초 계측에서 `E/SemApTrafficData( 2395): Empty traffic data` 한 줄이
+    **동일 시각에 수백 번씩** 반복(5초 800줄 중 대부분). `E/HeatmapThread` 도 상위
+  - → **초당 1.4만 줄의 대부분이 같은 태그의 같은 메시지 반복**이다. 같은 문자열을
+    수만 번 파싱·렌더하는 것이 로그 창 비용의 대부분
+  - **기대**: adb 측에서 이 태그를 제외하면 원래 비용의 **1% 수준**으로 떨어질 수 있다
+  - ⚠️ **라벨 exclusion 지원 여부는 기기에서 확인해야 한다** — adb host 옵션만으로 되는지
+    `logcat` 버전에 따라 다르다. **확인 없이 구현하지 말 것**
+  - 관련: 이전 세션에서 `logcatKeywords` 를 비운 이유(센서 잡음이 "감지 142건" 이 되던 문제)와
+    **다른 축** — 여기서는 "탐지" 가 아니라 **표시 부하** 다
 - [ ] **S3 관제 규칙 Rules as Code (로컬 YAML)** — TIER S 중 유일 미착수
 - [ ] **A7** Dock 배지 / 그룹화 (라이브액티비티·위젯은 1.15.0으로 완료)
 - **TIER A**: Things·캘린더 연동 · 스샷 스크랩북 · 멀티 스냅샷 그리드 · Prometheus/JSON export · cron 기기 태그 · 충전 방치 리포트
@@ -22,18 +35,6 @@
 - [ ] **Apple 실기 Trust 육안** — iPad USB 데이터 불량(안드로이드 동일 케이블 OK·복구도 미인식). 기기 확보 후 `brew install libimobiledevice` → 배터리/스토리지 카드
 - [ ] **Apple Phase 2** — Developer Mode·sysmon 등 — 위 기기 확보 후 착수 (A9)
 - [ ] **Apple 크래시 리포트 수집 (반드시 해야 할 작업)** — `idevicecrashreport`로 iOS `.ips` crash/ANR를 IncidentBundle에 첨부. 기기 확보 시 1순위. Trust USB + `idevicecrashreport -u <udid> copy` 패턴. Android `logcat -b crash`/dropbox 대응 Apple 쪽 원재료 — **기기 확보 전 구현 불가, 반드시 기억할 것**
-
-## 진행 중 (bd ready)
-- [ ] **stale TCP 엔드포인트 미정리** (2026-09-27 자동 모드 실기 검증 중 발견) —
-  Wi-Fi IP 가 바뀌면 `adb devices` 에 옛 항목이 남아 **같은 폰이 2개 기기로 잡히고 폴링도 2배**
-  (adb 자식 3개 실측). `autoEnableIfEnabled` 가 "이미 열려 있으면 skip" 만 하고 정리하지 않는다.
-  후보: TCP 전환 성공 시 **같은 기기의 옛 엔드포인트**를 `adb disconnect` — 단, "같은 기기" 판별은
-  USB serial 과의 매핑이 필요하므로 **추측 금지 원칙상 실측 후 착수**
-- [ ] **`@Published` 20개 세분화** (2026-09-27 알림 지연 조사 제안 3) — 알림 1건이 여전히
-  `objectWillChange` **2회**를 발생시킨다. 계산 비용은 캐시로 없앴지만 SwiftUI 재평가 비용은 남는다.
-  최소한 `recentWatchEvents` 를 별도 ObservableObject 로 분리해 **이벤트 변경이 기기/설정 탭까지
-  무효화하지 않게** 한다. **14개 View 의존성 재매핑 필요** — 09-26 보류 전례 있음.
-  **제안 1·2 적용 후 체감 재확인 → 통과하면 미착수**
 
 ## 완료 (2026-09-27)
 - [x] **TCP 유실 시 자동 재연결** — `PLAN_wifi_reconnect_relayconsole` · 테스트 8건 신규
