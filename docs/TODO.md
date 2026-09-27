@@ -52,9 +52,14 @@
     `./scripts/build-macos.sh debug` **EXIT=0** (번들 재생성·재서명·앱 재시작) ·
     L10n **766키 en/ko 1:1** · U+FFFD 0건
   - **육안 대기**: 알림 유입 시 다른 탭(설정·사이트)이 깜빡이지 않는지
+  - **머지 완료** — 리뷰 후 **squash 머지** `699c0af` (main 의 최근 관례 #45~#51 과 동일).
+    self-review 결과 **[HARD] 위반 0건** · 차단 사유 없음. [SOFT] 3건 사유는
+    PR #52 코멘트에 기재 — ① `catch` 에서 spawn 실패 원인이 버려지는 관측 공백
+    ② 신규 실패 사유의 `error_message_ko.json` 미등록(L10n 이 진실원천이라 동작 영향 없음)
+    ③ DebugPanel 로그 미첨부(육안 대기) + CHANGELOG 파일 부재
   - **브랜치 정리 + PR #52** — 13커밋이 브랜치명 불일치 상태로 로컬에 방치돼 있었음
     (`fix/logcat-honesty-incident-cap` → `feat/macos-2026-09-27` rename, main 직접 push 는 [HARD] 금지).
-    https://github.com/BoraSarang/RelayConsole/pull/52 · 커밋 8c97ed6
+    https://github.com/BoraSarang/RelayConsole/pull/52
 
 ## 완료 (2026-09-27)
 - [x] **TCP 유실 시 자동 재연결** — `PLAN_wifi_reconnect_relayconsole` · 테스트 8건 신규
