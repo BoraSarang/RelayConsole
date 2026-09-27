@@ -487,6 +487,79 @@ struct WatchEventTests {
         #expect(AdbClient.countLogcatHits("  ", keywords: DeviceMonitor.anrKeywords) == 0)
     }
 
+    // MARK: - v0.8.1 프로세스 사망 컨텍스트 (크래시 "누가/왜" 복구)
+
+    /// `has died` 로 적중한 크래시에서 패키지·PID·사유를 뽑는다.
+    ///
+    /// 종전엔 감지 키워드가 4 개인데 파서는 `fatal exception` / `fatal signal` 만 봤다.
+    /// 그래서 `has died` 적분 이벤트 24건 전부가 packageName=null 로 기록됐고
+    /// 알림에 "크래시 적중 1건" 만 남았다.
+    @Test func processDeathContextExtractsPackageAndPid() {
+        let text = """
+        09-27 09:39:05.100 I/ActivityManager: Process com.borasarang.droidrelay (pid 12345) has died.
+        09-27 09:39:05.200 I/ActivityManager: Force finishing activity com.borasarang.droidrelay/.MainActivity
+        """
+        let ctx = AdbClient.extractCrashContext(text)
+        #expect(ctx?.packageName == "com.borasarang.droidrelay")
+        #expect(ctx?.pid == "12345")
+        #expect(ctx?.exceptionClass != nil)
+    }
+
+    @Test func processDeathContextKeepsSignalReason() {
+        let text = "09-27 09:39:05.100 I/ActivityManager: Process com.foo.bar (pid 999) has died. Reason: SIGSEGV"
+        let ctx = AdbClient.extractProcessDeathContext(text)
+        #expect(ctx?.packageName == "com.foo.bar")
+        #expect(ctx?.exceptionClass == "SIGSEGV")
+    }
+
+    /// **실기 로그 그대로** (2026-09-27 10.233.247.205:5555).
+    /// 이 라인이 `crash` 감지를 실제로 발화시켰다 — watch-events.json 의
+    /// 09:39:05 크래시 이벤트가 이 09:39:03.823 라인에 대응한다.
+    /// `Reason:` 가 아니라 `has died: cch+5 CEM (...)` 형식이라 종전 파서는
+    /// 패키지·PID·사유를 하나도 못 뽑았다.
+    @Test func processDeathContextParsesRealDeviceLine() {
+        let real = "09-27 09:39:03.823 I/ActivityManager( 2399): "
+            + "Process com.google.android.apps.turbo (pid 14384) has died: cch+5 CEM (926,1457)"
+        let ctx = AdbClient.extractProcessDeathContext(real)
+        #expect(ctx?.packageName == "com.google.android.apps.turbo")
+        #expect(ctx?.pid == "14384")
+        #expect(ctx?.exceptionClass == "cch+5 CEM (926,1457)")
+        // 정식 경로(extractCrashContext)로는 FATAL EXCEPTION 이 없으므로 이 폴백이 실제로 쓰인다
+        #expect(AdbClient.extractCrashContext(real)?.packageName == "com.google.android.apps.turbo")
+    }
+
+    /// `has died` 만 있고 `fatal exception` 이 없어도 컨텍스트가 나와야 한다 (회귀 방지)
+    @Test func crashContextFallsBackToProcessDeath() {
+        #expect(AdbClient.extractCrashContext("nothing interesting here") == nil)
+        let only = "09-27 09:39:05.100 I/ActivityManager: Process com.foo.bar (pid 7) has died."
+        #expect(AdbClient.extractCrashContext(only)?.packageName == "com.foo.bar")
+    }
+
+    @Test func deathPackageRejectsNonPackageTokens() {
+        #expect(AdbClient.deathPackage(in: "I/ActivityManager: something has died") == nil)
+        #expect(
+            AdbClient.deathPackage(
+                in: "I/ActivityManager: Force finishing activity com.foo.bar/.Main"
+            ) == "com.foo.bar"
+        )
+        #expect(AdbClient.deathPID(in: "Process com.foo.bar (pid 4242) has died.") == "4242")
+        #expect(AdbClient.deathPID(in: "no pid here") == nil)
+    }
+
+    /// 크래시 이벤트에 패키지·예외가 실려야 fingerprint 가 생긴다
+    /// (fingerprint 없으면 알림 쿨다운이 전 기기 공통 키로 뭉뚱그려진다)
+    @Test func feedCrashWithContextProducesFingerprint() {
+        let ev = WatchEngine.shared.feedCrash(
+            serial: "FP1",
+            detail: "com.foo.bar · SIGSEGV",
+            packageName: "com.foo.bar",
+            exceptionClass: "SIGSEGV",
+            now: Date()
+        )
+        #expect(ev?.packageName == "com.foo.bar")
+        #expect(ev?.fingerprint != nil)
+    }
+
     @Test func activeRemediationIncludesAnrAndCrashWithinTtl() {
         let anr = WatchEvent(
             kind: .anr, severity: .critical, serial: "S1",

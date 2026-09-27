@@ -17,6 +17,79 @@ struct InsightsView: View {
         InsightLogic.dayKey(for: selectedDay, calendar: calendar)
     }
 
+    // MARK: - 인사이트 계산 캐시 (2026-09-27 알림 지연 조사 · 제안 2)
+    //
+    /// 알림 1건이 `objectWillChange` 를 2회 발생시키고 그것이 이 body 를 2번 다시 평가한다.
+    /// body 1회 = report 1.9ms + patterns 1.2ms + insight 0.13ms = **3.2ms**,
+    /// 그러면 알림 1건에 **6.4ms** — 프레임 예산(16.7ms)의 38%.
+    /// 입력이 그대로면 재계산하지 않는다.
+    ///
+    /// **무효화 키에 빠지면 안 되는 것** (전부 넣었다):
+    /// - 이벤트 배열 (first/last/count — 알림 유입)
+    /// - 선택 일자 `selectedKey` · 기기 필터 `serialFilter`
+    /// - 패턴 임계값 (설정 변경)
+    /// - `DeviceDailyStore.revision` · `ConnectionSessionStore.revision`
+    /// - **자정 경계** — `patterns` 의 "최근 N일" 판정이 날짜에 의존하므로
+    ///   선택된 날짜가 아니라 **오늘** 기준으로도 키를 잡는다
+    private struct InsightCacheKey: Equatable {
+        /// 이벤트는 `at` 내림차순으로 앞쪽에 삽입된다 — **양 끝 id** 로 배열 변경을 잡는다
+        let eventsFirst: UUID?
+        let eventsLast: UUID?
+        let eventsCount: Int
+        let selectedKey: String
+        let todayKey: String
+        let serialFilter: String?
+        let thresholds: PatternThresholds
+        let dailyRevision: Int
+        let sessionRevision: Int
+    }
+
+    private struct InsightCacheValue {
+        let insight: DeviceInsight
+        let report: DayOverDayReport
+        let patterns: [IssuePattern]
+    }
+
+    /// 캐시 홀더 — `@State` 에 **클래스**를 담아 body 재평가 사이에도 동일 인스턴스가 유지되게 한다.
+    /// `@State` 변수를 직접 바꾸면 "view update 중 수정" 경고가 나므로 **클래스 필드만** 바꾼다.
+    private final class InsightCacheBox {
+        var key: InsightCacheKey?
+        var value: InsightCacheValue?
+        /// 계산 횟수 — 계측용 (성능 회귀가 생기면 바로 보인다)
+        var computeCount = 0
+    }
+
+    @State private var cacheBox = InsightCacheBox()
+
+    private var currentCacheKey: InsightCacheKey {
+        let events = store.recentWatchEvents
+        return InsightCacheKey(
+            eventsFirst: events.first?.id,
+            eventsLast: events.last?.id,
+            eventsCount: events.count,
+            selectedKey: selectedKey,
+            todayKey: todayKey,
+            serialFilter: serialFilter,
+            thresholds: store.patternThresholds(),
+            dailyRevision: DeviceDailyStore.shared.revision,
+            sessionRevision: ConnectionSessionStore.shared.revision
+        )
+    }
+
+    /// 캐시 적중 시 0ms, 실패 시 약 3.2ms.
+    /// 알림 1건이 body 를 2번 평가해도 **계산은 1번만** 일어난다.
+    private func cachedInsights() -> InsightCacheValue {
+        let key = currentCacheKey
+        if let k = cacheBox.key, k == key, let v = cacheBox.value {
+            return v
+        }
+        let value = InsightCacheValue(insight: insight, report: report, patterns: patterns)
+        cacheBox.key = key
+        cacheBox.value = value
+        cacheBox.computeCount += 1
+        return value
+    }
+
     private var serials: [String] {
         var set = Set(store.inventory.devices.map(\.serial))
         set.formUnion(store.recentWatchEvents.map(\.serial))
@@ -71,15 +144,20 @@ struct InsightsView: View {
     }
 
     var body: some View {
-        // ── 렌더 비용 1회 계산 ──
+        // ── 렌더 비용 1회 계산 + 캐시 (2026-09-27 알림 지연 조사) ──
         // 종전엔 각 섹션이 `insight` / `report` / `patterns` computed property를
         // **자기 알아서 여러 번** 참조했고, 접근마다 전체 이벤트(실측 262건)를 다시
         // 필터·정렬했다. body 1회 평가 = insight 13회 + report 9회 + monthGrid 셀마다 필터.
         // 실측(262건): **body 1회당 약 57ms** (monthGrid 38ms · insight 14ms · report 5ms).
-        // 여기서 1회만 계산해 하위에 주입한다 → 약 3ms.
-        let insightValue = insight
-        let reportValue = report
-        let patternsValue = patterns
+        // 1회 계산으로 약 3ms (09-26 4단계).
+        //
+        // 그 다음 알림 1건이 `objectWillChange` 2회로 이 body 를 2번 평가해서
+        // **6.4ms** — 프레임 예산 38%. 그래서 입력이 같으면 재계산하지 않도록 캐시를 넣었다.
+        // (dayKey 정수화까지 적용 후 실측: body 1회 = report 1.9 + patterns 1.2 + insight 0.13 = 3.2ms)
+        let cached = cachedInsights()
+        let insightValue = cached.insight
+        let reportValue = cached.report
+        let patternsValue = cached.patterns
 
         return ZStack {
             OPColor.popBG.ignoresSafeArea()

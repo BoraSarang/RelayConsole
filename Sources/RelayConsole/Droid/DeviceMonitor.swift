@@ -5,7 +5,19 @@ import Foundation
 actor DeviceMonitor {
     static let shared = DeviceMonitor()
     /// SKILLPACK §4 고정 키워드
-    static let logcatKeywords = ["accelerometer_rotation", "wm_user_rotation_changed", "thermal"]
+    ///
+    /// **2026-09-27 — 의도적으로 비었다.**
+    ///
+    /// 종전엔 `accelerometer_rotation` / `wm_user_rotation_changed` / `thermal` 을 썼으나
+    /// 이건 에러 신호가 아니라 **센서·회전·발열 상태 변화**다. 폰이 가만히 있어도 5분마다
+    /// +140 건씩 찍혀 `탐지` 카드가 "문제 142건" 처럼 읽혔다 — 실제로는 센서 잡음이라
+    /// 의미가 없었고, `logcat 적중` 칩과 `>` 클릭 → Alerts(같은 카운트 반복) → 로그 창
+    /// (아래 LogViewerView 교착으로 빈 화면) 으로 이어지며 **세 화면 연속으로 아무것도
+    /// 보여주지 못하는 장식**이 되었다.
+    ///
+    /// 감지 대상은 ANR·크래시(`anrKeywords` / `crashKeywords`)처럼 **실패 신호**만 남긴다.
+    /// 원시 로그 줄이 필요하면 로그 창의 `W` 이상 필터를 쓴다.
+    static let logcatKeywords: [String] = []
     /// v0.8 — ANR / 크래시 감지 (대소문자 무시 부분 매칭)
     static let anrKeywords = ["anr in", "am_anr", "application not responding", "input dispatching timed out"]
     static let crashKeywords = ["fatal exception", "fatal signal", "has died", "force finishing"]
@@ -1014,12 +1026,31 @@ actor DeviceMonitor {
             Task { @MainActor in
                 ScreenshotService.shared.refresh(serial: s, adbPath: path)
             }
+            // USB 신규 감지 → Wi-Fi ADB 자동 개방 (2026-09-27 · PLAN_wifi_auto_tcpip)
+            // "USB 를 뽑아도 IP 로 계속" 의 전제 — 케이블을 뽑는 것은 adbd 를 죽이지 않는다.
+            // tcpip 은 **재부팅마다** 다시 필요하고, 재부팅하면 USB 를 다시 꽂게 된다.
+            if conn.kind == .usb {
+                Task { @MainActor in
+                    await WifiAdbController.shared.autoEnableIfEnabled(serial: s)
+                }
+            }
         }
 
         // 끊김 — 활성 gate synthetic clear (후속조치 영구잔류 방지)
         for s in knownSerials where !foundSet.contains(s) {
             knownSerials.remove(s)
             states.removeValue(forKey: s)
+            // TCP 엔드포인트 유실 → 자동 재연결 (2026-09-27 · PLAN_wifi_reconnect)
+            //
+            // "USB 를 뽑아도 IP 로 계속" 의 목표는 **IP 가 바뀌어도** 성립해야 한다.
+            //핫스팟 이동하거나 Wi-Fi 를 껐다 켜면 IP 가 바뀌어 기존 엔드포인트가 죽는다.
+            // USB 를 다시 꽂지 않아도 앱이 스스로 새 IP 로 붙어야 하며,
+            // 그래야 stale 정리(같은 폰의 옛 IP 제거)까지 따라온다.
+            if AdbClient.parseConnection(s).kind == .network {
+                Task { @MainActor in
+                    await WifiAdbController.shared.autoReconnect(lostSerial: s)
+                }
+            }
             // serial 키 자료구조 정리 — 네트워크 ADB 는 IP 가 바뀌면 새 키가 생겨
             // 이전 키가 영구 잔류했다(상시 실행 앱의 느린 누수)
             dropboxScannedAt.removeValue(forKey: s)

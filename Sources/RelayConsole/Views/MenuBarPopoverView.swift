@@ -3,6 +3,11 @@ import AppKit
 
 struct MenuBarPopoverView: View {
     @ObservedObject var store: ConsoleStore
+    /// 자동 Wi-Fi ADB 상태 (실패 배지용)
+    @ObservedObject private var wifi = WifiAdbController.shared
+    /// 최근 로그 한 줄 목록 — `ConsoleStore` 에서 분리했다(2026-09-28).
+    /// 알림 유입 시 `ConsoleStore` 를 무효화하지 않기 위한 것.
+    @ObservedObject private var recentEvents = RecentEventsStore.shared
     var openConsole: () -> Void
     var openDebug: () -> Void = {}
     var openSettings: () -> Void = {}
@@ -159,6 +164,7 @@ struct MenuBarPopoverView: View {
                         .truncationMode(.tail)
                     // 연결 종류: USB | IP:5555
                     connectionBadge(d)
+                    autoWifiFailBadge(for: d)
                     StatusDot(state: d.isOnline ? .ok : .bad)
                     Text(d.isOnline
                         ? L10n.string("menubar.status.connected")
@@ -248,6 +254,31 @@ struct MenuBarPopoverView: View {
                 RoundedRectangle(cornerRadius: 4)
                     .stroke(OPColor.border, lineWidth: 1)
             )
+    }
+
+    /// 자동 Wi-Fi ADB 실패 배지 — 사용자가 아무것도 안 했는데 실패했으므로
+    /// 조용히 사라지면 "설치만 하면 된다" 는 잘못된 믿음이 남는다 ([표시②])
+    private func autoWifiFailBadge(for d: DeviceSnapshot) -> some View {
+        // USB 로 꽂혀 있고, 그 기기가 TCP 로도 열려 있지 않을 때만 (안 열렸는데 실패한 것)
+        let usbDevice = d.connectionKind == .usb
+        let hasNetworkTwin = store.inventory.devices.contains {
+            $0.serial != d.serial && $0.connectionKind == .network
+        }
+        if !usbDevice || hasNetworkTwin || !wifi.autoFailed { return AnyView(EmptyView()) }
+        return AnyView(
+            Text(L10n.string("wifi.badge.autoFailed"))
+                .font(OPFont.number(9))
+                .foregroundStyle(OPColor.warn)
+                .lineLimit(1)
+                .padding(.horizontal, 5)
+                .padding(.vertical, 2)
+                .background(OPColor.card, in: RoundedRectangle(cornerRadius: 4))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 4)
+                        .stroke(OPColor.warn.opacity(0.35), lineWidth: 1)
+                )
+                .help(wifi.statusMessage ?? "")
+        )
     }
 
     // MARK: - Device list / detail expand
@@ -834,7 +865,7 @@ struct MenuBarPopoverView: View {
                 }
             } label: {
                 HStack {
-                    Text(L10n.format("menubar.events.recent", min(store.recentEvents.count, 5)))
+                    Text(L10n.format("menubar.events.recent", min(recentEvents.texts.count, 5)))
                         .font(OPFont.body(11))
                         .foregroundStyle(OPColor.inkDim)
                     Spacer()
@@ -846,13 +877,13 @@ struct MenuBarPopoverView: View {
             .buttonStyle(.plain)
 
             if showEvents {
-                if store.recentWatchEvents.isEmpty && store.recentEvents.isEmpty {
+                if store.recentWatchEvents.isEmpty && recentEvents.texts.isEmpty {
                     Text(L10n.string("menubar.events.empty"))
                         .font(OPFont.body(12))
                         .foregroundStyle(OPColor.inkDim)
                         .lineLimit(1)
                 } else {
-                    let fallback = store.recentEvents.prefix(5).map {
+                    let fallback = recentEvents.texts.prefix(5).map {
                         WatchRow(title: $0, detail: "", severity: .info, isClear: false)
                     }
                     let events = store.recentWatchEvents.isEmpty

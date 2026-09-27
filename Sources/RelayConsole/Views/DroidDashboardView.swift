@@ -603,7 +603,15 @@ struct DroidDashboardView: View {
                     .foregroundStyle(OPColor.ink)
                 Spacer(minLength: 8)
                 detectCountChip(L10n.string("droid.detect.settings"), counts.settings, color: OPColor.thermal)
-                detectCountChip(L10n.string("droid.detect.logcat"), counts.logcat, color: OPColor.cta)
+                // logcat 적중 칩 — 감지 키워드가 있을 때만 노출한다.
+                // 키워드가 비면 값이 늘 0이라 "0"을 고정으로 보여주는 건 장식에 가까웠다.
+                if !DeviceMonitor.logcatKeywords.isEmpty {
+                    detectCountChip(
+                        L10n.string("droid.detect.logcat"),
+                        counts.logcat,
+                        color: OPColor.cta
+                    )
+                }
                 Button {
                     showLogs = true
                 } label: {

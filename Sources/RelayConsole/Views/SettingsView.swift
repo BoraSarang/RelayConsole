@@ -37,6 +37,8 @@ struct SettingsView: View {
     /// On/Off·창 리스트 단일 진실원천 — FloatingGraphController (AppStorage 분리 기록 금지)
     @ObservedObject private var float = FloatingGraphController.shared
     @AppStorage(LoginItemLogic.headlessKey) private var headless = LoginItemLogic.defaultHeadless()
+    /// USB 연결 시 자동 Wi-Fi ADB — 기본 ON (사용자 확정)
+    @AppStorage(WifiAdbLogic.autoModeKey) private var wifiAuto = true
     @ObservedObject private var login = LoginItemController.shared
     @State private var selection: SettingsTab? = .general
 
@@ -109,8 +111,22 @@ struct SettingsView: View {
             }
             Toggle(L10n.string("settings.menubarMetrics"), isOn: $menubarMetrics)
             Toggle(L10n.string("settings.briefing"), isOn: $store.briefingEnabled)
+            autoWifiSection
             floatSection
             loginSection
+        }
+    }
+
+    /// USB → Wi-Fi ADB 자동 개방 (2026-09-27 · PLAN_wifi_auto_tcpip)
+    /// 설명 문구에 **한계를 적어둔다** — "끊기면 자동으로" 라고 말하면 재부팅 후에도
+    /// 된다고 오해하기 때문. tcpip 은 재부팅마다 한 번씩 다시 걸어야 한다.
+    private var autoWifiSection: some View {
+        Section(L10n.string("settings.wifi.section")) {
+            Toggle(L10n.string("wifi.setting.auto"), isOn: $wifiAuto)
+            Text(L10n.string("wifi.setting.auto.help"))
+                .font(OPFont.body(10))
+                .foregroundStyle(OPColor.inkDim)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 

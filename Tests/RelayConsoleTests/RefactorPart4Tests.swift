@@ -148,14 +148,14 @@ struct RefactorPart4Tests {
         #expect(next.first?.title == "t599")
     }
 
-    /// 로그 텍스트 상한
+    /// 로그 텍스트 상한 — `RecentEventsStore` 로 분리하면서 상한도 함께 옮겨갔다(2026-09-28)
     @Test func recentEventCapIsEnforced() {
-        #expect(ConsoleStore.maxRecentEvents == 20)
+        #expect(RecentEventsStore.maxTexts == 20)
         var next: [String] = []
         for i in 0..<50 {
             next.insert("line\(i)", at: 0)
-            if next.count > ConsoleStore.maxRecentEvents {
-                next.removeLast(next.count - ConsoleStore.maxRecentEvents)
+            if next.count > RecentEventsStore.maxTexts {
+                next.removeLast(next.count - RecentEventsStore.maxTexts)
             }
         }
         #expect(next.count == 20)

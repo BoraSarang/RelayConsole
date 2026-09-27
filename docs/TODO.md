@@ -2,9 +2,19 @@
 > 작업 추적 — bd 연동 (이슈 prefix: RelayConsole)
 
 ## 진행 중 (bd ready)
-- (없음 — 성능·안정성 리팩토링 6단계 전부 완료. 아래 완료 항목 참조)
+- (0건)
 
 ## 다음 스프린트 (리서치 §8 잔여 · 미착수)
+- [ ] **★ 1순위 — 로그 창 CPU (개방 시 약 40%)** — 착수 첫 단계는 **계측, 추측 금지**
+  - 근거(2026-09-27 실측): 5초 계측에서 `E/SemApTrafficData( 2395): Empty traffic data` 한 줄이
+    **동일 시각에 수백 번씩** 반복(5초 800줄 중 대부분). `E/HeatmapThread` 도 상위
+  - → **초당 1.4만 줄의 대부분이 같은 태그의 같은 메시지 반복**이다. 같은 문자열을
+    수만 번 파싱·렌더하는 것이 로그 창 비용의 대부분
+  - **기대**: adb 측에서 이 태그를 제외하면 원래 비용의 **1% 수준**으로 떨어질 수 있다
+  - ⚠️ **라벨 exclusion 지원 여부는 기기에서 확인해야 한다** — adb host 옵션만으로 되는지
+    `logcat` 버전에 따라 다르다. **확인 없이 구현하지 말 것**
+  - 관련: 이전 세션에서 `logcatKeywords` 를 비운 이유(센서 잡음이 "감지 142건" 이 되던 문제)와
+    **다른 축** — 여기서는 "탐지" 가 아니라 **표시 부하** 다
 - [ ] **S3 관제 규칙 Rules as Code (로컬 YAML)** — TIER S 중 유일 미착수
 - [ ] **A7** Dock 배지 / 그룹화 (라이브액티비티·위젯은 1.15.0으로 완료)
 - **TIER A**: Things·캘린더 연동 · 스샷 스크랩북 · 멀티 스냅샷 그리드 · Prometheus/JSON export · cron 기기 태그 · 충전 방치 리포트
@@ -18,6 +28,199 @@
 - [ ] **Apple 실기 Trust 육안** — iPad USB 데이터 불량(안드로이드 동일 케이블 OK·복구도 미인식). 기기 확보 후 `brew install libimobiledevice` → 배터리/스토리지 카드
 - [ ] **Apple Phase 2** — Developer Mode·sysmon 등 — 위 기기 확보 후 착수 (A9)
 - [ ] **Apple 크래시 리포트 수집 (반드시 해야 할 작업)** — `idevicecrashreport`로 iOS `.ips` crash/ANR를 IncidentBundle에 첨부. 기기 확보 시 1순위. Trust USB + `idevicecrashreport -u <udid> copy` 패턴. Android `logcat -b crash`/dropbox 대응 Apple 쪽 원재료 — **기기 확보 전 구현 불가, 반드시 기억할 것**
+
+## 완료 (2026-09-28)
+- [x] **T-2026-09-28-1 `recentEvents` 분리 — 알림 유입 시 `objectWillChange` 2회 → 1회** —
+  `PLAN_published_split_recentevents_relayconsole` · 테스트 5건 신규 · **594 → 599**
+  - **착수 전에 계측했다** — TODO 는 "14개 View 재매핑"을 적었지만 **그건 필요 없었다.**
+    계측 두 가지가 계획을 바꿨다:
+    ① 중복 신호의 원인은 `recentEvents` 인데, 이 필드를 읽는 View 는 **MenuBarPopoverView 하나(3곳)**.
+    `recentWatchEvents` 를 빼야 하는 14개 재매핑은 **원인 필드가 아니었다**
+    ② 제안 1·2(dayKey 정수화 + 캐시)가 **2번째 신호의 비용을 이미 0으로 만들어 뒀다.**
+    인사이트 캐시 키 9종에 `recentEvents` 가 없어 `pushEvent` 는 캐시 적중(0ms)이다
+  - **실측** (격리 프로브 + 실제 `ConsoleStore.shared`): 실제 경로 2회 ✅ 문서 일치 ·
+    `assignOnce` 항상 1회 · **`mutateInPlace` 는 링이 가득 차면 2회**
+  - **부수 발견 — 디버그 경로가 실제보다 나빴다** — `debugIngestWatchQuietly`(DebugPanel 알림 주입)가
+    in-place 변이라 **실제 2회 vs 디버그 3회**였고, `ConsoleStore:912-914` 가 경고한
+    **"상한 501건 중간 상태"도 이 경로에서 관측**됐다. → 체감 검증 도구가 나쁜 경로를 재고 있었다.
+    실제 `ingestWatch` 와 **같은 1회 대입 패턴**으로 통일
+  - **변경 범위** — `RecentEventsStore` 신규 · `ConsoleStore` 4곳 · `MenuBarPopoverView` 3곳.
+    `pushEvent` 시그니처 유지 → `DeviceMonitor` **무변경**. `recentWatchEvents` 는 **분리하지 않음**
+  - **신호 횟수를 테스트로 고정** (`PublishedSignalTests` 5건) — 중복 신호는 필드 하나를 다시
+    붙이는 것만으로 **조용히 되돌아오고 눈에 보이지 않는다.** 계측 없이 못 잡는다
+  - **검증 [HARD]**: `swift test` **495 + 104 = 599 / 0 failed** (착수 시 594, +5) ·
+    `./scripts/build-macos.sh debug` **EXIT=0** (번들 재생성·재서명·앱 재시작) ·
+    L10n **766키 en/ko 1:1** · U+FFFD 0건
+  - **육안 대기**: 알림 유입 시 다른 탭(설정·사이트)이 깜빡이지 않는지
+  - **브랜치 정리 + PR #52** — 13커밋이 브랜치명 불일치 상태로 로컬에 방치돼 있었음
+    (`fix/logcat-honesty-incident-cap` → `feat/macos-2026-09-27` rename, main 직접 push 는 [HARD] 금지).
+    https://github.com/BoraSarang/RelayConsole/pull/52 · 커밋 8c97ed6
+
+## 완료 (2026-09-27)
+- [x] **TCP 유실 시 자동 재연결** — `PLAN_wifi_reconnect_relayconsole` · 테스트 8건 신규
+  - **작업을 여는 계기 — 자기 검토에서 발견한 결함**: `disconnectStaleEndpoints` 는
+    "새 엔드포인트를 연 직후"에만 불린다. 그런데 **새 엔드포인트를 여는 경로가 없었다.**
+    `autoEnableIfEnabled` 는 "USB 신규 감지"(`DeviceMonitor:1034`)에서만 호출되므로,
+    핫스팟 이동으로 IP 가 바뀌면 앱이 **아무것도 하지 않았다** — 정리조차 실행되지 않음.
+    **정리보다 재연결 자체가 없는 것**이 더 큰 문제였다
+  - **흐름** — TCP 엔드포인트가 `adb devices` 에서 사라지면:
+    ① 자동 모드 ON 확인 ② 쿨다운 확인 ③ **IP 재판별**(게이트웨이 1순위) ④ `nc` 도달 확인
+    ⑤ `connect` ⑥ 성공 시 **stale 정리** 따라옴
+  - **★ `tcpip` 은 건드리지 않는다** — adbd 가 이미 TCP 모드다(TCP 로 붙어 있었으니).
+    `tcpip` 은 adbd 를 **재시작**해서 그 순간 연결을 **또** 끊는다
+  - **무한 재시도 방지 (이 작업의 최대 위험)** — 폴링 5초 주기이므로 쿨다운 없으면
+    **분당 12회** connect 시도 = adb 폭주 + 배터리
+    - 기본 **60초** · 연속 실패 시 **2배씩 증가** · 상한 **15분**
+    - 15분 지나면 실패 횟수와 무관하게 재시도 (**영구 포기 안 함**)
+    - 판정만 `shouldReconnect` 로 분리해 **테스트 8건으로 고정**
+  - **안전장치** — 자동 모드 OFF 면 전혀 동작하지 않음 · USB 유실은 이 경로로 안 온다(tcpip 경로가 처리) ·
+    `busy`/in-flight 중복 방지 · 실패 시 **조용히 지나가지 않고 사유를 상태로 남김** ([표시②])
+  - **검증 [HARD]**: `swift test` **490 + 104 = 594 / 0 failed** (착수 시 586, +8) ·
+    `./scripts/build-macos.sh debug` **EXIT=0** · L10n **766키 en/ko 1:1** · U+FFFD 0건
+  - **육안**: 핫스팟 이동 후 **USB 재삽입 없이** 기기 재등장 (직접 재현 어려움 — Wi-Fi 토글 필요)
+- [x] **stale TCP 엔드포인트 정리 — `ro.boot.serialno` 로 "같은 폰" 판별** — 테스트 9건 신규
+  - **문제**: Wi-Fi IP 가 바뀌면 옛 항목이 `adb devices` 에 남아 **같은 폰이 2개 기기**로 잡히고
+    **폴링이 2배**(adb 자식 3개 실측). `autoEnableIfEnabled` 는 "이미 열려 있으면 skip" 만 하고 정리 안 함
+  - **"같은 기기" 를 어떻게 아는가 — 계측이 답을 줬다**
+    `adb devices` 의 TCP 키는 **IP 그 자체**라 IP 가 바뀌면 같은 폰인지 알 수 없다.
+    `ro.boot.serialno` 로 판별한다. 실측 — 같은 폰이 하루에 세 번 IP 를 바꿨는데 이 값은 고정:
+    ```
+    10.233.247.205:5555 (오전)  ─┐
+    172.30.102.182:5555 (저녁)  ─┼─ 전부 ro.boot.serialno = R5CT215F4QK
+    10.38.120.211:5555 (지금)   ─┘
+    ```
+    **TCP 로도 읽힌다** — 인증 불필요, `shell getprop` 1회
+  - **알고리즘** — TCP 항목이 1개면 아무것도 안 함(대부분) · `keep` 의 물리 ID 와 각 후보의 물리 ID 를
+    비교해 **같은 폰의 옛 IP 만** `adb disconnect`
+  - **안전장치 3중** (잘못 끊으면 사용자의 다른 기기가 죽으므로)
+    ① `keep` 는 절대 끊지 않음 ② **다른 물리 ID 는 절대 끊지 않음** ③ **식별 실패 항목은 끊지 않음**
+    (애매하면 남겨두는 편이 옳다) — 셋 다 테스트로 고정
+  - **검증 [HARD]**: `swift test` **482 + 104 = 586 / 0 failed** (착수 시 577, +9) ·
+    `./scripts/build-macos.sh debug` **EXIT=0** · 신규 경고 0
+  - **육안**: IP 가 바뀐 뒤(핫스팟 이동) 목록에 옛 항목이 안 남는지 — 1회 관측 필요
+
+- [x] **T-2026-09-27-5 알림 유입 시 전 탭 지연 — 제안 1·2 적용** — `RESEARCH_alert_tab_slowness` · 테스트 10건 신규
+  - **조사 결론**: "데이터가 많아서" 가 **아니다**. 실측 — 알림 1건 유입 = **0.12ms**,
+    실제 유입률 **15분에 11건**. 느린 곳은 **InsightsView 하나**(body 1회 6.2ms)였고
+    그것이 `objectWillChange` 전파 + 프레임 예산 초과로 **연쇄 지연**을 만든 것
+  - **제안 1 — `dayKey` 정수화** (상수 시간 · 위험 최소)
+    `dayKey(for:)` 가 `dayOverDay(500건)` 안에서 **1,500회 이상** 호출되며 매번 `String(format:)` + 할당.
+    1,500회 기준 **문자열 3.471ms → 정수 0.672ms (5.2배)**
+    | 대상 | 적용 전 | 적용 후 |
+    |---|---|---|
+    | `report` | 4.330 ms | **1.935 ms** |
+    | `patterns` | 1.759 ms | **1.164 ms** |
+    | body 합계 | **6.2 ms** | **3.2 ms** |
+    - 스토어 키(`serial|dayKey`)는 문자열 유지 — 키 포맷을 바꾸면 저장 데이터와 어긋난다
+  - **제안 2 — 인사이트 캐시** — 알림 1건이 `objectWillChange` 2회로 body 를 2번 평가해
+    **6.4ms**(프레임 예산 38%)였다. 입력이 같으면 재계산하지 않음 → **적중 시 0ms**
+    - 무효화 키 9종: `events(first,last,count)` · `selectedKey` · **`todayKey`(자정 경계)** ·
+      `serialFilter` · `thresholds` · `dailyRevision` · `sessionRevision`
+    - `DeviceDailyStore` / `ConnectionSessionStore` 에 **`revision` 카운터 신설** — 둘 다
+      `@Published` 가 아니라 "바뀌었나" 신호가 없었다. **이게 캐시의 전제**
+  - **캐시 검증** — 상태 변화 6종(알림·날짜·기기필터·Daily·세션)이 **정확히 1회씩** 무효화되고
+    동일 입력은 hit 을 반복하는 것을 **영구 테스트로 고정**(`everyStateChangeInvalidatesExactlyOnce`).
+    캐시 버그의 위험은 "안 바뀌어야 할 때 바꾸는" 쪽이 아니라 **"바뀌었는데 그대로 쓰는"** 쪽이다
+  - **[HARD]**: `swift test` **473 + 104 = 577 / 0 failed** (착수 시 567, +10) ·
+    `./scripts/build-macos.sh debug` **EXIT=0** · 신규 경고 0
+  - **하지 않은 것**: `@Published` 20개 세분화(구조적 · 14개 View 의존성 전부 재매핑 필요 —
+    **09-26 보류 전례 있음**, 1·2 로 체감 문제 먼저 없앤 뒤 측정 후 재판단)
+  - **부수 발견 — 환경 의존 테스트 제거**: `reachabilityUsesAdbPortNotPing` 가 실기 IP 를 하드코딩해
+    **핫스pot을 끄는 순간 깨졌다**(실제로 그럼). 판정과 무관한 입력 검증으로 교체 —
+    "환경이 바뀌면 깨지는 테스트"는 **버그 신호가 아니라 잡음**이다
+- [x] **T-2026-09-27-4 USB 연결 시 자동 Wi-Fi ADB + IP 판별 버그 수정** — `PLAN_wifi_auto_tcpip_relayconsole` · 테스트 16건 신규 · **육안 3단계 대기**
+  - **작업을 열자마자 나온 결함**: 자동화를 붙이려던 중 **기존 "Wi-Fi 전환" 버튼이 이 기기에서 고장**임을 계측으로 확인
+  - **버그 실측 (SM-S901N · 핫스팟 + 셀룰러 동시)**
+    | 방법 | 반환 | 판정 |
+    |---|---|---|
+    | 앱 1순위 `ip route get 1.1.1.1` | `10.148.183.154` (rmnet_data1) | ❌ **셀룰러 IP** |
+    | 앱 2순위 `ip addr show wlan0` | 빈 출력 | ❌ 이 기기에 `wlan0` 없음 |
+    | 앱 3순위 `ifconfig wlan0` | 빈 출력 | ❌ 동일 |
+    | 맥 게이트웨이 | `10.233.247.205` | ✅ 정답 |
+  - **근본 2가지** — ① Samsung Wi-Fi 인터페이스는 `wlan0` 이 아니라 **`swlan0`** ② `ip route get` 의 `src` 는
+    **인터넷으로 나가는 쪽의 주소**라 셀룰러를 준다. **빈 값이 아니라 값을 반환해서** 올바른 후보에
+    **도달조차 못 했다 → 버튼이 `adb connect 10.148.183.154:5555` 를 시도하며 실패**
+  - **순서 개편** — ① 맥 게이트웨이(핫스팟이면 = 폰) ② 기기 `ip addr` 의 Wi-Fi 인터페이스
+    ③ `ifconfig` ④ `ip route get`(**마지막으로 강등**) · `isWifiInterface` 로 `wlan*/swlan*/wlp*` 일반화
+  - **스크립트의 `ping` 도 이 기기에서 오판한다** — 맥→폰 ping **100% loss** · 폰→자기 ping **0.142ms** ·
+    `nc -z :5555` **succeeded** · `get-state` `device`. 즉 **경로가 아니라 폰이 ICMP 를 막는다.**
+    ⇒ 도달 확인을 **`nc -z` (실제 서비스 포트)** 로 교체. 유일한 기준이 ping 이면
+    **연결 가능한 기기를 "닿지 않음" 으로 처리**해 tcpip 을 건너뛴다
+  - **알고리즘** — IP 판별 → `nc` 도달 확인 → **멱등 검사** → `tcpip 5555` → **재시도 3회·2초 간격**
+    (고정 대기 800ms 대체) → `disconnect` → `connect` → `No route to host` 면 adb 서버 재시작 후 1회
+  - **자동 모드 안전장치** — ① 이미 TCP 열려 있으면 **tcpip 생략**(adbd 재시작 = USB 잠깐 사라짐)
+    ② in-flight 세트 (같은 기기 중복 실행 방지) ③ **자동 실패는 팝업 없이 배지 + IssueLog**
+    (사용자가 아무것도 안 했는데 튀면 방해) ④ 설정 토글 기본 ON
+  - **"USB 뽑아도 유지" 의 원리를 UI 에 명시** — `adb tcpip` 은 adbd 를 네트워크 리스닝으로 바꾸므로
+    **케이블을 뽑는 것은 adbd 를 죽이지 않는다.** 단 **재부팅마다 1회** 다시 필요 → 그래서
+    "USB 꽂으면 자동" 이 정확한 트리거. 설정 도움말에 이 한계를 적었다
+  - **중복 표시** — 배지(`USB` / `IP:5555`)는 **이미 있던 것**이라 신규 UI 없음. USB 항목에
+    "자동 연결 실패" 배지만 추가 (안 열렸는데 실패했을 때만)
+  - **회귀 실증** — `routeText` 를 1순위로 되돌리면 테스트가 **실패**하며 셀룰러 IP를 고르는 것을 확인 후 복구
+  - **검증 [HARD]**: `swift test` **463 + 104 = 567 / 0 failed** (착수 시 551, +16) ·
+    `./scripts/build-macos.sh debug` **EXIT=0** · L10n **762키 en/ko 1:1** · U+FFFD 0건
+  - **육안 대기 (코드 대체 불가)**: ① USB 꽂기 → 자동 IP 개방 ② **USB 뽑기 → 유지** ③ 재부팅 후 재삽입 → 자동 재연결
+- [x] **T-2026-09-27-3 로그 뷰어 검색 (adb 측 필터 + 프리셋 칩)** — `PLAN_log_search_relayconsole` · 테스트 12건 신규 · **육안 대기**
+  - **왜 필요했나**: 로그 창에 **텍스트 검색이 없었다.** 레벨 필터(D/I/W/E)만 존재
+  - **결정적 계측** — 검색을 어디서 거르느냐가 갈렸다: `*:W` **초당 1.4만 줄**(3초 42,573줄) →
+    링 2000행은 **0.14초분**. 클라이언트에서만 거르면 읽을 수 있는 시간이 아니라
+    **나타난다 사라지는 것**만 보게 된다. → **adb(기기) 측 1차 필터 + 링 2차 필터** 로 확정(사용자 승인)
+  - **단순 문자열 계약의 핵심** — `NSRegularExpression.escapedPattern` 으로 메타문자 이스케이프.
+    `a.b` 가 임의 문자로 해석되면 사용자가 검색을 **못 하는 것보다 나쁘다**. 대소문자 무시는 `(?i)` 접두
+    (logcat `--regex` 는 Java Pattern)
+  - **디바운스 300ms** — 입력 중 adb 를 새로 띄우지 않는다. 기다리는 동안 이전 스트림이 살아 있으므로
+    **"일치 없음" 문구가 깜빡이지 않고** 로컬 필터가 즉시 결과를 보여준다
+  - **상태 구분 [표시②]** — 검색 중 0줄 = **"일치 없음"**(`droid.logs.search.none`)으로
+    "데이터 없음"(오류로 오해)을 쓰지 않는다. adb stderr 가 있으면 **원인을 덮지 않고** 그대로 노출
+    (`search.none.err` — 잘못된 패턴이 여기에 뜬다)
+  - **정직 배지** — 푸터에 `기기 필터 <검색어>`. adb 필터는 **기기에서** 걸린 결과이며
+    **필터 중에는 이전 구간이 되돌아오지 않는다**를 숨기지 않는다
+  - **프리셋 4종** — ANR · FATAL EXCEPTION · has died · dropbox. **상태 변화 태그는 넣지 않는다**
+    (`thermal` 등 = 2026-09-27 "감지 142건" 장식 사건의 교훈)
+  - **의도적 제외(사유 기록)** — 정규식 문법(사용자가 오타로 adb 를 죽인다) · 일치 하이라이트
+    (행마다 `AttributedString` 재생성 = 이미 CPU 100% 인 앱에 CPU 예산 초과) · `logcat -b` 버퍼 선택
+  - **성능 실측 (같은 기기, 같은 창)** — 검색 전 CPU **89~104%** → 검색 중 **1.4~14%**.
+    검색이 **볼륨을 실제로 줄였다는 계측 증거**(장식이 아니다). 자식 adb `*:W --regex=<검색어>` 로 확인
+  - **검증 [HARD]**: `swift test` **447 + 104 = 551 / 0 failed** (착수 시 539, +12) ·
+    `./scripts/build-macos.sh debug` **EXIT=0** · L10n **755키 en/ko 1:1** · U+FFFD 0건 · 신규 경고 0 ·
+    **타이핑 중에도 자식 adb 1개 유지**(디바운스 + `LogcatProcessSlot` 경쟁 수정의 실기 효과)
+  - **육안 대기**: 프리셋 칩 4종 동작 · `Aa` 토글 · 지우기 · 0건 문구 · 키보드로 타이핑 시 필드 포커스
+- [x] **로그 창 필터 전환마다 adb logcat 이 하나씩 새던 버그** — `LogcatProcessSlot` 신설 · 회귀 테스트 3건
+  - **증상**: 레벨 필터(D/I/W/E)를 바꿀 때마다 `adb logcat` 자식이 **누적**. 실측 필터 4회 전환 → **동시 4개 생존**(규칙은 최대 1개)
+  - **원인 — 종료 알림이 늦게 도착해 자리를 비운다**: `terminationHandler` 는 `Task { @MainActor }` 로 큐잉된다.
+    `stop()` → `terminate()` → 자리 비움 → **새 프로세스 `adopt`** → *이후에* 이전 프로세스 알림이 도착해
+    `self.process = nil` 을 실행 → **살아 있는 새 프로세스의 참조가 사라짐** → 다음 전환에서 `stop()` 이 죽일 대상을 못 찾음
+  - **adb 는 무죄였고 참조 소실이 원인** — 셸에서 `kill -TERM` 은 즉시 종료함을 실측 확인
+  - **조치**: `LogcatProcessSlot`(현재 프로세스 1개의 자리) 신설 — `release(_:)` 는 **내가 아직 들고 있는 그 프로세스일 때만** 비우고 `true`. 알림이 이전 프로세스 것이면 `false` 로 아무것도 안 함
+  - **잔여 (기록만)**: `proc.terminationHandler` 가 `proc` 를 강하게 캡처해 **Process 객체 자체가 죽어도 안 돌아옴**(파이프·핸들러 잔류). 기동 1회당 수십 KB 수준이라 측정 전 손대지 않음 — 필요 시 `[weak proc]` 로 사이클 끊기
+  - **검증**: `swift test` **435 + 104 = 539 / 0 failed** (+3 신규) · `./scripts/build-macos.sh debug` **EXIT=0** ·
+    재실행 후 로그 창 개방 → **adb 자식 정확히 1개**(종전엔 계속 쌓임) · 신규 크래시 0건
+  - **육안 대기**: 필터를 여러 번 바꿔도 adb 자식이 1개를 유지하는지(누적 회귀의 유일한 실기 증거)
+- [x] **로그 버튼 크래시 근본 제거 — `%@` 에 숫자를 넣으면 죽는다** — 브랜치 `fix/logcat-honesty-incident-cap` · `L10nFormatTests` 12건 신규
+  - **증상**: 로그 버튼을 누르면 **즉시 크래시**. 복귀 못 하고 앱이 죽었다가 다시 뜬다
+  - **원인 (추측 아님 — 크래시 리포트가 답이었다)**: `~/Library/Logs/DiagnosticReports/RelayConsole-2026-09-27-170630.ips`
+    - `exception: EXC_BAD_ACCESS · KERN_INVALID_ADDRESS at 0x8ad` · `far = 2221` · **main thread**
+    - 스택: `objc_opt_respondsToSelector` ← `_NSDescriptionWithStringProxyFunc` ← `__CFStringAppendFormatCore` ← `L10n.format` ← **`LogViewerContent.header.getter`**
+    - 즉 `"수신 %@줄"` 에 `streamer.totalLines`(Int)를 넣었다. `%@` 는 **객체를 요구**하는데 CFString 포맷터는 정수를 **포인터로** 읽어 2221(0x8ad) 에 `objc_msgSend` 를 날렸다. **줄 수가 곧 주소가 된다**
+  - **동일 함정 3곳** — ① `droid.logs.count`(창을 열면 **반드시** 발화) ② `droid.logs.term.exit` ③ `droid.logs.term.signal`(②③ 은 **기기를 뽑으면** adb 가 0 으로 끝나므로 정상 경로). 3곳 모두 `%@` ← 숫자
+  - **조치 ① 데이터 정정** — 3개 키 en/ko 동시 `%@` → `%d` (숫자 자리에 숫자 변환자)
+  - **조치 ② 클래스 폐쇄** — `L10n.format` 이 **인자 타입에 맞춰 변환자를 교정**하고 넘긴다. `%@`+숫자→`%d`/`%f` · `%d`+문자열→`%@` · `%s`+숫자→`%d` · 변환자 아닌 문자(`50% 이상`)는 리터럴 통과(인자 소비 안 함) · 인자 부족 변환자는 통째로 제거(va_list 초과 읽기 방지). **호출부가 또 실수해도 죽지 않는다**
+  - **조치 ③ 검수 자동화** (`L10nFormatTests` 12건) — ① 그 자리의 크래시 회귀(2221줄) ② en/ko **변환자 나열까지** 1:1 (한 로케일만 고치면 그쪽에서 크래시 부활) ③ `L10n.format` 호출부 **전수 스캔** — 인자 수 ≠ 변환자 수 / `%@` 에 숫자처럼 보이는 인자. 되돌려 놓으면 잡히는지 **실측 확인**함
+  - **부수 발견 ①**: `files.push.done` 는 변환자 1개에 인자 2개(`dir` 미사용) → 정리
+  - **부수 발견 ② (미수정 · 기록만)**: 앱이 죽으면(배포 스크립트 `pkill`) `adb logcat` 자식이 **고아(PPID 1)로 남아 계속 스트리밍** — 28분짜리 잔존 프로세스를 실측으로 확인 후 정리. 종료 시 `LogcatStreamer.stop()` 연결 필요 (앱 정상 종료 경로에서는 `onDisappear` 가 `stop()` 을 부르므로 **강제 종료(pkill·크래시) 때만** 남음)
+  - **부수 발견 ③ (미수정 · 기록만)**: 이 기기 `*:W` 유입 **초당 1.6만 줄**(5초 82,167행 실측) → 로그 창 개방 시 앱 **CPU 89%** · RSS 184MB. 링 2000행 × `textSelection(.enabled)` 렌더 비용. 사람이 못 읽는 속도라는 점은 `[표시②]` 관점에서 별건
+  - **검증 [HARD]**: `swift test` **432 + 104 = 536 / 0 failed** (착수 시 524, +12) · `./scripts/build-macos.sh debug` **EXIT=0** (1.16.0 · 앱+appex 팀 `6GPJQ7BQC9` 일치) · L10n **744키 en/ko 1:1** 유지 · U+FFFD 0건
+  - **런타임 검증 (육안 대신 계측)**: 재설치 후 `relayconsole://logs` 딥링크로 로그 창 개방 → 앱 PID 불변(69697) · 신규 크래시 리포트 0건 · 앱 CPU 67~89% · `adb logcat` 자식 살아 있음 = **줄이 흐르는 상태로 헤더가 수천 번 렌더**됨. 종전엔 이 순간에 죽었다
+- [x] **logcat 정직성 + 프로세스 사망 파싱 + incident 덤프 상한** — 커밋 `706daa0` · 브랜치 `fix/logcat-honesty-incident-cap` · **육안 대기**
+  - **LogcatStreamer 교착 근본 제거** — `stderr 미배출` 이 원인. 64KB 파이프가 차면 adb 가 `write()` 에서 블로킹돼 **stdout 생산이 멎고** 프로세스도 안 죽어 `terminationHandler` 도 안 불림 = 초록 점 + 빈 화면 영구 지속. stderr 배수 + 알림 펌프 → `readabilityHandler`(전용 스레드, 경합 없음)
+  - **LIVE 거짓말 제거** [표시②] — `isLive`(흐르는 중) / `isSilent`(기동됐으나 0바이트) / `isStalled`(3초간 무수신) 구분. 멈춤 시 **adb stderr 원인을 그대로 노출**
+  - **볼륨** — 실측 무필터 **초당 약 3만 줄**(6초에 20MB). `MinLevel`(D/I/W/E) 필터를 adb 쪽에 적용 + 링 200 → **2000행** + 안정 id(`offset` id 는 플러시마다 전 줄 재렌더) + 수신 총 줄 수 표시
+  - **"크래시 적중 1건"만 남던 문제** — 감지 키워드는 4개인데 파서는 2개만 봄 → `has died` / `force finishing` / `anr in` 대응 추가(`extractProcessDeathContext`). **실기 형식 2종** 처리: `has died. Reason: SIGSEGV` · `has died: cch+5 CEM (926,1457)`(lmkd 킬러 사유 — 종전 `Reason:` 만 찾으므로 통째로 누락)
+  - **`logcatKeywords` 의도적으로 비움** — `accelerometer_rotation`·`wm_user_rotation_changed`·`thermal` 은 에러가 아니라 **센서·회전·발열 상태 변화**. 가만히 있어도 5분에 +140건 → `탐지` 카드가 "문제 142건" 처럼 읽힘 + `>` 클릭 → Alerts(같은 카운트 반복) → 로그 창(교착으로 빈 화면) **세 화면 연속으로 장식**. 실패 신호만 남김
+  - **IncidentBundle — 스택이 하나도 안 들어가던 문제** — ① crash 버퍼 덤프 신설(`-b crash`, `hasCrashLogcat` 필드) ② main 덤프를 `-T` 시각 앵커로 전환(종전 `-t 500` 은 이 기기에서 **약 2초분**이라 캡처 시점엔 이미 롤아웃) ③ **앵커 60초 리드** — `event.at` 은 크래시 그 자체가 **아니다**(폴링 5초 + 캡처 지연). 실측 이벤트 10:00:12 vs 실제 `has died` **10:00:06** → 앵커를 `event.at` 에 두면 크래시 라인이 창 밖으로 밀려남(실측 18건 → 19건)
+  - **39MB 회귀 차단** — 실측 `-T 5분분` = **39.0MB / 33만 줄**(종전 52KB, 750배). adb 쪽에서 못 자름: **`-T` 에 `-t` 를 같이 주면 `-T` 가 이김**(실측 336,024줄) → 읽는 쪽에서 뒤를 자르는 `TailBuffer`(2MB, 이벤트에 가까운 끝 보존). **잘린 양은 파일 첫 줄에 명시**(숨기지 않음). `runCaptureTail` 로 전환하며 stderr 배수 — 종전 `runCaptureData` 에 **같은 함정이 남아 있었음**
+  - **검증 [HARD]**: `swift test` **420 + 104 = 524 / 0 failed** (+13 신규) · `./scripts/build-macos.sh debug` **EXIT=0** (1.16.0 · 팀 6GPJQ7BQC9) · L10n **744키 en/ko 1:1** · U+FFFD 0건
+  - **실기 계측 (10.233.247.205:5555 · SM-S901N)**: `*:W` 필터 후에도 **55,166줄/6초(초당 9천)** — 상위 태그는 `E/HeatmapThread`(22,851)·`E/SemApTrafficData`(19,061)로 삼성 기기 특유 오류 스팸. **crash 버퍼는 이 기기에서 0줄**(덤프는 유지 — 버퍼를 쓰는 기기를 위해) · 번들 34개 23MB(스크린샷이 대부분)
 
 ## 완료 (2026-09-26)
 - [x] **성능·안정성 리팩토링 6단계 전체 완료** — `PLAN_refactor_perf_stability_macos` · PR #45~#50 · 태그 `pre-refactor-perf` 롤백 지점

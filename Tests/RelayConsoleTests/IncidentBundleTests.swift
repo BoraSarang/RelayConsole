@@ -3,6 +3,66 @@ import Testing
 @testable import RelayConsole
 
 struct IncidentBundleTests {
+    // MARK: - TailBuffer (logcat 덤프 상한)
+
+    @Test func tailBufferKeepsEverythingUnderLimit() {
+        var t = IncidentBundleLogic.TailBuffer(maxBytes: 100)
+        t.append(Data("abc".utf8))
+        t.append(Data("de".utf8))
+        #expect(t.droppedBytes == 0)
+        #expect(String(decoding: t.data, as: UTF8.self) == "abcde")
+    }
+
+    /// 상한을 넘으면 **뒤**가 남아야 한다 — `-T <이벤트 시각>` 기준이라 끝이 이벤트 근처다
+    @Test func tailBufferDropsFromFrontKeepsTail() {
+        var t = IncidentBundleLogic.TailBuffer(maxBytes: 4)
+        t.append(Data("0123456789".utf8))
+        #expect(String(decoding: t.data, as: UTF8.self) == "6789")
+        #expect(t.droppedBytes == 6)
+    }
+
+    @Test func tailBufferAccumulatesDroppedAcrossChunks() {
+        var t = IncidentBundleLogic.TailBuffer(maxBytes: 3)
+        for chunk in ["aaaa", "bbbb", "cccc"] {
+            t.append(Data(chunk.utf8))
+        }
+        #expect(String(decoding: t.data, as: UTF8.self) == "ccc")
+        #expect(t.droppedBytes == 9)
+    }
+
+    @Test func tailBufferEmptyChunkIsNoOp() {
+        var t = IncidentBundleLogic.TailBuffer(maxBytes: 4)
+        t.append(Data())
+        #expect(t.isEmpty)
+        #expect(t.droppedBytes == 0)
+    }
+
+    /// 상한 0 = 전부 버린다 — 그래도 "몇 바이트 잃었는지"는 기록되어야 한다
+    @Test func tailBufferZeroLimitDropsEverythingAndCounts() {
+        var t = IncidentBundleLogic.TailBuffer(maxBytes: 0)
+        t.append(Data("hello".utf8))
+        #expect(t.isEmpty)
+        #expect(t.droppedBytes == 5)
+    }
+
+    /// 앵커는 `event.at` 이 아니라 **여유를 되돌린 시각**이어야 한다.
+    /// 크래시 라인은 이벤트 시각보다 먼저 찍힌다 (실측: 10:00:06 크래시 / 10:00:12 이벤트).
+    @Test func mainLogcatLeadSecondsIsAppliedToAnchor() {
+        #expect(IncidentBundleLogic.mainLogcatLeadSeconds > 0)
+        // 폴링 주기(5초)와 5분 쿨다운(300초)보다 짧으면 크래시를 못 담는다
+        #expect(IncidentBundleLogic.mainLogcatLeadSeconds >= 60)
+    }
+
+    @Test func truncationNoticeRevealsDroppedAmount() {
+        let s = IncidentBundleLogic.truncationNotice(
+            droppedBytes: 37 * 1_048_576,
+            maxBytes: 2 * 1_048_576
+        )
+        #expect(s.contains("37.0MB"))
+        #expect(s.contains("2MB"))
+        #expect(s.contains("생략"))
+    }
+
     // MARK: - captures
 
     @Test func capturesOnlyAnrCrashSiteDown() {

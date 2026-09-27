@@ -15,6 +15,12 @@ final class DeviceDailyStore {
     /// serial → 마지막 저장 시각 (1분 디바운스)
     private var lastFlushAt: [String: Date] = [:]
     private var pending: Set<String> = []
+    /// map 이 바뀔 때마다 증가 — **캐시 무효화용** (2026-09-27 알림 지연 조사)
+    ///
+    /// `map` 은 @Published 가 아니라 값을 바꿔도 SwiftUI 를 깨우지 않는다.
+    /// 그래서 "바뀌었나"를 알려줄 신호가 없었고, 인사이트는 그래서 매 body 마다
+    /// 다시 계산했다. 이 카운터가 그 신호다.
+    private(set) var revision: Int = 0
 
     /// 저장 실패 사유 (nil 이면 정상)
     var lastSaveError: String? { writer.lastError }
@@ -73,6 +79,7 @@ final class DeviceDailyStore {
         var daily = map[k] ?? DeviceDaily(serial: serial, dayKey: day)
         DeviceDailyLogic.merge(into: &daily, sample: sample)
         map[k] = daily
+        revision &+= 1
 
         let now = sample.at
         let shouldFlush: Bool
@@ -100,6 +107,7 @@ final class DeviceDailyStore {
         var daily = map[k] ?? DeviceDaily(serial: serial, dayKey: day)
         DeviceDailyLogic.countEvent(into: &daily, kind: kind, isClear: isClear)
         map[k] = daily
+        revision &+= 1
         pending.insert(serial)
         if let last = lastFlushAt[serial], at.timeIntervalSince(last) >= Self.debounceSeconds {
             save()
@@ -144,6 +152,7 @@ final class DeviceDailyStore {
         map = [:]
         pending.removeAll()
         lastFlushAt.removeAll()
+        revision &+= 1
         save()
     }
 }

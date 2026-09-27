@@ -247,7 +247,8 @@ enum PatternLogic {
             let clears = sorted.filter { $0.isClear }
             guard !enters.isEmpty else { continue }
 
-            let dayKeys = Set(enters.map { InsightLogic.dayKey(for: $0.at, calendar: calendar) })
+            // 정수 dayKey — `dayKeys` 는 개수(반복일수)만 쓰이므로 형식이 상관없다 (2026-09-27 조사)
+            let dayKeys = Set(enters.map { DeviceDailyLogic.dayKeyInt(for: $0.at, calendar: calendar) })
             let recentCount = enters.filter { $0.at >= repeatingCutoff }.count
 
             // MTTR — 같은 fingerprint enter→가장 가까운 clear
@@ -505,16 +506,21 @@ enum ReportLogic {
     ) -> DayOverDayReport {
         let prevKey = InsightLogic.previousDayKey(dayKey)
 
-        func filterDay(_ key: String?) -> [WatchEvent] {
-            guard let key else { return [] }
+        // 정수 dayKey 로 비교 — 이벤트마다 문자열을 만들지 않는다 (2026-09-27 조사)
+        // `InsightLogic.dayKey(for:)` 는 `.current` 캘린더를 쓰므로 여기서도 동일하게 맞춘다.
+        let targetInt = DeviceDailyLogic.dayKeyInt(dayKey)
+        let prevInt = prevKey.map { DeviceDailyLogic.dayKeyInt($0) }
+
+        func filterDay(_ target: Int?) -> [WatchEvent] {
+            guard let target else { return [] }
             return events.filter {
                 !$0.isClear
-                    && InsightLogic.dayKey(for: $0.at) == key
+                    && DeviceDailyLogic.dayKeyInt(for: $0.at) == target
                     && (serial == nil || $0.serial == serial)
             }
         }
-        let today = filterDay(dayKey)
-        let prev = filterDay(prevKey)
+        let today = filterDay(targetInt)
+        let prev = filterDay(prevInt)
 
         func daily(_ key: String?) -> DeviceDaily? {
             guard let key else { return nil }
