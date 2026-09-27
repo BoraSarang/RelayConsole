@@ -1,7 +1,8 @@
 # 조사 — 알림 유입 시 전 탭 지연 (2026-09-27)
 
-> 성격: **조사·제안** (코드 변경 없음) · 실측 기반 · 추측 금지
+> 성격: **조사 → 적용 완료** (제안 1·2 구현됨, 2026-09-27 저녁) · 실측 기반 · 추측 금지
 > 관련: `session-2026-09-27-2/3/4` · 성능 예산 `rules/budgets.json` (p95 프레임 16.7ms)
+> **구현 결과 → §7**
 
 ---
 
@@ -195,3 +196,54 @@ static func dayKey(for date: Date, calendar: Calendar = .current) -> String {
   Instruments 없이 코드만으로 확정할 수 없다. 제안 1 적용 후 **체감 재확인**이 최종 증거
 - `MenuBarPopoverView` 의 15초 타이머(`now = t`)가 매 15초 body 를 깨우는데,
   이 탭이 얼마나 무거운지는 **별도 측정**이 필요하다 (팝오버는 상시 마운트)
+
+---
+
+## 7. 적용 결과 (제안 1·2 · 2026-09-27 저녁)
+
+### 제안 1 — `dayKey` 정수화 ✅
+
+`DeviceDailyLogic.dayKeyInt(for:)` / `dayKeyInt(_:)` 추가.
+`ReportLogic.dayOverDay` 의 `filterDay` 2회와 `PatternLogic.patterns` 의 `Set(map:)` 를 정수 비교로 전환.
+
+| 대상 | 적용 전 | 적용 후 | 개선 |
+|---|---|---|---|
+| `report` | 4.330 ms | **1.935 ms** | 2.2배 |
+| `patterns` | 1.759 ms | **1.164 ms** | 1.5배 |
+| `insight` | 0.126 ms | 0.131 ms | — |
+| **body 합계** | **6.2 ms** | **3.2 ms** | **1.9배** |
+
+**설계 규칙**: 이 함수는 **비교 전용**이다. 스토어 키(`serial|dayKey`)처럼 문자열이 필요한
+곳은 `dayKey(for:)` 를 그대로 쓴다 — 키 포맷을 바꾸면 저장 데이터와 어긋난다.
+
+### 제안 2 — 인사이트 캐시 ✅
+
+`InsightsView` 에 `InsightCacheBox`(클래스) + `InsightCacheKey`(9종)를 도입.
+
+- **캐시 키 9종**: `events.first` · `events.last` · `events.count` · `selectedKey` ·
+  **`todayKey`(자정 경계)** · `serialFilter` · `thresholds` · `dailyRevision` · `sessionRevision`
+- **전제 확보**: `DeviceDailyStore` / `ConnectionSessionStore` 에 **`revision` 카운터** 신설.
+  둘 다 `@Published` 가 아니라 "바뀌었나" 신호가 없었다 — **이게 캐시가 성립하는 근거**
+- **예상**: 알림 1건당 InsightsView 비용 **6.4ms → 0ms(적중 시)**
+
+### 검증
+
+- **캐시 규칙 실측**: 상태 변화 6종(알림·날짜·기기필터·Daily·세션)이 **정확히 1회씩** 무효화,
+  동일 입력은 hit 반복 — 확인 후 **영구 테스트로 고정** (`everyStateChangeInvalidatesExactlyOnce`)
+- **동치성**: `dayKeyInt` ↔ `dayKey` 문자열이 1,600일에 걸쳐 일치(윤년·월경계 포함),
+  `dayOverDay` 결과가 정수화 전과 **동일**함을 테스트로 고정
+- `[HARD]`: `swift test` **473 + 104 = 577 / 0 failed** · `build-macos.sh debug` **EXIT=0**
+
+### 부수 — 환경 의존 테스트 제거
+
+`WifiAutoTests.reachabilityUsesAdbPortNotPing` 가 실기 IP(`10.233.247.205`)를 하드코딩해
+**핫스팟을 끄는 순간 실제로 깨졌다.** 판정과 무관한 입력 검증(잘못된 IP·루프백·닫힌 포트)으로 교체.
+
+> **원칙**: 환경이 바뀌면 깨지는 테스트는 **버그 신호가 아니라 잡음**이다.
+> 실기 계측은 그 시점에 문서에 남기고, 테스트는 결정적(deterministic)으로만 유지한다.
+
+### 남은 것
+- **알림 1건이 여전히 `objectWillChange` 2회** — 캐시로 계산 비용을 없앴지만
+  SwiftUI 자체 재평가 비용은 남는다. 완전 제거는 `@Published` 세분화(제안 3)이며 **보류**
+- **체감 재확인** — Instruments 없이 코드만으로 프레임 정지 시간은 확정 불가.
+  실제 앱에서 알림을 몰아넣고 체감 확인이 최종 증거다

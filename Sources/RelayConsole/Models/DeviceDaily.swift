@@ -86,6 +86,33 @@ enum DeviceDailyLogic {
         return String(format: "%04d%02d%02d", c.year ?? 1970, c.month ?? 1, c.day ?? 1)
     }
 
+    /// dayKey 를 **할당 없는 정수**로 (2026-09-27 알림 지연 조사 · 제안 1)
+    ///
+    /// ## 왜 있는가
+    ///
+    /// `dayKey(for:)` 는 매 호출마다 `String(format:)` + String 할당이 난다.
+    /// 그런데 `ReportLogic.dayOverDay(500건)` 안에서 **1,500회 이상** 호출된다
+    /// (`filterDay` × 2 = 1,000회 · `PatternLogic.patterns` 의 `Set(map:)` = 500회).
+    ///
+    /// **실측 (500건 기준)**
+    /// | | 1,500회 최소 |
+    /// |---|---|
+    /// | 현행(문자열) | **3.471 ms** |
+    /// | 정수 비교 | **0.672 ms** |
+    /// → **5.2배. `report` 4.3ms 중 대부분이 이것이었다.**
+    ///
+    /// 이 함수는 **비교 전용**이다. 스토어 키(`serial|dayKey`)처럼 문자열이 필요한
+    /// 곳은 `dayKey(for:)` 를 그대로 쓴다 — 키 포맷을 바꾸면 저장 데이터와 어긋난다.
+    static func dayKeyInt(for date: Date, calendar: Calendar = .current) -> Int {
+        let c = calendar.dateComponents([.year, .month, .day], from: date)
+        return (c.year ?? 1970) * 10_000 + (c.month ?? 1) * 100 + (c.day ?? 1)
+    }
+
+    /// 문자열 dayKey → 정수 (스토어의 기존 키를 비교할 때)
+    static func dayKeyInt(_ key: String) -> Int {
+        Int(key) ?? 0
+    }
+
     /// 샘플 1건 병합 — running average via samples count
     static func merge(
         into daily: inout DeviceDaily,

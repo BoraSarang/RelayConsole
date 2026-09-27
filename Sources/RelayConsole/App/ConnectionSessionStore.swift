@@ -8,6 +8,9 @@ final class ConnectionSessionStore {
     private let url: URL
     private let queue = DispatchQueue(label: "relay.connectionstore", qos: .utility)
     private(set) var sessions: [ConnectionSession] = []
+    /// sessions 이 바뀔 때마다 증가 — **캐시 무효화용** (2026-09-27 알림 지연 조사)
+    /// `sessions` 도 @Published 가 아니어서 변경 신호가 없었다.
+    private(set) var revision: Int = 0
 
     private init() {
         self.url = Self.defaultURL()
@@ -61,13 +64,14 @@ final class ConnectionSessionStore {
 
     func open(serial: String, kind: ConnectionKind, at: Date = .now) {
         ConnectionSessionLogic.open(sessions: &sessions, serial: serial, kind: kind, at: at)
+        revision &+= 1
         save()
     }
 
     @discardableResult
     func close(serial: String, at: Date = .now) -> Bool {
         let ok = ConnectionSessionLogic.close(sessions: &sessions, serial: serial, at: at)
-        if ok { save() }
+        if ok { revision &+= 1; save() }
         return ok
     }
 

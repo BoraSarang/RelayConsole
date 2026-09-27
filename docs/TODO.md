@@ -19,7 +19,43 @@
 - [ ] **Apple Phase 2** — Developer Mode·sysmon 등 — 위 기기 확보 후 착수 (A9)
 - [ ] **Apple 크래시 리포트 수집 (반드시 해야 할 작업)** — `idevicecrashreport`로 iOS `.ips` crash/ANR를 IncidentBundle에 첨부. 기기 확보 시 1순위. Trust USB + `idevicecrashreport -u <udid> copy` 패턴. Android `logcat -b crash`/dropbox 대응 Apple 쪽 원재료 — **기기 확보 전 구현 불가, 반드시 기억할 것**
 
+## 진행 중 (bd ready)
+- [ ] **stale TCP 엔드포인트 미정리** (2026-09-27 자동 모드 실기 검증 중 발견) —
+  Wi-Fi IP 가 바뀌면 `adb devices` 에 옛 항목이 남아 **같은 폰이 2개 기기로 잡히고 폴링도 2배**
+  (adb 자식 3개 실측). `autoEnableIfEnabled` 가 "이미 열려 있으면 skip" 만 하고 정리하지 않는다.
+  후보: TCP 전환 성공 시 **같은 기기의 옛 엔드포인트**를 `adb disconnect` — 단, "같은 기기" 판별은
+  USB serial 과의 매핑이 필요하므로 **추측 금지 원칙상 실측 후 착수**
+
 ## 완료 (2026-09-27)
+- [x] **T-2026-09-27-5 알림 유입 시 전 탭 지연 — 제안 1·2 적용** — `RESEARCH_alert_tab_slowness` · 테스트 10건 신규
+  - **조사 결론**: "데이터가 많아서" 가 **아니다**. 실측 — 알림 1건 유입 = **0.12ms**,
+    실제 유입률 **15분에 11건**. 느린 곳은 **InsightsView 하나**(body 1회 6.2ms)였고
+    그것이 `objectWillChange` 전파 + 프레임 예산 초과로 **연쇄 지연**을 만든 것
+  - **제안 1 — `dayKey` 정수화** (상수 시간 · 위험 최소)
+    `dayKey(for:)` 가 `dayOverDay(500건)` 안에서 **1,500회 이상** 호출되며 매번 `String(format:)` + 할당.
+    1,500회 기준 **문자열 3.471ms → 정수 0.672ms (5.2배)**
+    | 대상 | 적용 전 | 적용 후 |
+    |---|---|---|
+    | `report` | 4.330 ms | **1.935 ms** |
+    | `patterns` | 1.759 ms | **1.164 ms** |
+    | body 합계 | **6.2 ms** | **3.2 ms** |
+    - 스토어 키(`serial|dayKey`)는 문자열 유지 — 키 포맷을 바꾸면 저장 데이터와 어긋난다
+  - **제안 2 — 인사이트 캐시** — 알림 1건이 `objectWillChange` 2회로 body 를 2번 평가해
+    **6.4ms**(프레임 예산 38%)였다. 입력이 같으면 재계산하지 않음 → **적중 시 0ms**
+    - 무효화 키 9종: `events(first,last,count)` · `selectedKey` · **`todayKey`(자정 경계)** ·
+      `serialFilter` · `thresholds` · `dailyRevision` · `sessionRevision`
+    - `DeviceDailyStore` / `ConnectionSessionStore` 에 **`revision` 카운터 신설** — 둘 다
+      `@Published` 가 아니라 "바뀌었나" 신호가 없었다. **이게 캐시의 전제**
+  - **캐시 검증** — 상태 변화 6종(알림·날짜·기기필터·Daily·세션)이 **정확히 1회씩** 무효화되고
+    동일 입력은 hit 을 반복하는 것을 **영구 테스트로 고정**(`everyStateChangeInvalidatesExactlyOnce`).
+    캐시 버그의 위험은 "안 바뀌어야 할 때 바꾸는" 쪽이 아니라 **"바뀌었는데 그대로 쓰는"** 쪽이다
+  - **[HARD]**: `swift test` **473 + 104 = 577 / 0 failed** (착수 시 567, +10) ·
+    `./scripts/build-macos.sh debug` **EXIT=0** · 신규 경고 0
+  - **하지 않은 것**: `@Published` 20개 세분화(구조적 · 14개 View 의존성 전부 재매핑 필요 —
+    **09-26 보류 전례 있음**, 1·2 로 체감 문제 먼저 없앤 뒤 측정 후 재판단)
+  - **부수 발견 — 환경 의존 테스트 제거**: `reachabilityUsesAdbPortNotPing` 가 실기 IP 를 하드코딩해
+    **핫스pot을 끄는 순간 깨졌다**(실제로 그럼). 판정과 무관한 입력 검증으로 교체 —
+    "환경이 바뀌면 깨지는 테스트"는 **버그 신호가 아니라 잡음**이다
 - [x] **T-2026-09-27-4 USB 연결 시 자동 Wi-Fi ADB + IP 판별 버그 수정** — `PLAN_wifi_auto_tcpip_relayconsole` · 테스트 16건 신규 · **육안 3단계 대기**
   - **작업을 열자마자 나온 결함**: 자동화를 붙이려던 중 **기존 "Wi-Fi 전환" 버튼이 이 기기에서 고장**임을 계측으로 확인
   - **버그 실측 (SM-S901N · 핫스팟 + 셀룰러 동시)**

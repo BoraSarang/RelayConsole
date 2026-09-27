@@ -134,17 +134,24 @@ struct WifiAutoTests {
 
     // MARK: - 도달 확인 기준 (ping 아닌 포트)
 
-    /// 실측: 맥 → 폰 ping 은 100% loss, 같은 주소에 `nc 5555` 는 succeeded.
-    /// ping 을 유일한 기준으로 삼으면 **연결 가능한 기기를 "닿지 않음" 으로 오판**한다.
-    @Test func reachabilityUsesAdbPortNotPing() {
-        #expect(PingProbe.reachable(ip: "10.233.247.205", port: 5555))
+    /// **판정에 무관한 것만** 고정한다 — 실기 IP/연결 여부에 의존하면
+    /// 핫스팟을 끄는 순간 테스트가 깨진다(2026-09-27 실제로 그랬다).
+    ///
+    /// 실측 근거(문서화용): 맥 → 폰 ping 100% loss · 폰 → 자기 ping 0.142ms ·
+    /// `nc 5555` succeeded. 즉 이 기기는 ICMP 를 막고 adb 포트는 연다.
+    /// 그래서 기준을 `nc -z` 로 잡았다 — ping 이면 "연결 가능한 기기" 를
+    /// "닿지 않음" 으로 오판해 tcpip 을 건너뛴다.
+    @Test func reachabilityRejectsInvalidInputWithoutTouchingNetwork() {
+        // 잘못된 입력 / 루프백은 네트워크를 건드리지 않고 즉시 false 여야 한다
+        #expect(!PingProbe.reachable(ip: "not-an-ip"))
+        #expect(!PingProbe.reachable(ip: "999.1.1.1"))
+        #expect(!PingProbe.reachable(ip: "127.0.0.1"), "루프백은 검사 대상이 아니다")
+        #expect(!PingProbe.reachable(ip: ""))
     }
 
-    @Test func unreachableAndInvalidAddresses() {
-        // 192.0.2.0/24 은 TEST-NET — RFC5737 문서용이라 절대 응답하지 않는다
-        #expect(!PingProbe.reachable(ip: "192.0.2.1", port: 5555))
-        #expect(!PingProbe.reachable(ip: "not-an-ip"))
-        #expect(!PingProbe.reachable(ip: "127.0.0.1"), "루프백은 검사 대상이 아니다")
+    /// 닫혀 있는 포트(로컬 listen 없는 고포트) 는 false — 도달 불가의 기본 동작
+    @Test func closedPortIsUnreachable() {
+        #expect(!PingProbe.reachable(ip: "127.0.0.1", port: 9))
     }
 
     @Test func parseGatewayNilWhenAbsent() {
