@@ -202,7 +202,12 @@ struct LogcatNoiseFilterTests {
     @Test func levelFilterComesFirstAndExclusionsFollow() {
         let specs = LogcatFilter.filterSpecs(minLevel: "*:W", excludedTags: LogcatFilter.noisyTags)
         #expect(specs.first == "*:W", "레벨 필터가 첫 칸이어야 인자가 한 줄로 읽힌다")
-        #expect(specs == ["*:W", "SemApTrafficData:S", "HeatmapThread:S"])
+        #expect(specs == [
+            "*:W",
+            "SemApTrafficData:S",
+            "HeatmapThread:S",
+            "ThermalManagerService$ThermalHalWrapper:S",
+        ])
     }
 
     @Test func noExclusionLeavesLevelFilterAlone() {
@@ -212,9 +217,20 @@ struct LogcatNoiseFilterTests {
 
     /// 실측으로 확인된 값을 코드에 고정한다 — 목록이 조용히 바뀌면 효과도 조용히 사라진다
     @Test func noisyTagsMatchTheMeasuredOffenders() {
-        #expect(LogcatFilter.noisyTags == ["SemApTrafficData", "HeatmapThread"])
+        #expect(LogcatFilter.noisyTags == [
+            "SemApTrafficData",
+            "HeatmapThread",
+            "ThermalManagerService$ThermalHalWrapper",
+        ])
         // 20초 전수 스캔: 282,655줄 중 SemAp 261,521(92.5%) · 서로 다른 메시지는 1종류
-        // (PLAN_log_cpu_noise_filter §1)
+        // ThermalHalWrapper 는 버퍼 2,874줄 (PLAN_log_cpu_noise_filter §1)
+    }
+
+    /// **`$` 가 들어간 태그는 실기에서 검증했다** (2026-09-28 · 버퍼 2,874 → 0줄, 과잉 제외 없음).
+    /// 안전 필터가 `$` 를 걸러내면 **검증된 제외가 조용히 사라진다** — 효과가 아니라 실패처럼 보인다
+    @Test func dollarSignTagSurvivesTheSafetyFilter() {
+        #expect(LogcatFilter.safeTags(["ThermalManagerService$ThermalHalWrapper"])
+                == ["ThermalManagerService$ThermalHalWrapper"])
     }
 
     // MARK: - 명령을 망가뜨리는 값 방어

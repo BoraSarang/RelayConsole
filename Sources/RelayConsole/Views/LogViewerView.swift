@@ -42,9 +42,23 @@ enum LogcatFilter {
     /// |---|---:|---:|---:|
     /// | `SemApTrafficData` | 261,521 | **92.5%** | **1** (`Empty traffic data`) |
     /// | `HeatmapThread` | 1,178 | 0.4% | 3 (모두 `/efs/FactoryApp` 공장 EFS 접근 실패) |
+    /// | `ThermalManagerService$ThermalHalWrapper` | 2,874 | 1.5% | 2 (HAL 조회 실패 — 냉각기·임계값 없음) |
     ///
-    /// 로그 창을 열면 **CPU 102%** 로 올라간다(부하가 100배 변하므로 "40%" 라는 수치는 믿지 않는다).
+    /// 로그 창을 열면 **CPU 99%** 로 올라간다(부하가 100배 변하므로 "40%" 라는 수치는 믿지 않는다).
     /// 1종류 메시지를 초당 1.3만 번 파싱·렌더하는 것이 비용의 대부분이다.
+    /// 더구나 원인은 **개방 순간의 링 버퍼 덤프**였다(231,982줄 → 16,763줄, 7.2%).
+    ///
+    /// ## 왜 `ActivityManager` 는 넣지 않았나 (판단을 넘기는 이유를 남긴다)
+    ///
+    /// 3종 제외 후 잔여 13,811줄 중 `ActivityManager` 가 **40.4%** 이고 그중 5,247줄(94%)이
+    /// **하나의 동일 메시지**다:
+    /// `Foreground service started from background … : service com.nisargjhaveri.netspeed/.IndicatorService`
+    /// 반복도로 보면 소음이지만, **이 줄은 범인 앱 이름을 담고 있다**(버퍼에 앱 7종).
+    /// `Empty traffic data` 와 달리 "무엇이 이 기기를 망가뜨리고 있는가" 를 말해주는 신호이므로
+    /// **기본 제외하지 않는다.** 사용자가 원하면 고를 수 있게 하는 것이 정답이며 — 태그 선택 UI 는 별도 과목.
+    /// `PermissionService`(590줄·1종류) · `DeviceStorageMonitorService`(332줄·2종류) 도
+    /// 순수 반복이지만, 이미 7% 로 줄인 잔여량에서 **6.7%** 뿐이라 뺄 이유가 부족하다
+    /// (숨기는 `E` 줄이 늘면 배지가 아니라 **침묵** 이 된다).
     ///
     /// ## 왜 `--regex` 로 안 됐나 (실측 3-way 비교)
     ///
@@ -66,7 +80,11 @@ enum LogcatFilter {
     /// - **범위가 좁다** — 로그 창의 실시간 스트림에만 적용된다.
     ///   `IncidentBundle` 캡처(`logcat -d`)와 `logcatKeywords` 스캔은 **전량 그대로**다.
     ///   "incident 를 뽑아 보면 저게 보인다" 는 사실이 유지된다
-    static let noisyTags: [String] = ["SemApTrafficData", "HeatmapThread"]
+    static let noisyTags: [String] = [
+        "SemApTrafficData",
+        "HeatmapThread",
+        "ThermalManagerService$ThermalHalWrapper",
+    ]
 
     /// 제외 토글 저장 키 — 기본 ON
     static let excludeNoisyKey = "relay.logs.excludeNoisyTags"
@@ -77,16 +95,21 @@ enum LogcatFilter {
     /// - `*` 를 넣으면 **모든 로그가 사라진다**(전부 조용히 — [표시②] 위반)
     /// - 공백·`:` 등이 섞이면 필터식이 깨진다
     ///
-    /// 비-ASCII 태그도 여기서 떨어진다. 필터식 문법은 ASCII 를 전제로 하고,
-    /// **제외가 안 되는 것(효과 없음)보다 명령이 깨지는 것(전부 안 보임)이 나쁘다.**
-    /// 그러므로 이 함수는 "안전한 것만 남긴다" 로 정의한다.
+    /// **비-ASCII 와 `$` 를 빼는 이유가 다르다.**
+    /// 비-ASCII 태그는 필터식 문법의 전제 밖이라 애초에 검증되지 않았다.
+    /// `$` 는 **검증된** 태그에 실제로 들어 있다(`ThermalManagerService$ThermalHalWrapper`).
+    /// 2026-09-28 실기 — 버퍼 2,874줄이 이 태그였고 `'<tag>:S'` 를 걸었더니 **0줄**,
+    /// 다른 태그는 194,910 → 185,309(딱 2,874줄만 감소)로 과잉 제외도 없었다.
+    /// 즉 `$` 는 필터식 문법에서 특별하지 않다. **검증된 걸로 막으면 된다가 아니라,
+    /// 검증된 예외는 예외로 들여다보다** — 이 성질이 문서에 없었다면 이 태그가 조용히 사라졌다.
     static func safeTags(_ tags: [String]) -> [String] {
-        let asciiTag = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_")
+        let allowed = CharacterSet(charactersIn:
+            "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_$")
         var out: [String] = []
         for tag in tags {
             let t = tag.trimmingCharacters(in: .whitespaces)
             guard !t.isEmpty, t != "*" else { continue }
-            guard t.unicodeScalars.allSatisfy({ asciiTag.contains($0) }) else { continue }
+            guard t.unicodeScalars.allSatisfy({ allowed.contains($0) }) else { continue }
             out.append(t)
         }
         return out
