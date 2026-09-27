@@ -432,7 +432,7 @@ final class FileBrowserController: ObservableObject {
                 } else if errorText != nil {
                     self.statusMessage = L10n.string("files.error.push")
                 } else {
-                    self.statusMessage = L10n.format("files.push.done", "\(okCount)", dir)
+                    self.statusMessage = L10n.format("files.push.done", "\(okCount)")
                     self.reloadQuietly(adb: adb, serial: serial, dir: dir)
                 }
             }

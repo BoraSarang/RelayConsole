@@ -158,7 +158,7 @@
 "droid.logs.button" = "▤ Logs";
 "droid.logs.close" = "Close";
 "droid.logs.connecting" = "Connecting";
-"droid.logs.count" = "%@ lines";
+"droid.logs.count" = "%d lines";
 "droid.logs.empty" = "Waiting for logcat…";
 "droid.logs.follow" = "Follow";
 "droid.logs.live" = "LIVE";
@@ -170,8 +170,8 @@
 "droid.logs.stalled.err" = "logcat stalled · nothing received for 3s — adb error: %@";
 "droid.logs.start" = "Start";
 "droid.logs.stop" = "Stop";
-"droid.logs.term.exit" = "logcat exited (code %@)";
-"droid.logs.term.signal" = "logcat killed by signal (%@)";
+"droid.logs.term.exit" = "logcat exited (code %d)";
+"droid.logs.term.signal" = "logcat killed by signal (%d)";
 "droid.logs.title" = "Logs — %@";
 "droid.logs.titleShort" = "Logs";
 "droid.offline.banner" = "Device disconnected — the values below are the last snapshot";

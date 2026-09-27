@@ -20,6 +20,21 @@
 - [ ] **Apple 크래시 리포트 수집 (반드시 해야 할 작업)** — `idevicecrashreport`로 iOS `.ips` crash/ANR를 IncidentBundle에 첨부. 기기 확보 시 1순위. Trust USB + `idevicecrashreport -u <udid> copy` 패턴. Android `logcat -b crash`/dropbox 대응 Apple 쪽 원재료 — **기기 확보 전 구현 불가, 반드시 기억할 것**
 
 ## 완료 (2026-09-27)
+- [x] **로그 버튼 크래시 근본 제거 — `%@` 에 숫자를 넣으면 죽는다** — 브랜치 `fix/logcat-honesty-incident-cap` · `L10nFormatTests` 12건 신규
+  - **증상**: 로그 버튼을 누르면 **즉시 크래시**. 복귀 못 하고 앱이 죽었다가 다시 뜬다
+  - **원인 (추측 아님 — 크래시 리포트가 답이었다)**: `~/Library/Logs/DiagnosticReports/RelayConsole-2026-09-27-170630.ips`
+    - `exception: EXC_BAD_ACCESS · KERN_INVALID_ADDRESS at 0x8ad` · `far = 2221` · **main thread**
+    - 스택: `objc_opt_respondsToSelector` ← `_NSDescriptionWithStringProxyFunc` ← `__CFStringAppendFormatCore` ← `L10n.format` ← **`LogViewerContent.header.getter`**
+    - 즉 `"수신 %@줄"` 에 `streamer.totalLines`(Int)를 넣었다. `%@` 는 **객체를 요구**하는데 CFString 포맷터는 정수를 **포인터로** 읽어 2221(0x8ad) 에 `objc_msgSend` 를 날렸다. **줄 수가 곧 주소가 된다**
+  - **동일 함정 3곳** — ① `droid.logs.count`(창을 열면 **반드시** 발화) ② `droid.logs.term.exit` ③ `droid.logs.term.signal`(②③ 은 **기기를 뽑으면** adb 가 0 으로 끝나므로 정상 경로). 3곳 모두 `%@` ← 숫자
+  - **조치 ① 데이터 정정** — 3개 키 en/ko 동시 `%@` → `%d` (숫자 자리에 숫자 변환자)
+  - **조치 ② 클래스 폐쇄** — `L10n.format` 이 **인자 타입에 맞춰 변환자를 교정**하고 넘긴다. `%@`+숫자→`%d`/`%f` · `%d`+문자열→`%@` · `%s`+숫자→`%d` · 변환자 아닌 문자(`50% 이상`)는 리터럴 통과(인자 소비 안 함) · 인자 부족 변환자는 통째로 제거(va_list 초과 읽기 방지). **호출부가 또 실수해도 죽지 않는다**
+  - **조치 ③ 검수 자동화** (`L10nFormatTests` 12건) — ① 그 자리의 크래시 회귀(2221줄) ② en/ko **변환자 나열까지** 1:1 (한 로케일만 고치면 그쪽에서 크래시 부활) ③ `L10n.format` 호출부 **전수 스캔** — 인자 수 ≠ 변환자 수 / `%@` 에 숫자처럼 보이는 인자. 되돌려 놓으면 잡히는지 **실측 확인**함
+  - **부수 발견 ①**: `files.push.done` 는 변환자 1개에 인자 2개(`dir` 미사용) → 정리
+  - **부수 발견 ② (미수정 · 기록만)**: 앱이 죽으면(배포 스크립트 `pkill`) `adb logcat` 자식이 **고아(PPID 1)로 남아 계속 스트리밍** — 28분짜리 잔존 프로세스를 실측으로 확인 후 정리. 종료 시 `LogcatStreamer.stop()` 연결 필요
+  - **부수 발견 ③ (미수정 · 기록만)**: 이 기기 `*:W` 유입 **초당 1.6만 줄**(5초 82,167행 실측) → 로그 창 개방 시 앱 **CPU 89%** · RSS 184MB. 링 2000행 × `textSelection(.enabled)` 렌더 비용. 사람이 못 읽는 속도라는 점은 `[표시②]` 관점에서 별건
+  - **검증 [HARD]**: `swift test` **432 + 104 = 536 / 0 failed** (착수 시 524, +12) · `./scripts/build-macos.sh debug` **EXIT=0** (1.16.0 · 앱+appex 팀 `6GPJQ7BQC9` 일치) · L10n **744키 en/ko 1:1** 유지 · U+FFFD 0건
+  - **런타임 검증 (육안 대신 계측)**: 재설치 후 `relayconsole://logs` 딥링크로 로그 창 개방 → 앱 PID 불변(69697) · 신규 크래시 리포트 0건 · 앱 CPU 67~89% · `adb logcat` 자식 살아 있음 = **줄이 흐르는 상태로 헤더가 수천 번 렌더**됨. 종전엔 이 순간에 죽었다
 - [x] **logcat 정직성 + 프로세스 사망 파싱 + incident 덤프 상한** — 커밋 `706daa0` · 브랜치 `fix/logcat-honesty-incident-cap` · **육안 대기**
   - **LogcatStreamer 교착 근본 제거** — `stderr 미배출` 이 원인. 64KB 파이프가 차면 adb 가 `write()` 에서 블로킹돼 **stdout 생산이 멎고** 프로세스도 안 죽어 `terminationHandler` 도 안 불림 = 초록 점 + 빈 화면 영구 지속. stderr 배수 + 알림 펌프 → `readabilityHandler`(전용 스레드, 경합 없음)
   - **LIVE 거짓말 제거** [표시②] — `isLive`(흐르는 중) / `isSilent`(기동됐으나 0바이트) / `isStalled`(3초간 무수신) 구분. 멈춤 시 **adb stderr 원인을 그대로 노출**

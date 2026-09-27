@@ -206,6 +206,8 @@ final class LogcatStreamer: ObservableObject {
         lines = next
     }
 
+    /// 종료 사유 — `%@` 에 숫자를 넣으면 크래시한다 (2026-09-27 `EXC_BAD_ACCESS` 0x8ad).
+    /// 키는 `%d` 다 — 기기 뽑으면 adb 가 0 으로 끝나므로 **정상 경로에서도 이 문구가 나온다.**
     nonisolated private static func terminationReason(_ proc: Process) -> String {
         let status = proc.terminationStatus
         if proc.terminationReason == .uncaughtSignal {
@@ -362,6 +364,8 @@ struct LogViewerContent: View {
                 .font(OPFont.number(10))
                 .foregroundStyle(live ? OPColor.ok : OPColor.inkDim)
             if streamer.totalLines > 0 {
+                // 줄 수는 숫자다 — 키는 `%d`. `%@` 에 Int 를 넣으면 이 자리에서 SIGSEGV 났다
+                // (2026-09-27 · `RelayConsole-2026-09-27-170630.ips` far=0x8ad=2221줄)
                 Text(L10n.format("droid.logs.count", streamer.totalLines))
                     .font(OPFont.number(10))
                     .foregroundStyle(OPColor.inkDim)

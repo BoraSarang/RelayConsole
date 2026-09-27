@@ -158,7 +158,7 @@
 "droid.logs.button" = "▤ 로그";
 "droid.logs.close" = "닫기";
 "droid.logs.connecting" = "연결 중";
-"droid.logs.count" = "수신 %@줄";
+"droid.logs.count" = "수신 %d줄";
 "droid.logs.empty" = "logcat 대기 중…";
 "droid.logs.follow" = "자동 스크롤";
 "droid.logs.live" = "LIVE";
@@ -170,8 +170,8 @@
 "droid.logs.stalled.err" = "logcat 멈춤 · 최근 3초간 수신 없음 — adb 오류: %@";
 "droid.logs.start" = "시작";
 "droid.logs.stop" = "중지";
-"droid.logs.term.exit" = "logcat 종료 (코드 %@)";
-"droid.logs.term.signal" = "logcat 시그널 종료 (%@)";
+"droid.logs.term.exit" = "logcat 종료 (코드 %d)";
+"droid.logs.term.signal" = "logcat 시그널 종료 (%d)";
 "droid.logs.title" = "로그 — %@";
 "droid.logs.titleShort" = "로그";
 "droid.offline.banner" = "기기 연결 끊김 — 아래 수치는 마지막 스냅샷입니다";
