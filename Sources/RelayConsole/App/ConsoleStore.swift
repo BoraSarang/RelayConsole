@@ -9,14 +9,11 @@ final class ConsoleStore: ObservableObject {
     static let shared = ConsoleStore()
 
     @Published var inventory = DeviceInventory()
-    @Published var recentEvents: [String] = []
     /// 구조화 감시 이벤트 (PLAN_v0.5) — 심각도·fingerprint 보존, 팝오버 우선 표시용
     @Published private(set) var recentWatchEvents: [WatchEvent] = []
 
     /// 감시 이벤트 보관 상한 (EventStore.maxEvents 와 동일)
     nonisolated static let maxWatchEvents = 500
-    /// 최근 로그 텍스트 상한
-    nonisolated static let maxRecentEvents = 20
     @Published var lastError: String?
     /// serial → DroidMetrics 링 60점 (5s × 60 = 5분)
     @Published private(set) var metricsHistory: [String: DroidMetrics] = [:]
@@ -895,14 +892,11 @@ final class ConsoleStore: ObservableObject {
         selectedDevice.map { metrics(for: $0.serial) }
     }
 
+    /// 최근 로그 한 줄 추가 — `RecentEventsStore` 로 분리했다(2026-09-28).
+    /// 알림 유입(`ingestWatch`)이 `ConsoleStore` 를 무효화하지 않게 하려는 것이라
+    /// 시그니처는 유지한다. `DeviceMonitor` 폴링 경로가 이 메서드를 호출한다.
     func pushEvent(_ text: String) {
-        // 1회 대입 — 중간 상태(21건) 관측 방지 (@Published 는 대입마다 willChange 발화)
-        var next = recentEvents
-        next.insert(text, at: 0)
-        if next.count > Self.maxRecentEvents {
-            next.removeLast(next.count - Self.maxRecentEvents)
-        }
-        recentEvents = next
+        RecentEventsStore.shared.push(text)
     }
 
     // MARK: - Watch events (PLAN_v0.5)
@@ -1338,8 +1332,16 @@ final class ConsoleStore: ObservableObject {
 
     /// 알림·배너 없이 이력만 주입 — 단위 테스트(UN 미사용 환경)용
     func debugIngestWatchQuietly(_ event: WatchEvent) {
-        recentWatchEvents.insert(event, at: 0)
-        if recentWatchEvents.count > 500 { recentWatchEvents.removeLast() }
+        // 실제 `ingestWatch` 와 **같은 1회 대입 패턴**으로 통일(2026-09-28).
+        // in-place 변이를 쓰면 링이 가득 찬 상태에서 `removeLast()` 가 두 번째
+        // `objectWillChange` 를 만들고, 상한을 넘긴 중간 상태(501건)도 관측된다.
+        // → DebugPanel 로 알림을 몰아넣어 체감 검증할 때 **실제보다 나쁜 경로**를 재게 된다.
+        var next = recentWatchEvents
+        next.insert(event, at: 0)
+        if next.count > Self.maxWatchEvents {
+            next.removeLast(next.count - Self.maxWatchEvents)
+        }
+        recentWatchEvents = next
         pushEvent(event.summary)
         EventStore.shared.save(recentWatchEvents)
     }

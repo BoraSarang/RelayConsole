@@ -5,6 +5,9 @@ struct MenuBarPopoverView: View {
     @ObservedObject var store: ConsoleStore
     /// 자동 Wi-Fi ADB 상태 (실패 배지용)
     @ObservedObject private var wifi = WifiAdbController.shared
+    /// 최근 로그 한 줄 목록 — `ConsoleStore` 에서 분리했다(2026-09-28).
+    /// 알림 유입 시 `ConsoleStore` 를 무효화하지 않기 위한 것.
+    @ObservedObject private var recentEvents = RecentEventsStore.shared
     var openConsole: () -> Void
     var openDebug: () -> Void = {}
     var openSettings: () -> Void = {}
@@ -862,7 +865,7 @@ struct MenuBarPopoverView: View {
                 }
             } label: {
                 HStack {
-                    Text(L10n.format("menubar.events.recent", min(store.recentEvents.count, 5)))
+                    Text(L10n.format("menubar.events.recent", min(recentEvents.texts.count, 5)))
                         .font(OPFont.body(11))
                         .foregroundStyle(OPColor.inkDim)
                     Spacer()
@@ -874,13 +877,13 @@ struct MenuBarPopoverView: View {
             .buttonStyle(.plain)
 
             if showEvents {
-                if store.recentWatchEvents.isEmpty && store.recentEvents.isEmpty {
+                if store.recentWatchEvents.isEmpty && recentEvents.texts.isEmpty {
                     Text(L10n.string("menubar.events.empty"))
                         .font(OPFont.body(12))
                         .foregroundStyle(OPColor.inkDim)
                         .lineLimit(1)
                 } else {
-                    let fallback = store.recentEvents.prefix(5).map {
+                    let fallback = recentEvents.texts.prefix(5).map {
                         WatchRow(title: $0, detail: "", severity: .info, isClear: false)
                     }
                     let events = store.recentWatchEvents.isEmpty
