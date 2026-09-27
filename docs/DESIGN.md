@@ -29,7 +29,7 @@
 ## 5. 검색 · 필터 UI 규칙 (v1.16 로그 뷰어)
 - **형태**: 헤더 아래 2행 — ① 검색 입력 + `Aa` + 지우기 ② 프리셋 칩 4종
 - **칩 문법**: `OPColor.card` 채움 + `Capsule` + `OPColor.border` 1px. 활성 시 테두리 `OPColor.cta` + 본문 `ink`
-  (AlertsView `filterChip` 과 **같은 문법** — 한 화면에서 두 가지 필터 문법이并存하지 않게)
+  (AlertsView `filterChip` 과 **같은 문법** — 한 화면에서 두 가지 필터 문법이 섞이지 않게)
 - **입력창**: `card` 채움 + `RoundedRectangle(6)` + `border` 1px · `magnifyingglass` 아이콘 선형(weight .light, 11pt)
 - **다크 전용**: 이 화면은 다크 고정(AGENTS.local §4). 라이트 대응은 하지 않는다
 - **색은 상태에만**: 검색 결과 행은 기존 E/W 색칠 규칙 유지. 일치 하이라이트는 **의도적으로 넣지 않음**
