@@ -742,3 +742,14 @@
 "wifi.status.connecting" = "Connecting…";
 "wifi.status.disconnected" = "Disconnected";
 "wifi.status.enabling" = "Switching to tcpip…";
+"droid.logs.search.placeholder" = "Search (ANR, FATAL, tag)";
+"droid.logs.search.clear" = "Clear";
+"droid.logs.search.ci" = "Ignore case";
+"droid.logs.search.none" = "No lines match %@ yet";
+"droid.logs.search.none.err" = "No matches — adb error: %@";
+"droid.logs.matched" = "%d matches";
+"droid.logs.ring.filtered" = "device filter %@ · last 2000 lines";
+"droid.logs.preset.anr" = "ANR";
+"droid.logs.preset.fatal" = "FATAL EXCEPTION";
+"droid.logs.preset.died" = "has died";
+"droid.logs.preset.dropbox" = "dropbox";

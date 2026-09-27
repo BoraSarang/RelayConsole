@@ -22,6 +22,15 @@ enum L10n {
     /// 즉 **"`%@` 에는 문자열을 넣어야 한다" 는 사람이 지키는 약속이 아니라 런타임 지뢰**다.
     /// 호출부 검수는 사람이 빠뜨리면 그대로 터지므로, 포맷터가 스스로 맞춘다.
     static func format(_ key: String, _ args: CVarArg...) -> String {
+        formatted(key, args)
+    }
+
+    /// 배열 형태 — 판단 함수가 `(키, 인자)` 튜플을 그대로 돌려줄 때 쓴다
+    static func format(_ key: String, _ args: [CVarArg]) -> String {
+        formatted(key, args)
+    }
+
+    private static func formatted(_ key: String, _ args: [CVarArg]) -> String {
         let fmt = string(key)
         // 인자가 없으면 포맷터를 아예 돌리지 않는다 — 변환자를 그대로 보여주는 편이 낫다
         // (va_list 를 넘겨 읽으면 알 수 없는 값이 찍힌다)

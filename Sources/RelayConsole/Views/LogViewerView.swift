@@ -21,6 +21,66 @@ import Combine
 /// 배수는 `readabilityHandler`(전용 백그라운드 스레드)로 통일했다. 종전의
 /// `NSFileHandleDataAvailable` 알림 펌프는 알림 注册/재무장 사이의 경쟁이 있었고,
 /// 알림 기반이므로 런루프 상태에 예민했다.
+/// 로그 검색 — 판단 로직을 **순수 함수**로 분리한다 (2026-09-27 · PLAN_log_search)
+///
+/// 왜 분리했나: `LogcatStreamer` 는 싱글턴이고 `start()` 가 실제 adb 를 필요로 해서
+/// "검색 중인데 0줄" 상태를 단위 테스트로 고정할 방법이 없다. 판단만 떼어 내면 고정된다.
+enum LogcatFilter {
+    /// 검색에 자주 쓰이는 신호 — 실패만, 상태 변화는 넣지 않는다
+    /// (2026-09-27: `thermal`·`accelerometer_rotation` 같은 상태 변화는 실패 신호가 아니다)
+    static let presets: [String] = ["ANR", "FATAL EXCEPTION", "has died", "dropbox"]
+
+    /// adb `logcat --regex=<패턴>` 에 넘길 값.
+    ///
+    /// - 빈 검색어 → `nil` (= 기기 필터 없음)
+    /// - **메타문자는 반드시 이스케이프한다** — 계약은 "단순 문자열" 이므로 `a.b` 가 `a 임의 문자 b` 로
+    ///   해석돼서는 안 된다. 잘못 이스케이프를 빼면 사용자가 검색을 못 하는 것보다 나쁘다.
+    /// - 대소문자 무시 → `(?i)` 접두. logcat `--regex` 는 Java `Pattern` 이므로 지원된다.
+    static func pattern(for query: String, caseInsensitive: Bool) -> String? {
+        let trimmed = query.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return nil }
+        let escaped = NSRegularExpression.escapedPattern(for: trimmed)
+        return caseInsensitive ? "(?i)\(escaped)" : escaped
+    }
+
+    /// 링 버퍼 2차 필터 — adb 가 아직 따라오기 전(디바운스 중)에도 즉시 반응한다.
+    /// adb `--regex` 미지원 기기에서도 여기가 최종 방어선이 된다.
+    static func matches(_ text: String, query: String, caseInsensitive: Bool) -> Bool {
+        let trimmed = query.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return true }
+        return caseInsensitive
+            ? text.lowercased().contains(trimmed.lowercased())
+            : text.contains(trimmed)
+    }
+
+    /// 무数据显示 이유 — [표시②] 실제 상태를 구분해 그대로 말한다.
+    ///
+    /// 핵심 구분: **검색 중인데 0줄** 과 **데이터가 안 옴** 은 다른 상태다.
+    /// 검색 중인데 "데이터 없음" 이라 하면 기기가 멀쩡한데 사용자는 오류라고 읽는다.
+    /// 반대로 adb 오류(stderr)가 있으면 "일치 없음" 으로 덮지 않고 **원인을 그대로** 보여준다.
+    static func silence(
+        query: String,
+        stderr: String?,
+        isSilent: Bool,
+        isStalled: Bool
+    ) -> (key: String, args: [CVarArg])? {
+        let hasQuery = !query.trimmingCharacters(in: .whitespaces).isEmpty
+        if isSilent {
+            if hasQuery {
+                if let stderr, !stderr.isEmpty { return ("droid.logs.search.none.err", [stderr]) }
+                return ("droid.logs.search.none", [query])
+            }
+            if let stderr, !stderr.isEmpty { return ("droid.logs.silent.err", [stderr]) }
+            return ("droid.logs.silent", [])
+        }
+        if isStalled {
+            if let stderr, !stderr.isEmpty { return ("droid.logs.stalled.err", [stderr]) }
+            return ("droid.logs.stalled", [])
+        }
+        return nil
+    }
+}
+
 /// 기동 중인 프로세스 **한 개의 자리** — 종료 알림이 "이전 프로세스" 것인지 판별한다.
 ///
 /// ## 왜 이 클래스가 있나 (2026-09-27 실측)
@@ -84,6 +144,10 @@ final class LogcatStreamer: ObservableObject {
     @Published private(set) var totalLines: Int = 0
     /// 필터 변경 시 스트림을 다시 튼다 (이 값을 바꾸면 `restartOnLevelChange` 참조)
     @Published var minLevel: MinLevel = .warning
+    /// 검색어 — 로컬 2차 필터는 **즉시** 반영, adb 1차 필터는 디바운스 뒤 반영된다
+    @Published var query: String = ""
+    /// 대소문자 무시
+    @Published var caseInsensitive: Bool = false
 
     /// `isLive` 판정용 틱 — 시간이 지나면 스스로 갱신되어야 "정지"를 감지한다
     @Published private var tick = Date()
@@ -91,12 +155,25 @@ final class LogcatStreamer: ObservableObject {
     /// 기동 중인 프로세스의 자리 — 종료 알림이 **이전 프로세스** 것인지 판별한다
     private let slot = LogcatProcessSlot()
     private var tickTask: Task<Void, Never>?
+    /// adb 1차 필터 재기동 대기 — 입력 중 adb 를 새로 띄우지 않기 위한 디바운스
+    private var searchTask: Task<Void, Never>?
     private let stderrTail = StderrTail()
     private var nextID: UInt64 = 0
     /// 링 버퍼 상한
     private let maxLines = 2000
+    /// 2차 필터 메모 키 — 링이 같은 상태 + 같은 검색 조건일 때만 재계산한다
+    private struct FilterKey: Equatable {
+        let count: Int
+        let first: UInt64?
+        let last: UInt64?
+        let query: String
+        let caseInsensitive: Bool
+    }
+    private var filterCache: (key: FilterKey, value: [Line])?
     /// 이만큼 넘게 바이트가 없으면 "살아 있지만 멈춤" 으로 본다
     static let staleAfter: TimeInterval = 3
+    /// 검색어 입력 → adb 재기동 대기 — 사람 속도(초당 3~5자)면 한 번만 재기동된다
+    static let searchDebounce: TimeInterval = 0.3
 
     private init() {}
 
@@ -119,13 +196,17 @@ final class LogcatStreamer: ObservableObject {
 
     /// 왜 안 나오는지 — [표시②] 실제 원인을 그대로 노출한다
     var silenceReason: String? {
-        let tail = stderrTail.lastMeaningful
-        if isSilent, let tail { return L10n.format("droid.logs.silent.err", tail) }
-        if isSilent { return L10n.string("droid.logs.silent") }
-        if isStalled, let tail { return L10n.format("droid.logs.stalled.err", tail) }
-        if isStalled { return L10n.string("droid.logs.stalled") }
-        return nil
+        guard let s = LogcatFilter.silence(
+            query: query,
+            stderr: stderrTail.lastMeaningful,
+            isSilent: isSilent,
+            isStalled: isStalled
+        ) else { return nil }
+        return L10n.format(s.key, s.args)
     }
+
+    /// 지금 adb 에 실제로 적용된 검색 패턴 — "기기 필터" 배지에 쓴다
+    private(set) var appliedPattern: String?
 
     // MARK: - 수명 주기
 
@@ -146,8 +227,16 @@ final class LogcatStreamer: ObservableObject {
         let proc = Process()
         proc.executableURL = URL(fileURLWithPath: adb)
         // 레벨 필터를 adb 쪽에서 적용 — 이 기기는 무필터 시 초당 3만 줄이라
-        // 파이프가 살아 있어도 사람이 읽을 수 없다.
-        proc.arguments = ["-s", serial, "logcat", "-v", "time", minLevel.filterSpec]
+        // 파이프가 살아 있어도 사람이 못 본다.
+        //
+        // 검색도 **adb(기기) 쪽**에서 거른다. 이 기기는 초당 1.4만 줄이라 클라이언트에서만
+        // 거르면 0.14초분밖에 볼 수 없다 — 볼륨 자체를 줄여야 검색이 산다.
+        // Process 배열 인자라 셸 인용 위험이 없다(패턴에 공백이 있어도 한 인자로 전달된다).
+        let pattern = LogcatFilter.pattern(for: query, caseInsensitive: caseInsensitive)
+        appliedPattern = pattern
+        var args = ["-s", serial, "logcat", "-v", "time", minLevel.filterSpec]
+        if let pattern { args.append("--regex=\(pattern)") }
+        proc.arguments = args
         let out = Pipe()
         let err = Pipe()
         proc.standardOutput = out
@@ -222,15 +311,60 @@ final class LogcatStreamer: ObservableObject {
     func stop() {
         tickTask?.cancel()
         tickTask = nil
+        searchTask?.cancel()
+        searchTask = nil
         if let p = slot.current, p.isRunning {
             p.terminate()
         }
         slot.adopt(nil)
         isRunning = false
         lastDataAt = nil
+        appliedPattern = nil
+        filterCache = nil
+    }
+
+    /// 검색어 변경 — **로컬 필터는 즉시**(2차), **adb 재기동은 디바운스 뒤**(1차)
+    ///
+    /// 디바운스가 없으면 한 단어마다 adb 를 새로 띄우게 되고, 게다가 재기동 사이에는
+    /// 이전 스트림이 살아 있으므로 **"일치 없음" 문구가 깜빡인다.** 기다리는 동안은
+    /// 이전 스트림이 계속 채우므로 사용자는 즉시 결과를 본다.
+    func searchChanged(serial: String, adbPath: String?) {
+        filterCache = nil
+        guard !serial.isEmpty else { return }
+        searchTask?.cancel()
+        searchTask = Task { [weak self] in
+            guard let self else { return }
+            try? await Task.sleep(for: .seconds(Self.searchDebounce))
+            guard !Task.isCancelled else { return }
+            self.searchTask = nil
+            self.start(serial: serial, adbPath: adbPath)
+        }
     }
 
     // MARK: - 내부
+
+    /// 화면에 **보여줄** 줄 — 링 버퍼에서 검색어를 2차로 거른 것
+    ///
+    /// adb 필터가 아직 따라오지 않은 **디바운스 사이**에도 즉시 반응해야 하므로 로컬에서도 거른다.
+    /// `body` 는 초당 수십 번 평가되므로 **여기서 다시 계산하면 안 된다** — 키가 같으면 메모를 돌려준다.
+    var visibleLines: [Line] {
+        let key = FilterKey(
+            count: lines.count,
+            first: lines.first?.id,
+            last: lines.last?.id,
+            query: query,
+            caseInsensitive: caseInsensitive
+        )
+        if let cache = filterCache, cache.key == key { return cache.value }
+        let value: [Line]
+        if query.trimmingCharacters(in: .whitespaces).isEmpty {
+            value = lines
+        } else {
+            value = lines.filter { LogcatFilter.matches($0.text, query: query, caseInsensitive: caseInsensitive) }
+        }
+        filterCache = (key, value)
+        return value
+    }
 
     private func append(_ batch: [String]) {
         var next = lines
@@ -304,6 +438,7 @@ struct LogViewerContent: View {
         VStack(spacing: 0) {
             header
             Divider().overlay(OPColor.border)
+            searchBar
 
             if streamer.lastError != nil || serial.isEmpty {
                 notice(
@@ -313,7 +448,7 @@ struct LogViewerContent: View {
                 )
             } else if let reason = streamer.silenceReason {
                 notice(reason, icon: "pause.circle", tint: OPColor.warn)
-            } else if streamer.lines.isEmpty {
+            } else if streamer.visibleLines.isEmpty {
                 notice(L10n.string("droid.logs.empty"), icon: "clock", tint: OPColor.inkDim)
             } else {
                 stream
@@ -333,7 +468,7 @@ struct LogViewerContent: View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 1) {
-                    ForEach(streamer.lines) { line in
+                    ForEach(streamer.visibleLines) { line in
                         Text(line.text)
                             .font(OPFont.number(11))
                             .foregroundStyle(color(for: line.text))
@@ -344,8 +479,8 @@ struct LogViewerContent: View {
                 }
                 .padding(OPSpace.sm)
             }
-            .onChange(of: streamer.lines.last?.id) { _, _ in
-                guard follow, let last = streamer.lines.last else { return }
+            .onChange(of: streamer.visibleLines.last?.id) { _, _ in
+                guard follow, let last = streamer.visibleLines.last else { return }
                 proxy.scrollTo(last.id, anchor: .bottom)
             }
             .onChange(of: serial) { _, s in
@@ -370,6 +505,79 @@ struct LogViewerContent: View {
     private func restart(_ s: String) {
         guard !s.isEmpty else { streamer.stop(); return }
         streamer.start(serial: s, adbPath: adbPath)
+    }
+
+    // MARK: - 검색 (PLAN_log_search)
+
+    /// 검색바 — 로컬 필터는 즉시, adb 재기동은 디바운스 뒤.
+    /// "기기 필터" 배지로 **어디서 거르는지** 밝힌다: 필터 중에는 이전 구간이 되돌아오지 않는다.
+    private var searchBar: some View {
+        VStack(spacing: 6) {
+            HStack(spacing: 6) {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 11, weight: .light))
+                    .foregroundStyle(OPColor.inkDim)
+                TextField(L10n.string("droid.logs.search.placeholder"), text: $streamer.query)
+                    .textFieldStyle(.plain)
+                    .font(OPFont.body(12))
+                    .foregroundStyle(OPColor.ink)
+                    .onSubmit { streamer.searchChanged(serial: serial, adbPath: adbPath) }
+                if !streamer.query.isEmpty {
+                    Button {
+                        streamer.query = ""
+                        streamer.searchChanged(serial: serial, adbPath: adbPath)
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 11))
+                            .foregroundStyle(OPColor.inkDim)
+                    }
+                    .buttonStyle(.plain)
+                    .help(L10n.string("droid.logs.search.clear"))
+                }
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(OPColor.card, in: RoundedRectangle(cornerRadius: 6))
+            .overlay(RoundedRectangle(cornerRadius: 6).stroke(OPColor.border, lineWidth: 1))
+            .onChange(of: streamer.query) { _, _ in
+                streamer.searchChanged(serial: serial, adbPath: adbPath)
+            }
+            .onChange(of: streamer.caseInsensitive) { _, _ in
+                streamer.searchChanged(serial: serial, adbPath: adbPath)
+            }
+
+            HStack(spacing: 6) {
+                ForEach(LogcatFilter.presets, id: \.self) { preset in
+                    presetChip(preset)
+                }
+                Toggle(isOn: $streamer.caseInsensitive) {
+                    Text("Aa")
+                        .font(OPFont.number(11))
+                }
+                .toggleStyle(.checkbox)
+                .help(L10n.string("droid.logs.search.ci"))
+            }
+        }
+        .padding(.horizontal, OPSpace.md)
+        .padding(.vertical, 6)
+    }
+
+    /// 프리셋 칩 — 실패 신호만 넣었다 (상태 변화 태그는 실패가 아니다 · 2026-09-27 교훈)
+    private func presetChip(_ preset: String) -> some View {
+        let active = streamer.query == preset
+        return Button {
+            streamer.query = active ? "" : preset
+            streamer.searchChanged(serial: serial, adbPath: adbPath)
+        } label: {
+            Text(preset)
+                .font(OPFont.number(10))
+                .foregroundStyle(active ? OPColor.ink : OPColor.inkDim)
+                .padding(.horizontal, 7)
+                .padding(.vertical, 3)
+                .background(OPColor.card, in: Capsule())
+                .overlay(Capsule().stroke(active ? OPColor.cta : OPColor.border, lineWidth: 1))
+        }
+        .buttonStyle(.plain)
     }
 
     private func color(for line: String) -> Color {
@@ -410,6 +618,12 @@ struct LogViewerContent: View {
                     .font(OPFont.number(10))
                     .foregroundStyle(OPColor.inkDim)
             }
+            // 검색 중이면 "무엇이 몇 줄 남았는지" 를 함께 보여준다 (링은 잘리므로 실측 아님)
+            if !streamer.query.trimmingCharacters(in: .whitespaces).isEmpty {
+                Text(L10n.format("droid.logs.matched", streamer.visibleLines.count))
+                    .font(OPFont.number(10))
+                    .foregroundStyle(OPColor.cta)
+            }
             if onClose != nil {
                 Button(L10n.string("droid.logs.close")) { onClose?() }
                     .buttonStyle(.plain)
@@ -419,8 +633,13 @@ struct LogViewerContent: View {
         .padding(OPSpace.md)
     }
 
-    private var footer: some View {
-        HStack(spacing: 12) {
+    /// 링 설명 — 검색 중이면 "기기가 얼마나 걸렀다" 를 함께 밝힌다
+    private var ringLabel: String {
+        guard streamer.appliedPattern != nil else { return L10n.string("droid.logs.ring") }
+        return L10n.format("droid.logs.ring.filtered", streamer.query)
+    }
+
+    private var footer: some View {        HStack(spacing: 12) {
             Button {
                 if streamer.isRunning {
                     streamer.stop()
@@ -457,9 +676,13 @@ struct LogViewerContent: View {
                 .font(OPFont.body(11))
 
             Spacer()
-            Text(L10n.string("droid.logs.ring"))
+            // "어디서 거르는가" 를 숨기지 않는다 — adb 측 필터는 **기기에서** 걸러온 결과다
+            // (필터 중에는 그 이전 구간이 되돌아오지 않는다)
+            Text(ringLabel)
                 .font(OPFont.number(10))
-                .foregroundStyle(OPColor.inkDim)
+                .foregroundStyle(streamer.appliedPattern == nil ? OPColor.inkDim : OPColor.cta)
+                .lineLimit(1)
+                .truncationMode(.middle)
         }
         .padding(OPSpace.sm)
     }

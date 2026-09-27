@@ -26,7 +26,20 @@
 ## 4. 시스템 UI (프로필 무관 native)
 - 설정창, 디버그 패널, 권한 요청 화면, 알림
 
-## 5. 접근성 최소선
+## 5. 검색 · 필터 UI 규칙 (v1.16 로그 뷰어)
+- **형태**: 헤더 아래 2행 — ① 검색 입력 + `Aa` + 지우기 ② 프리셋 칩 4종
+- **칩 문법**: `OPColor.card` 채움 + `Capsule` + `OPColor.border` 1px. 활성 시 테두리 `OPColor.cta` + 본문 `ink`
+  (AlertsView `filterChip` 과 **같은 문법** — 한 화면에서 두 가지 필터 문법이并存하지 않게)
+- **입력창**: `card` 채움 + `RoundedRectangle(6)` + `border` 1px · `magnifyingglass` 아이콘 선형(weight .light, 11pt)
+- **다크 전용**: 이 화면은 다크 고정(AGENTS.local §4). 라이트 대응은 하지 않는다
+- **색은 상태에만**: 검색 결과 행은 기존 E/W 색칠 규칙 유지. 일치 하이라이트는 **의도적으로 넣지 않음**
+  (링 2000행 × 초당 1.4만 줄 → 행마다 `AttributedString` 재생성은 CPU 예산 초과) — 장식보다 예산이 우선
+- **정직 표시**: 필터가 걸리면 푸터에 `기기 필터 <검색어>` 배지(cta 색)를 띄운다.
+  "어디서 걸렀는가"를 숨기지 않는다 — 기기 필터는 **이전 구간이 되돌아오지 않는다**
+- 프리셋은 **실패 신호만**: ANR / FATAL EXCEPTION / has died / dropbox
+  (`thermal`·`accelerometer_rotation` 같은 상태 변화는 넣지 않는다 — 2026-09-27 "감지 142건" 장식 사건)
+
+## 6. 접근성 최소선
 - 대비: ink/abyss 대비 10:1 이상, dim 텍스트 4.5:1 이상 유지
 - 상태는 색+텍스트 병기 (색맹 대비)
 - Dynamic Type 대응 (SwiftUI 기본)

@@ -742,3 +742,14 @@
 "wifi.status.connecting" = "연결 중…";
 "wifi.status.disconnected" = "연결 해제됨";
 "wifi.status.enabling" = "tcpip 전환 중…";
+"droid.logs.search.placeholder" = "검색 (ANR, FATAL, 태그)";
+"droid.logs.search.clear" = "지우기";
+"droid.logs.search.ci" = "대소문자 무시";
+"droid.logs.search.none" = "'%@' 와 일치하는 줄이 아직 없습니다";
+"droid.logs.search.none.err" = "일치 없음 — adb 오류: %@";
+"droid.logs.matched" = "일치 %d줄";
+"droid.logs.ring.filtered" = "기기 필터 %@ · 최근 2000행";
+"droid.logs.preset.anr" = "ANR";
+"droid.logs.preset.fatal" = "FATAL EXCEPTION";
+"droid.logs.preset.died" = "has died";
+"droid.logs.preset.dropbox" = "dropbox";
