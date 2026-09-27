@@ -9,7 +9,7 @@ rebase 충돌을 "해결"했다고 생각하고 `git add` 했는데 마커가 �
 `swift test` 가 문법 에러로 잡아낼 뿐 **원인이 수백 줄 뒤에 있었다.**
 충돌이 났다는 사실 자체는 눈에 보이는데, **해결이 덜었다는 사실은 눈에 보이지 않는다.**
 
-사용: scripts/scan-cjk.py [경로…]   (인자 없으면 git tracked 파일 전체)
+사용: scripts/scan-cjk.py [경로…]   (경로는 파일·디렉터리 모두 가능. 없으면 git tracked 전체)
 """
 import subprocess
 import sys
@@ -24,6 +24,7 @@ RANGES = (
     (0x20000, 0x2A6DF),
 )
 ALLOW_MARKER = "scan-cjk: allow"  # 이 표기가 있는 줄은 검사에서 제외한다
+# **앞에 # 을 붙이지 않는다** — Swift 의 #warning/#if 같은 지시자로 파싱되어 컴파일이 깨진다 (2026-09-28 실측)
 # 충돌 마커 — `<<<<<<< HEAD` / `>>>>>>> branch` 형태만 잡는다.
 # `=======` 단독 줄은 마크다운 제목 밑줄과 겹치므로 **쓰지 않는다** (오탐)
 CONFLICT_MARKERS = ("<<<<<<< ", ">>>>>>> ")
@@ -37,7 +38,14 @@ def is_hanja(ch: str) -> bool:
 
 def targets(paths: list[str]) -> list[Path]:
     if paths:
-        return [Path(p) for p in paths]
+        out: list[Path] = []
+        for raw in paths:
+            p = Path(raw)
+            # ★ 디렉터리를 받으면 **재귀해서 모은다.**
+            # 이 버그가 있었을 때 `scan-cjk.py Sources Tests docs` 는 **파일 하나도 안 보고
+            # 0건 으로 통과했다.** "아무것도 안 봤는데 문제가 없다" 는 가장 위험한 보고다.
+            out.extend(sorted(p.rglob("*")) if p.is_dir() else [p])
+        return out
     out = subprocess.run(
         ["git", "ls-files", "-z"], capture_output=True, text=True, check=True
     ).stdout

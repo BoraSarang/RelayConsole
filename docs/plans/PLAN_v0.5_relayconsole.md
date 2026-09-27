@@ -8,7 +8,7 @@
 
 ## 0. 리서치 분석 요약 (간단)
 
-| 항목 | 리서치 결론 | 코드베이스现状 | 갭 |
+| 항목 | 리서치 결론 | 코드베이스 현황 | 갭 |
 |------|-------------|----------------|-----|
 | 아키텍처 | ThresholdGate(hysteresis+cooldown) → MonitorEvent(kind+severity+fingerprint) → 파이프 | `DeviceMonitor.notifyEvent(String)` + `ConsoleStore.recentEvents:[String]` | **구조화 이벤트 없음** |
 | 스로틀링 | enter≥3, clear≤1, 60s 쿨다운, ntfy p4 | `parseThermal`✓ · UI 배너 `status≥2`✓ · **이벤트 발행 없음** | Gate+이벤트만 연결 |
@@ -124,7 +124,7 @@ WatchEvent
 |------|------|
 | **신규** `Models/WatchEvent.swift` | kind/severity/fingerprint |
 | **신규** `Utils/ThresholdGate.swift` | hysteresis 상태머신 |
-| **신규** `Droid/WatchEngine.swift` | serial별 Gate 맵 · evaluate · 이벤트 emit (DeviceMonitor와解耦) |
+| **신규** `Droid/WatchEngine.swift` | serial별 Gate 맵 · evaluate · 이벤트 emit (DeviceMonitor와 분리) |
 | `DeviceMonitor.swift` | prev thermal/charging/protection 보존 → WatchEngine.feed |
 | `ConsoleStore.swift` | `recentWatchEvents`, fingerprint 쿨다운, UNNotification 발송 |
 | `RelayConsoleApp.swift` / `AppDelegate.swift` | 알림 권한 요청(최초 1회) |

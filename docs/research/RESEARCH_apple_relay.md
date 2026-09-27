@@ -162,7 +162,7 @@ iOS는 샌드박스로 `/proc`, `/sys`, `dumpsys`를 **어떤 App Store 앱에�
 
 | 순위 | 안 | 이유 |
 |------|----|------|
-| 1 | 메뉴바 UX收尾 (WindowFocus 육안 + push/PR) | 이미 구현 완료분 정리 |
+| 1 | 메뉴바 UX 마무리 (WindowFocus 육안 + push/PR) | 이미 구현 완료분 정리 |
 | 2 | **방향 A Phase 1** (Trust-only Apple 배터리 카드) | 상대적 작은 공사, 기존 카드 재사용, 맥 안에서 완결 |
 | 3 | 방향 A Phase 2 (Developer Mode) | power user opt-in |
 | 4 | 방향 B (iOS 호스트) | 큰 공사 — 새 ADB 스택, 별도 앱 아이덴티티 검토 |

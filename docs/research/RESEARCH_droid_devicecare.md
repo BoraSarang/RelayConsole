@@ -94,7 +94,7 @@
 | | PSS 전체 | `dumpsys meminfo` | med | **3.33s — 상시 폴링 금지** | Broken pipe 주의 |
 | **저장소** | 용량/잔량% | `df -h /data` | low | 30~60s | 23G/223G 11% 실측 |
 | | 카테고리 점유 | `dumpsys diskstats` | low | 5분 | App/Video/System Size |
-| **네트워크** | 통신사/RAT | `dumpsys telephony.registry \| grep mServiceState` (기기内 grep) | med→low | 5~10s | 372KB → 기기内grep으로 ~1KB |
+| **네트워크** | 통신사/RAT | `dumpsys telephony.registry \| grep mServiceState` (기기 내 grep) | med→low | 5~10s | 372KB → 기기 내 grep으로 ~1KB |
 | | 신호 RSRP/level | `... \| grep mSignalStrength` | med→low | 5s | RSRP -100 level 3 실측 |
 | | WiFi SSID/RSSI | `cmd wifi status` | low | 5s | WiFi off 시 안내 필요 |
 | | RXTX 속도 | `/proc/net/dev` delta | low | 2~5s | |
@@ -135,7 +135,7 @@ Temperature{mValue=53.0, mType=0, mName=AP, mStatus=0}
 Temperature{mValue=44.3, mType=3, mName=SKIN, mStatus=3}
 Temperature{mValue=42.3, mType=2, mName=BAT, mStatus=0}
 
-# telephony (기기内 grep 대상)
+# telephony (기기 내 grep 대상)
 mOperatorAlphaLong=KT, ... LTE ...
 CellSignalStrengthLte: rssi=-67 rsrp=-100 rsrq=-13 ... level=3
 
