@@ -73,6 +73,45 @@ enum WifiAdbLogic {
     /// 이미 TCP 로 열려 있다면 기기는 재부팅된 적이 없으니 다시 걸 이유가 없다.
     static func needsTcpip(isNetworkSerialPresent: Bool) -> Bool { !isNetworkSerialPresent }
 
+    /// `ro.boot.serialno` 로 읽는 **물리 기기 고유값** — TCP 엔드포인트의 정체
+    ///
+    /// ## 왜 이게 정답인가 (2026-09-27 실측)
+    ///
+    /// `adb devices` 의 키는 TCP 라 `10.38.120.211:5555` 처럼 **IP 라 IP 가 바뀐다.**
+    /// 그러면 옛 엔드포인트와 새 엔드포인트가 같은 폰인지 알 수 없어
+    /// stale 항목이 계속 남고, 같은 폰이 2개 기기로 잡혀 **폴링이 두 배**로 돌아간다.
+    ///
+    /// 실측 — 같은 폰이 하루에 세 번 IP 를 바꿨는데 `ro.boot.serialno` 는 고정:
+    /// ```
+    /// 10.233.247.205:5555 (오전)  ─┐
+    /// 172.30.102.182:5555 (저녁)  ─┼─ 전부 ro.boot.serialno = R5CT215F4QK
+    /// 10.38.120.211:5555 (지금)   ─┘
+    /// ```
+    /// **TCP 로도 읽힌다** — 별도 인증 없이 `shell getprop` 한 번이다.
+    static let physicalIdProp = "ro.boot.serialno"
+
+    /// TCP 엔드포인트인가 (`:5555` 형태 — USB 시리얼은 콜론이 없다)
+    static func isNetworkEndpoint(_ serial: String) -> Bool {
+        serial.contains(":")
+    }
+
+    /// stale 판정 — **물리 고유값이 같은데 엔드포인트가 다른** TCP 항목을 찾는다.
+    ///
+    /// - Parameters:
+    ///   - physicalIdsByEndpoint: 엔드포인트 → 그 기기의 `ro.boot.serialno`.
+    ///     **판별의 근거는 오직 이 값이다** — IP 로는 같은 폰인지 알 수 없다.
+    ///   - keep: 이번에 열었던 엔드포인트. 이건 명백히 살아 있으므로 건드리지 않는다.
+    static func staleNetworkEndpoints(
+        physicalIdsByEndpoint: [String: String],
+        physicalId: String,
+        keep: String
+    ) -> [String] {
+        physicalIdsByEndpoint.compactMap { endpoint, id in
+            guard endpoint != keep, id == physicalId else { return nil }
+            return endpoint
+        }.sorted()
+    }
+
     /// 자동 모드 설정 키 — 기본 ON (사용자 확정). 값이 바뀌면 사용자 설정이 조용히 초기화된다.
     static let autoModeKey = "relay.wifiAutoTcpip"
 
@@ -308,6 +347,8 @@ final class WifiAdbController: ObservableObject {
             try WifiAdbRunner.run(adb, WifiAdbLogic.tcpipArgs(serial: serial, port: port))
             try await connectWithRetry(adb: adb, endpoint: endpoint, port: port)
             lastEndpoint = endpoint
+            // ⑧ 옛 IP 정리 — IP 가 바뀌면 옛 항목이 남아 **같은 폰이 2개 기기**로 잡힌다(폴링 2배)
+            await disconnectStaleEndpoints(adb: adb, keep: endpoint)
             statusMessage = L10n.format("wifi.status.connected", endpoint)
             DebugLogger.shared.info("WifiAdb", "[INFO] [FEATURE] Wi-Fi 연결 \(endpoint)")
         } catch {
@@ -316,6 +357,81 @@ final class WifiAdbController: ObservableObject {
             } else {
                 failDetail("wifi.error.connectFailed", detail: cause(error))
             }
+        }
+    }
+
+    /// 옛 TCP 엔드포인트 정리 — **같은 폰의 옛 IP** 만 끊는다 (2026-09-27 실측 발견)
+    ///
+    /// ## 왜 필요한가
+    ///
+    /// Wi-Fi IP 는 바뀐다(같은 폰이 하루에 세 번 바뀐 것을 관측). 그런데 `adb devices` 의
+    /// TCP 키는 IP 그 자체라 **옛 항목이 계속 살아남고**, 같은 폰이 2개 기기로 잡혀
+    /// **폴링이 두 배**로 돌아간다(adb 자식 3개 실측).
+    ///
+    /// ## "같은 기기" 를 어떻게 아는가
+    ///
+    /// IP 로는 알 수 없다. `ro.boot.serialno` 로 판별한다 — 이 값은 IP 가 바뀌어도
+    /// 고정이고 **TCP 로도 읽힌다**(인증 불필요, `shell getprop` 1회).
+    ///
+    /// ## 안전장치
+    ///
+    /// - 판별 근거가 모호하면 **아무것도 끊지 않는다** (조용히 남겨두는 편이 낫다)
+    /// - `keep` (방금 연 엔드포인트) 는 절대 건드리지 않는다
+    /// - 실패해도 연결 성 자체에는 영향이 없다 — 정리 실패는 경고로만 남긴다
+    private func disconnectStaleEndpoints(adb: String, keep: String) async {
+        guard let list = try? WifiAdbRunner.runCapture(adb, ["devices"]) else {
+            DebugLogger.shared.warn("WifiAdb", "[WARN] stale 정리 — adb devices 실패, 건너뜀")
+            return
+        }
+        let alive = Self.parseDeviceList(list)
+        let networkSerials = alive.filter { WifiAdbLogic.isNetworkEndpoint($0) }
+        // 이미 하나뿐이면 정리할 것이 없다 (대부분의 경우)
+        guard networkSerials.count > 1 else { return }
+
+        // 이번에 붙은 기기의 물리 고유값
+        guard let keepPhysicalId = physicalId(of: keep, adb: adb) else {
+            DebugLogger.shared.warn("WifiAdb", "[WARN] stale 정리 — 물리 식별 실패, 건너뜀")
+            return
+        }
+        // 각 TCP 후보의 물리 고유값 — **판별의 유일한 근거**
+        var ids: [String: String] = [:]
+        for endpoint in networkSerials {
+            guard let id = physicalId(of: endpoint, adb: adb) else { continue }
+            ids[endpoint] = id
+        }
+        let stale = WifiAdbLogic.staleNetworkEndpoints(
+            physicalIdsByEndpoint: ids, physicalId: keepPhysicalId, keep: keep
+        )
+        guard !stale.isEmpty else { return }
+        for endpoint in stale {
+            do {
+                try WifiAdbRunner.run(adb, WifiAdbLogic.disconnectArgs(endpoint: endpoint))
+                DebugLogger.shared.info("WifiAdb", "[INFO] 옛 IP 정리: \(endpoint) disconnect")
+            } catch {
+                DebugLogger.shared.warn("WifiAdb", "[WARN] 옛 IP 정리 실패 \(endpoint): \(cause(error))")
+            }
+        }
+    }
+
+    /// 엔드포인트의 물리 고유값 — 실패 시 nil (판별 불가 → 아무것도 하지 않는다)
+    private func physicalId(of endpoint: String, adb: String) -> String? {
+        guard let out = try? WifiAdbRunner.runCapture(
+            adb, ["-s", endpoint, "shell", "getprop", WifiAdbLogic.physicalIdProp]
+        ) else { return nil }
+        let value = out.trimmingCharacters(in: .whitespacesAndNewlines)
+        // 빈 값·에러 문구는 식별 실패로 본다 — 추측으로 채우지 않는다
+        guard !value.isEmpty, value.count <= 64, !value.contains("not found") else { return nil }
+        return value
+    }
+
+    /// `adb devices` 출력에서 정상 상태인 기기만 뽑는다 (순수 파싱)
+    nonisolated static func parseDeviceList(_ text: String) -> [String] {
+        text.split(separator: "\n").compactMap { raw in
+            let line = raw.trimmingCharacters(in: .whitespaces)
+            guard !line.isEmpty, !line.hasPrefix("List of devices") else { return nil }
+            let parts = line.split(whereSeparator: \.isWhitespace)
+            guard let serial = parts.first, parts.contains("device") else { return nil }
+            return String(serial)
         }
     }
 

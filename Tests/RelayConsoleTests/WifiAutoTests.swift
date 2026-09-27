@@ -188,3 +188,108 @@ struct WifiAutoTests {
         #expect(WifiAdbLogic.autoModeKey == "relay.wifiAutoTcpip")
     }
 }
+
+/// 옛 TCP 엔드포인트 정리 — 2026-09-27 자동 모드 실기 검증 중 발견
+///
+/// ## 무엇을 고치는가
+/// Wi-Fi IP 는 바뀐다(같은 폰이 하루에 세 번 바뀐 것을 관측). `adb devices` 의 TCP 키는
+/// IP 그 자체라 **옛 항목이 계속 살아남고**, 같은 폰이 2개 기기로 잡혀 **폴링이 2배**다.
+///
+/// ## 판별 근거
+/// IP 로는 알 수 없다. `ro.boot.serialno` 로 판별한다 — IP 가 바뀌어도 고정이고
+/// TCP 로도 읽힌다(실측: 같은 폰의 세 IP 모두 `R5CT215F4QK`).
+///
+/// ## 위험
+/// **잘못 끊으면 사용자의 다른 기기가 죽는다.** 그래서 아래 테스트는
+/// "끊어야 하는 것만 끊고, 애매하면 아무것도 안 끊는다" 를 고정한다.
+struct WifiStaleTests {
+    /// 실측 `adb devices` 출력 형식
+    private let devicesSample = """
+    List of devices attached
+    R5CT215F4QK	device
+    10.38.120.211:5555	device
+    172.30.102.182:5555	offline
+    emulator-5554	device
+    """
+
+    @Test func parseDeviceListKeepsOnlyHealthyDevices() {
+        let parsed = WifiAdbController.parseDeviceList(devicesSample)
+        #expect(parsed.contains("R5CT215F4QK"))
+        #expect(parsed.contains("10.38.120.211:5555"))
+        #expect(parsed.contains("emulator-5554"))
+        #expect(!parsed.contains("172.30.102.182:5555"), "offline 은 살아있지 않다")
+        #expect(!parsed.contains("List of devices attached"))
+    }
+
+    @Test func parseDeviceListEmptyOnGarbage() {
+        #expect(WifiAdbController.parseDeviceList("").isEmpty)
+        #expect(WifiAdbController.parseDeviceList("adb server version (41) doesn't match").isEmpty)
+    }
+
+    @Test func networkEndpointDetection() {
+        #expect(WifiAdbLogic.isNetworkEndpoint("10.38.120.211:5555"))
+        #expect(WifiAdbLogic.isNetworkEndpoint("192.168.1.5:5037"))
+        // USB 시리얼에는 콜론이 없다 — 이 구분이 TCP/USB 판별의 전부
+        #expect(!WifiAdbLogic.isNetworkEndpoint("R5CT215F4QK"))
+        #expect(!WifiAdbLogic.isNetworkEndpoint("emulator-5554"))
+    }
+
+    // MARK: - stale 판별 (이것이 핵심)
+
+    @Test func samePhysicalDeviceDifferentIpsAreStale() {
+        // 실측 관측 이력 — 같은 폰, IP 만 변경
+        let ids = [
+            "10.38.120.211:5555": "R5CT215F4QK",   // 지금
+            "172.30.102.182:5555": "R5CT215F4QK",  // 저녁
+            "10.233.247.205:5555": "R5CT215F4QK"    // 오전
+        ]
+        let stale = WifiAdbLogic.staleNetworkEndpoints(
+            physicalIdsByEndpoint: ids, physicalId: "R5CT215F4QK", keep: "10.38.120.211:5555"
+        )
+        #expect(stale == ["10.233.247.205:5555", "172.30.102.182:5555"].sorted())
+    }
+
+    @Test func otherDevicesAreNeverDisconnected() {
+        // **가장 위험한 실패 모드** — 다른 폰을 끊으면 안 된다
+        let ids = [
+            "10.38.120.211:5555": "R5CT215F4QK",   // 이 폰
+            "192.168.1.99:5555": "OTHER-DEVICE-ID"  // 다른 폰
+        ]
+        let stale = WifiAdbLogic.staleNetworkEndpoints(
+            physicalIdsByEndpoint: ids, physicalId: "R5CT215F4QK", keep: "10.38.120.211:5555"
+        )
+        #expect(stale.isEmpty, "다른 기기의 엔드포인트는 절대 끊지 않는다")
+    }
+
+    @Test func keepEndpointIsNeverDisconnected() {
+        let ids = ["10.38.120.211:5555": "R5CT215F4QK"]
+        #expect(WifiAdbLogic.staleNetworkEndpoints(
+            physicalIdsByEndpoint: ids, physicalId: "R5CT215F4QK", keep: "10.38.120.211:5555"
+        ).isEmpty)
+    }
+
+    @Test func ambiguousIdentityDisconnectsNothing() {
+        // 물리 식별을 못 한 후보는 **제외**된다 — 애매하면 남겨두는 게 옳다
+        let ids = [
+            "10.38.120.211:5555": "R5CT215F4QK",
+            "172.30.102.182:5555": ""              // getprop 실패 → 빈 값
+        ]
+        let stale = WifiAdbLogic.staleNetworkEndpoints(
+            physicalIdsByEndpoint: ids, physicalId: "R5CT215F4QK", keep: "10.38.120.211:5555"
+        )
+        #expect(stale.isEmpty, "식별 불가 항목은 끊지 않는다")
+    }
+
+    @Test func noNetworkDuplicatesMeansNothingToDo() {
+        // TCP 가 하나뿐이면 정리 대상이 없다 — 불필요한 adb 호출을 하지 않는다
+        let ids = ["10.38.120.211:5555": "R5CT215F4QK"]
+        #expect(WifiAdbLogic.staleNetworkEndpoints(
+            physicalIdsByEndpoint: ids, physicalId: "R5CT215F4QK", keep: "10.38.120.211:5555"
+        ).isEmpty)
+    }
+
+    @Test func physicalIdPropIsStable() {
+        // 이 값이 바뀌면 판별이 무너진다 — 프로퍼티 이름을 고정한다
+        #expect(WifiAdbLogic.physicalIdProp == "ro.boot.serialno")
+    }
+}
