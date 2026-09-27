@@ -15,6 +15,14 @@
     `logcat` 버전에 따라 다르다. **확인 없이 구현하지 말 것**
   - 관련: 이전 세션에서 `logcatKeywords` 를 비운 이유(센서 잡음이 "감지 142건" 이 되던 문제)와
     **다른 축** — 여기서는 "탐지" 가 아니라 **표시 부하** 다
+- [ ] **한자(중국어) 혼입 잔재 24건** — 2026-09-28 전수 스캔으로 발견. `main` 대조 결과
+    PR #52 가 넣은 3건은 정리했고(`2b2306e`), **24건은 기존 잔재**다. 20개 파일에 걸려 있음
+    - 주 offenders: `docs/plans/PLAN_v0.3_relayconsole.md`(6) · `docs/research/RESEARCH_adb_file_browser.md`(4) ·
+      `docs/research/RESEARCH_droid_devicecare.md`(2) · `Sources/RelayConsole/Views/LogViewerView.swift`(0, 정리 완료)
+    - **왜 방치했나**: 세션 마무리 시점의 20개 파일 무분별 수정은 검토 없이 코드를 건드리는 것.
+      주석 한 줄씩이라 위험은 낮지만 **파일 단위로 묶어** 하는 게 맞다
+    - **진짜 해법은 스캔을 커밋 훅으로 올리는 것** — 이 세션에서 한자 혼입이 4회 재발했다.
+      사람이 기억으로 점검하는 한 또 온다
 - [ ] **S3 관제 규칙 Rules as Code (로컬 YAML)** — TIER S 중 유일 미착수
 - [ ] **A7** Dock 배지 / 그룹화 (라이브액티비티·위젯은 1.15.0으로 완료)
 - **TIER A**: Things·캘린더 연동 · 스샷 스크랩북 · 멀티 스냅샷 그리드 · Prometheus/JSON export · cron 기기 태그 · 충전 방치 리포트
@@ -52,11 +60,14 @@
     `./scripts/build-macos.sh debug` **EXIT=0** (번들 재생성·재서명·앱 재시작) ·
     L10n **766키 en/ko 1:1** · U+FFFD 0건
   - **육안 대기**: 알림 유입 시 다른 탭(설정·사이트)이 깜빡이지 않는지
-  - **머지 완료** — 리뷰 후 **squash 머지** `699c0af` (main 의 최근 관례 #45~#51 과 동일).
+  - **PR #52 머지 완료** — 리뷰 후 **squash 머지** `699c0af` (main 의 최근 관례 #45~#51 과 동일).
     self-review 결과 **[HARD] 위반 0건** · 차단 사유 없음. [SOFT] 3건 사유는
     PR #52 코멘트에 기재 — ① `catch` 에서 spawn 실패 원인이 버려지는 관측 공백
     ② 신규 실패 사유의 `error_message_ko.json` 미등록(L10n 이 진실원천이라 동작 영향 없음)
     ③ DebugPanel 로그 미첨부(육안 대기) + CHANGELOG 파일 부재
+  - **한자 혼입 전수 스캔** — 27건 검출. `main` 대조로 **PR #52 가 넣은 3건**임을 확인해 정리
+    (`LogViewerView` 주석 2 · `DESIGN.md` 1 · 커밋 `2b2306e`). **잔재 24건은 별도 과목으로 등록** —
+    세션 마무리 시점의 20개 파일 무분별 수정은 하지 않는다
   - **브랜치 정리 + PR #52** — 13커밋이 브랜치명 불일치 상태로 로컬에 방치돼 있었음
     (`fix/logcat-honesty-incident-cap` → `feat/macos-2026-09-27` rename, main 직접 push 는 [HARD] 금지).
     https://github.com/BoraSarang/RelayConsole/pull/52
