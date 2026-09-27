@@ -1,7 +1,10 @@
 import Foundation
 
 /// Localized string lookup for SwiftPM bundle (ko source, en secondary).
-/// Keys match Resources/Localizable.xcstrings and *.lproj/Localizable.strings.
+/// 진실원천은 `Sources/RelayConsole/Resources/{en,ko}.lproj/Localizable.strings` 다 (2026-09-28).
+/// - `Bundle.module.localizedString` 는 **번들 안의 `<lang>.lproj/Localizable.strings` 만** 읽는다
+/// - 구 `Resources/Localizable.xcstrings`(612키로 낙오) 는 읽는 코드가 없었고 2026-09-28 에 삭제했다.
+///   여기를 고쳐도 아무 일도 일어나지 않는 함정이었기 때문이다 — 키는 위 `.lproj` 에서 고칠 것.
 enum L10n {
     static func string(_ key: String) -> String {
         Bundle.module.localizedString(forKey: key, value: key, table: nil)
