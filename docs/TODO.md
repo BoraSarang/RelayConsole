@@ -2,9 +2,6 @@
 > 작업 추적 — bd 연동 (이슈 prefix: RelayConsole)
 
 ## 진행 중 (bd ready)
-- [ ] **브랜치 정리** — 8커밋(`0d053b9`~`b91e2a9`)이 `fix/logcat-honesty-incident-cap` 에 있고
-  **push/PR 안 함**(main 직접 push 는 [HARD] 금지). 브랜치명·내용 불일치 →
-  `feat/macos-2026-09-27` 로 rename 후 PR. 상세는 `.agent/session-2026-09-27-5-macos.md`
 - [ ] **`@Published` 20개 세분화** (2026-09-27 알림 지연 조사 제안 3) — 알림 1건이 여전히
   `objectWillChange` **2회**를 발생시킨다. 계산 비용은 캐시로 없앴지만 SwiftUI 재평가 비용은 남는다.
   최소한 `recentWatchEvents` 를 별도 ObservableObject 로 분리해 **이벤트 변경이 기기/설정 탭까지
@@ -36,6 +33,14 @@
 - [ ] **Apple Phase 2** — Developer Mode·sysmon 등 — 위 기기 확보 후 착수 (A9)
 - [ ] **Apple 크래시 리포트 수집 (반드시 해야 할 작업)** — `idevicecrashreport`로 iOS `.ips` crash/ANR를 IncidentBundle에 첨부. 기기 확보 시 1순위. Trust USB + `idevicecrashreport -u <udid> copy` 패턴. Android `logcat -b crash`/dropbox 대응 Apple 쪽 원재료 — **기기 확보 전 구현 불가, 반드시 기억할 것**
 
+## 완료 (2026-09-28)
+- [x] **브랜치 정리 + PR #52** — 13커밋(`706daa0`~`71e3fad`)이 브랜치명 불일치 상태로 로컬에 방치돼 있었음
+  - `fix/logcat-honesty-incident-cap` → **`feat/macos-2026-09-27`** 로 rename (main 직접 push 는 [HARD] 금지였으므로
+    push 는 feature 브랜치로만) → **PR #52** 생성 · MERGEABLE · 13커밋 / 33파일 / +3855 −198
+  - 축별로 쪼개지 않고 1개 PR 로 올림 — 594개 테스트가 서로 묶여 있고 rewrite 시 검증 재수행 필요.
+    갈라낼 필요는 없다고 판단
+  - 상세: https://github.com/BoraSarang/RelayConsole/pull/52 · `.agent/session-2026-09-28-macos.md`
+
 ## 완료 (2026-09-27)
 - [x] **TCP 유실 시 자동 재연결** — `PLAN_wifi_reconnect_relayconsole` · 테스트 8건 신규
   - **작업을 여는 계기 — 자기 검토에서 발견한 결함**: `disconnectStaleEndpoints` 는
@@ -53,7 +58,7 @@
     - 기본 **60초** · 연속 실패 시 **2배씩 증가** · 상한 **15분**
     - 15분 지나면 실패 횟수와 무관하게 재시도 (**영구 포기 안 함**)
     - 판정만 `shouldReconnect` 로 분리해 **테스트 8건으로 고정**
-  - **안전장치** — 자동 모드 OFF 면完全不동 · USB 유실은 이 경로로 안 온다(tcpip 경로가 처리) ·
+  - **안전장치** — 자동 모드 OFF 면 전혀 동작하지 않음 · USB 유실은 이 경로로 안 온다(tcpip 경로가 처리) ·
     `busy`/in-flight 중복 방지 · 실패 시 **조용히 지나가지 않고 사유를 상태로 남김** ([표시②])
   - **검증 [HARD]**: `swift test` **490 + 104 = 594 / 0 failed** (착수 시 586, +8) ·
     `./scripts/build-macos.sh debug` **EXIT=0** · L10n **766키 en/ko 1:1** · U+FFFD 0건
@@ -170,7 +175,7 @@
   - **원인 — 종료 알림이 늦게 도착해 자리를 비운다**: `terminationHandler` 는 `Task { @MainActor }` 로 큐잉된다.
     `stop()` → `terminate()` → 자리 비움 → **새 프로세스 `adopt`** → *이후에* 이전 프로세스 알림이 도착해
     `self.process = nil` 을 실행 → **살아 있는 새 프로세스의 참조가 사라짐** → 다음 전환에서 `stop()` 이 죽일 대상을 못 찾음
-  - **adb 는 무罪였고 참조 소실이 원인** — 셸에서 `kill -TERM` 은 즉시 종료함을 실측 확인
+  - **adb 는 무죄였고 참조 소실이 원인** — 셸에서 `kill -TERM` 은 즉시 종료함을 실측 확인
   - **조치**: `LogcatProcessSlot`(현재 프로세스 1개의 자리) 신설 — `release(_:)` 는 **내가 아직 들고 있는 그 프로세스일 때만** 비우고 `true`. 알림이 이전 프로세스 것이면 `false` 로 아무것도 안 함
   - **잔여 (기록만)**: `proc.terminationHandler` 가 `proc` 를 강하게 캡처해 **Process 객체 자체가 죽어도 안 돌아옴**(파이프·핸들러 잔류). 기동 1회당 수십 KB 수준이라 측정 전 손대지 않음 — 필요 시 `[weak proc]` 로 사이클 끊기
   - **검증**: `swift test` **435 + 104 = 539 / 0 failed** (+3 신규) · `./scripts/build-macos.sh debug` **EXIT=0** ·
@@ -200,7 +205,7 @@
   - **IncidentBundle — 스택이 하나도 안 들어가던 문제** — ① crash 버퍼 덤프 신설(`-b crash`, `hasCrashLogcat` 필드) ② main 덤프를 `-T` 시각 앵커로 전환(종전 `-t 500` 은 이 기기에서 **약 2초분**이라 캡처 시점엔 이미 롤아웃) ③ **앵커 60초 리드** — `event.at` 은 크래시 그 자체가 **아니다**(폴링 5초 + 캡처 지연). 실측 이벤트 10:00:12 vs 실제 `has died` **10:00:06** → 앵커를 `event.at` 에 두면 크래시 라인이 창 밖으로 밀려남(실측 18건 → 19건)
   - **39MB 회귀 차단** — 실측 `-T 5분분` = **39.0MB / 33만 줄**(종전 52KB, 750배). adb 쪽에서 못 자름: **`-T` 에 `-t` 를 같이 주면 `-T` 가 이김**(실측 336,024줄) → 읽는 쪽에서 뒤를 자르는 `TailBuffer`(2MB, 이벤트에 가까운 끝 보존). **잘린 양은 파일 첫 줄에 명시**(숨기지 않음). `runCaptureTail` 로 전환하며 stderr 배수 — 종전 `runCaptureData` 에 **같은 함정이 남아 있었음**
   - **검증 [HARD]**: `swift test` **420 + 104 = 524 / 0 failed** (+13 신규) · `./scripts/build-macos.sh debug` **EXIT=0** (1.16.0 · 팀 6GPJQ7BQC9) · L10n **744키 en/ko 1:1** · U+FFFD 0건
-  - **실기 계측 (10.233.247.205:5555 · SM-S901N)**: `*:W` 필터 후에도 **55,166줄/6초(초당 9천)** — 상위 태그는 `E/HeatmapThread`(22,851)·`E/SemApTrafficData`(19,061)로 삼성 기기 특유 오류 스팸. **crash 버퍼는 이 기기에서 0줄**(덤프는 유지 — 버퍼를 쓰는 기기를 위해) · 번들 34개 23MB(스크린샷 占 대부분)
+  - **실기 계측 (10.233.247.205:5555 · SM-S901N)**: `*:W` 필터 후에도 **55,166줄/6초(초당 9천)** — 상위 태그는 `E/HeatmapThread`(22,851)·`E/SemApTrafficData`(19,061)로 삼성 기기 특유 오류 스팸. **crash 버퍼는 이 기기에서 0줄**(덤프는 유지 — 버퍼를 쓰는 기기를 위해) · 번들 34개 23MB(스크린샷이 대부분)
 
 ## 완료 (2026-09-26)
 - [x] **성능·안정성 리팩토링 6단계 전체 완료** — `PLAN_refactor_perf_stability_macos` · PR #45~#50 · 태그 `pre-refactor-perf` 롤백 지점
