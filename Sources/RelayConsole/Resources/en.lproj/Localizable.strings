@@ -753,3 +753,10 @@
 "droid.logs.preset.fatal" = "FATAL EXCEPTION";
 "droid.logs.preset.died" = "has died";
 "droid.logs.preset.dropbox" = "dropbox";
+"wifi.setting.auto" = "Enable Wi-Fi ADB automatically on USB connect";
+"wifi.setting.auto.help" = "The IP connection survives unplugging the cable. After a reboot it is needed again each time you replug USB.";
+"wifi.auto.notReachable" = "%@ is unreachable — check that you are on the same Wi-Fi";
+"wifi.auto.waiting" = "Waiting for adb connection… (%d/%d)";
+"wifi.auto.alreadyOpen" = "Already open over Wi-Fi — %@";
+"wifi.badge.autoFailed" = "auto-connect failed";
+"settings.wifi.section" = "Wi-Fi ADB";

@@ -6,11 +6,93 @@ import Combine
 enum WifiAdbLogic {
     static let defaultPort = 5555
 
+    // MARK: - IP 판별 (2026-09-27 순서 개편 — 계측 근거는 PLAN_wifi_auto_tcpip)
+
+    /// Wi-Fi 인터페이스 이름인가 — **Samsung 은 `wlan0` 이 아니라 `swlan0`** (실측).
+    /// `wlan0` 만 하드코딩하면 빈 값이 돌아와 다음 후보로 넘어가지 못한다.
+    static func isWifiInterface(_ raw: String) -> Bool {
+        // `swlan0:`, `wlan0@if2`, `rmnet_data1@rmnet_ipa0` 같은 형태에서 이름만 떼어낸다
+        var name = raw.trimmingCharacters(in: .whitespaces)
+        if let at = name.firstIndex(of: "@") { name = String(name[name.startIndex..<at]) }
+        while let last = name.last, last == ":" || last.isWhitespace { name.removeLast() }
+        // `ip addr` 헤더는 "60: swlan0:" 처럼 번호가 붙어 온다
+        if let colon = name.firstIndex(of: ":"), name[name.startIndex..<colon].allSatisfy(\.isNumber) {
+            name = String(name[name.index(after: colon)...]).trimmingCharacters(in: .whitespaces)
+        }
+        let n = name.lowercased()
+        return n.hasPrefix("wlan") || n.hasPrefix("swlan") || n.hasPrefix("wlp") || n.hasPrefix("wl")
+    }
+
+    /// `ip -f inet addr` 다중 블록 텍스트 → **Wi-Fi 인터페이스만** 골라 IPv4
+    static func parseWifiIp(fromIfAddr text: String) -> String? {
+        var currentIsWifi = false
+        for raw in text.split(separator: "\n") {
+            let line = String(raw).trimmingCharacters(in: .whitespaces)
+            if line.isEmpty { continue }
+            // 인터페이스 헤더: "60: swlan0:" 또는 "swlan0: flags=…"
+            let isHeader = line.contains(":") && {
+                let head = line.prefix { $0 != ":" }.trimmingCharacters(in: .whitespaces)
+                let afterColon = line.split(separator: ":", maxSplits: 1).last.map(String.init) ?? ""
+                return head.isEmpty || head.allSatisfy(\.isNumber) || afterColon.contains("flags=")
+            }()
+            if isHeader {
+                currentIsWifi = isWifiInterface(line)
+                continue
+            }
+            guard currentIsWifi, let ip = firstIPv4(inLines: [line], interfaceHints: nil) else { continue }
+            return ip
+        }
+        return nil
+    }
+
+    /// IP 후보 결정 — **순서가 곧 정확도다.**
+    ///
+    /// ① 맥 기본 게이트웨이 — 폰이 핫스팟이면 **게이트웨이가 곧 폰 IP** (기기한테 묻지 않아도 안다)
+    /// ② 기기 `ip addr` 의 Wi-Fi 인터페이스 (`swlan0` 등)
+    /// ③ 기기 `ifconfig` 전체
+    /// ④ `ip route get` 의 `src` — **마지막**이다. 인터넷으로 나가는 쪽의 주소라
+    ///    핫스팟 + 셀룰러 동시 켜진 기기에서는 **셀룰러 IP** 가 나온다 (실측 `10.148.183.154`).
+    ///    게다가 빈 값이 아니라 **값을 반환해서** ②③에 도달하지 못하게 만든다.
+    static func resolveIp(
+        gateway: String?,
+        ifAddrText: String?,
+        ifconfigText: String?,
+        routeText: String?
+    ) -> String? {
+        if let gw = gateway.map({ $0.trimmingCharacters(in: .whitespaces) }), isIPv4(gw), !isLoopback(gw) {
+            return gw
+        }
+        if let t = ifAddrText, let ip = parseWifiIp(fromIfAddr: t) { return ip }
+        if let t = ifconfigText, let ip = parseWlanIp(from: t) { return ip }
+        if let t = routeText, let ip = parseWlanIp(from: t) { return ip }
+        return nil
+    }
+
+    /// 이미 해당 엔드포인트가 열려 있으면 tcpip 을 다시 걸지 않는다.
+    /// 이유: `adb tcpip` 은 **adbd 를 재시작**해서 그 순간 USB 연결이 잠깐 사라진다.
+    /// 이미 TCP 로 열려 있다면 기기는 재부팅된 적이 없으니 다시 걸 이유가 없다.
+    static func needsTcpip(isNetworkSerialPresent: Bool) -> Bool { !isNetworkSerialPresent }
+
+    /// 자동 모드 설정 키 — 기본 ON (사용자 확정). 값이 바뀌면 사용자 설정이 조용히 초기화된다.
+    static let autoModeKey = "relay.wifiAutoTcpip"
+
+    /// adbd 재기동 대기 — 고정 대기 대신 재시도로 판정한다 (스크립트는 4초 고정 대기)
+    static let connectAttempts = 3
+    static let connectRetryInterval: TimeInterval = 2
+
+    /// adb 오류에서 사람이 읽을 수 있는 원문을 뽑는다 (안쪽에 이미 `cause` 가 있다)
+    static func cause(_ error: Error) -> String { (error as? WifiAdbError)?.cause ?? "" }
+
     /// `ip route` / `ip -f inet addr` / ifconfig 텍스트에서 wlan IPv4 추출
-    /// 우선: `wlan0` 인터페이스 · 그 외 default src
+    /// 우선: Wi-Fi 인터페이스 · 그 외 default src
     static func parseWlanIp(from text: String) -> String? {
-        // 1) wlan0 블록의 inet
-        if let ip = firstIPv4(inLines: linesContaining(text, interfaceHints: ["wlan0"]), interfaceHints: ["wlan0"]) {
+        // 1) Wi-Fi 인터페이스 블록의 inet (wlan0 / swlan0 / wlp…)
+        //    블록 헤더를 보고 **Wi-Fi 인 것만** 넘긴다 — rmnet(셀룰러) 블록을 먼저 읽으면
+        //    cellular 주소가 답이 된다 (실측 `10.148.183.154`)
+        let wifiBlocks = blocks(of: text).filter { block in
+            block.split(separator: "\n").contains { isWifiInterface(String($0)) }
+        }
+        if let ip = firstIPv4(inLines: wifiBlocks, interfaceHints: nil) {
             return ip
         }
         // 2) `ip route` → "src 192.168.x.y"
@@ -76,26 +158,27 @@ enum WifiAdbLogic {
 
     // MARK: - private helpers
 
-    private static func linesContaining(_ text: String, interfaceHints: [String]) -> [String] {
+    static func isLoopback(_ s: String) -> Bool { s.hasPrefix("127.") }
+
+    /// 인터페이스 헤더("60: swlan0:", "wlan0: flags=…") 기준으로 텍스트를 블록으로 나눈다
+    private static func blocks(of text: String) -> [String] {
         var out: [String] = []
-        var capturing = false
-        for line in text.split(separator: "\n") {
-            let l = String(line)
-            if interfaceHints.contains(where: { l.contains($0) }) {
-                capturing = true
-                out.append(l)
-                continue
+        var current: [String] = []
+        for raw in text.split(separator: "\n") {
+            let line = String(raw)
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            let looksLikeHeader = trimmed.contains(":") && {
+                let head = trimmed.prefix { $0 != ":" }.trimmingCharacters(in: .whitespaces)
+                let after = trimmed.split(separator: ":", maxSplits: 1).last.map(String.init) ?? ""
+                return head.isEmpty || head.allSatisfy(\.isNumber) || after.contains("flags=")
+            }()
+            if looksLikeHeader, !current.isEmpty {
+                out.append(current.joined(separator: "\n"))
+                current = []
             }
-            if capturing {
-                // 새 인터페이스 헤더면 중단
-                if l.hasPrefix("inet ") || l.contains("wlan") || l.hasPrefix("wlp") {
-                    if l.contains("wlan") || l.contains("wlp") { out.append(l); continue }
-                    capturing = false
-                } else {
-                    out.append(l)
-                }
-            }
+            if !trimmed.isEmpty { current.append(line) }
         }
+        if !current.isEmpty { out.append(current.joined(separator: "\n")) }
         return out
     }
 
@@ -130,40 +213,140 @@ final class WifiAdbController: ObservableObject {
     @Published var statusMessage: String?
     @Published var statusIsError = false
     @Published var lastEndpoint: String?
+    /// 자동 모드가 마지막으로 실패했나 (버튼 배지용) — 자동 실패는 조용히 남긴다
+    @Published private(set) var autoFailed = false
+    /// 자동 실행 중인 시리얼 — 중복 실행 방지 (같은 기기에 tcpip 2번 걸면 adbd 2번 재시작)
+    private var autoInFlight: Set<String> = []
 
     private init() {}
 
-    /// USB 기기: tcpip → wlan IP → connect
+    /// USB 기기: tcpip → IP 판별 → connect
+    ///
+    /// 순서가 곧 정확도다 (2026-09-27 · `PLAN_wifi_auto_tcpip`):
+    /// **tcpip 을 걸기 전에 IP 를 먼저 판별하고 도달 가능 여부를 확인한다.**
+    /// 종전에는 tcpip 을 먼저 걸고 IP 를 뒤에서 찾았는데, 그 IP 판별이 이 기기에서
+    /// **셀룰러 주소**를 잡았다(`ip route get` 의 src). 게다가 값을 반환하므로
+    /// 올바른 후보(기기 `ip addr` 의 `swlan0`)에 도달하지 못했다.
     func enableWifi(serial: String, port: Int = WifiAdbLogic.defaultPort) {
         guard !busy else { return }
         busy = true
         statusIsError = false
         statusMessage = L10n.string("wifi.status.enabling")
         Task {
-            defer {
-                busy = false
-            }
+            defer { busy = false }
             guard let adb = DeviceMonitor.adbPathNow() else {
                 fail("wifi.error.adbMissing")
                 return
             }
-            do {
-                try WifiAdbRunner.run(adb, WifiAdbLogic.tcpipArgs(serial: serial, port: port))
-                // adb 서버 재시작 대기
-                try? await Task.sleep(nanoseconds: 800_000_000)
-                guard let ip = try? await fetchDeviceIp(serial: serial, adb: adb) else {
-                    fail("wifi.error.ipNotFound")
-                    return
+            await runEnable(serial: serial, port: port, adb: adb, quiet: false)
+        }
+    }
+
+    /// 자동 모드 — 실패해도 사용자 방해 금지(팝업 없음), 상태만 남긴다 (PLAN_wifi_auto_tcpip §2)
+    func enableWifiAutomatically(serial: String, port: Int = WifiAdbLogic.defaultPort) async {
+        guard !autoInFlight.contains(serial) else { return }
+        guard !busy else { return }
+        autoInFlight.insert(serial)
+        defer { autoInFlight.remove(serial) }
+        guard let adb = DeviceMonitor.adbPathNow() else {
+            DebugLogger.shared.warn("WifiAdb", "[WARN] wifi.error.adbMissing (auto)")
+            return
+        }
+        await runEnable(serial: serial, port: port, adb: adb, quiet: true)
+    }
+
+    /// 자동 모드 진입점 — 설정이 꺼져 있으면 아무것도 하지 않는다 (기본 ON)
+    func autoEnableIfEnabled(serial: String) async {
+        guard UserDefaults.standard.object(forKey: WifiAdbLogic.autoModeKey) as? Bool ?? true else { return }
+        // 이미 TCP 로 열려 있으면 adbd 를 건드리지 않는다 (tcpip 은 adbd 재시작을 부른다)
+        if isNetworkEndpointOpen() {
+            DebugLogger.shared.info("WifiAdb", "[INFO] 이미 Wi-Fi 연결됨 — 자동 실행 생략 \(serial)")
+            return
+        }
+        autoFailed = false
+        await enableWifiAutomatically(serial: serial)
+    }
+
+    /// 자동 모드 설정 키 — 기본 ON (사용자 확정)
+    static let autoModeKey = "relay.wifiAutoTcpip"
+
+    /// 이미 TCP 로 열려 있으면 adbd 를 건드리지 않는다 — `tcpip` 은 adbd 를 재시작해서
+    /// 그 순간 USB 연결이 잠깐 사라지기 때문(기기가 재부팅된 적 없다면 다시 걸 이유가 없다)
+    func isNetworkEndpointOpen(port: Int = WifiAdbLogic.defaultPort) -> Bool {
+        lastEndpoint.map { $0.hasSuffix(":\(port)") } ?? false
+    }
+
+    private func runEnable(serial: String, port: Int, adb: String, quiet: Bool) async {
+        do {
+            // ① IP 판별 — 게이트웨이 1순위
+            guard let ip = try? await resolveIp(serial: serial, adb: adb) else {
+                if quiet { failAuto("wifi.error.ipNotFound") } else { fail("wifi.error.ipNotFound") }
+                return
+            }
+            let endpoint = WifiAdbLogic.defaultEndpoint(ip: ip, port: port)
+
+            // ② 도달 확인 — 닿지 않는 기기에 tcpip 을 걸면 adbd 만 재시작된 채 끝난다
+            //    (ping 이 아니라 adb 포트 — 핫스팟 폰은 ICMP 를 막는다, 실측)
+            guard PingProbe.reachable(ip: ip, port: port) else {
+                if quiet {
+                    failAuto("wifi.auto.notReachable", detail: endpoint)
+                } else {
+                    failDetail("wifi.auto.notReachable", detail: endpoint)
                 }
-                let endpoint = WifiAdbLogic.defaultEndpoint(ip: ip, port: port)
-                try WifiAdbRunner.run(adb, WifiAdbLogic.connectArgs(endpoint: endpoint))
+                return
+            }
+
+            // ③ 멱등 — 이미 TCP 로 열려 있으면 그대로 쓴다
+            if isNetworkEndpointOpen(port: port) {
                 lastEndpoint = endpoint
-                statusMessage = L10n.format("wifi.status.connected", endpoint)
-                DebugLogger.shared.info("WifiAdb", "[INFO] [FEATURE] Wi-Fi 연결 \(endpoint)")
-            } catch {
+                statusMessage = L10n.format("wifi.auto.alreadyOpen", endpoint)
+                DebugLogger.shared.info("WifiAdb", "[INFO] 이미 열려 있음 — tcpip 생략 \(endpoint)")
+                return
+            }
+
+            // ④ tcpip → ⑤ 준비 대기(재시도) → ⑥ 정리 → ⑦ connect
+            try WifiAdbRunner.run(adb, WifiAdbLogic.tcpipArgs(serial: serial, port: port))
+            try await connectWithRetry(adb: adb, endpoint: endpoint, port: port)
+            lastEndpoint = endpoint
+            statusMessage = L10n.format("wifi.status.connected", endpoint)
+            DebugLogger.shared.info("WifiAdb", "[INFO] [FEATURE] Wi-Fi 연결 \(endpoint)")
+        } catch {
+            if quiet {
+                failAuto("wifi.error.connectFailed", detail: cause(error))
+            } else {
                 failDetail("wifi.error.connectFailed", detail: cause(error))
             }
         }
+    }
+
+    /// adbd 재시작 직후엔 아직 준비 중일 수 있다 — 고정 대기 대신 **재시도로** 판정한다
+    private func connectWithRetry(adb: String, endpoint: String, port: Int) async throws {
+        var lastError: Error = WifiAdbError(cause: "")
+        for attempt in 1...WifiAdbLogic.connectAttempts {
+            // 고아 연결 정리 — 남아 있으면 새 연결이 붙지 않는다
+            try? WifiAdbRunner.run(adb, WifiAdbLogic.disconnectArgs(endpoint: endpoint))
+            do {
+                try WifiAdbRunner.run(adb, WifiAdbLogic.connectArgs(endpoint: endpoint))
+                return
+            } catch {
+                lastError = error
+                if attempt < WifiAdbLogic.connectAttempts {
+                    statusMessage = L10n.format("wifi.auto.waiting", attempt, WifiAdbLogic.connectAttempts)
+                    try? await Task.sleep(for: .seconds(WifiAdbLogic.connectRetryInterval))
+                }
+            }
+        }
+        // 마지막 시도도 "No route to host" 면 adb 서버 재시작 후 1회 (스크립트와 동일)
+        if WifiAdbLogic.cause(lastError).localizedCaseInsensitiveContains("no route to host") {
+            DebugLogger.shared.warn("WifiAdb", "[WARN] No route to host — adb 서버 재시작 후 재시도")
+            try? WifiAdbRunner.run(adb, ["kill-server"])
+            try? await Task.sleep(for: .seconds(1))
+            try? WifiAdbRunner.run(adb, ["start-server"])
+            try WifiAdbRunner.run(adb, WifiAdbLogic.disconnectArgs(endpoint: endpoint))
+            try WifiAdbRunner.run(adb, WifiAdbLogic.connectArgs(endpoint: endpoint))
+            return
+        }
+        throw lastError
     }
 
     func connect(endpoint: String) {
@@ -214,37 +397,48 @@ final class WifiAdbController: ObservableObject {
         }
     }
 
-    /// 기기 wlan IP — 실패 시 nil
+    /// 기기 Wi-Fi IP — 실패 시 nil
     func fetchDeviceIp(serial: String) async throws -> String? {
         guard let adb = DeviceMonitor.adbPathNow() else { return nil }
-        return try await fetchDeviceIp(serial: serial, adb: adb)
+        return try await resolveIp(serial: serial, adb: adb)
     }
 
-    private func fetchDeviceIp(serial: String, adb: String) async throws -> String? {
-        // 빠른 경로: ip route get 1.1.1.1
-        if let out = try? WifiAdbRunner.runCapture(
-            adb,
-            ["-s", serial, "shell", "ip", "route", "get", "1.1.1.1"]
-        ), let ip = WifiAdbLogic.parseWlanIp(from: out) {
-            return ip
-        }
-        if let out = try? WifiAdbRunner.runCapture(
-            adb,
-            ["-s", serial, "shell", "ip", "-f", "inet", "addr", "show", "wlan0"]
-        ), let ip = WifiAdbLogic.parseWlanIp(from: out) {
-            return ip
-        }
-        if let out = try? WifiAdbRunner.runCapture(
-            adb,
-            ["-s", serial, "shell", "ifconfig", "wlan0"]
-        ), let ip = WifiAdbLogic.parseWlanIp(from: out) {
-            return ip
-        }
-        return nil
+    /// IP 판별 — **후보 순서가 곧 정확도다** (2026-09-27 실측 · PLAN_wifi_auto_tcpip §0)
+    ///
+    /// ① 맥 기본 게이트웨이 — 폰이 핫스팟이면 **게이트웨이가 곧 폰 IP**
+    /// ② 기기 `ip addr` 전체 — Wi-Fi 인터페이스(`swlan0` 등)만 골라
+    /// ③ 기기 `ifconfig` 전체
+    /// ④ `ip route get` 의 src — **마지막**. 인터넷으로 나가는 쪽의 주소라
+    ///    핫스팟 + 셀룰러 동시 켜진 기기에서는 **셀룰러 IP** 를 준다(실측 `10.148.183.154`)
+    ///
+    /// 종전에는 ④가 **1순위**였고, 그래서 이 기기에서 잘못된 IP로 connect 를 시도했다.
+    private func resolveIp(serial: String, adb: String) async throws -> String? {
+        let gateway = MacRoute.defaultGateway()
+        let ifAddr = try? WifiAdbRunner.runCapture(adb, ["-s", serial, "shell", "ip", "-f", "inet", "addr"])
+        let ifconfig = try? WifiAdbRunner.runCapture(adb, ["-s", serial, "shell", "ifconfig"])
+        let route = try? WifiAdbRunner.runCapture(
+            adb, ["-s", serial, "shell", "ip", "route", "get", "1.1.1.1"]
+        )
+        return WifiAdbLogic.resolveIp(
+            gateway: gateway,
+            ifAddrText: ifAddr,
+            ifconfigText: ifconfig,
+            routeText: route
+        )
     }
 
     private func fail(_ key: String) {
         failDetail(key, detail: nil)
+    }
+
+    /// 자동 경로 실패 — 조용히 상태만 남긴다. 사용자가 아무것도 안 했는데
+    /// 팝업이 튀면 방해가 된다. 대신 배지와 로그로는 남긴다 ([표시②]의 "조용한 return" 금지).
+    private func failAuto(_ key: String, detail: String? = nil) {
+        autoFailed = true
+        statusIsError = true
+        let base = L10n.string(key)
+        statusMessage = (detail?.isEmpty == false) ? "\(base) — \(detail!)" : base
+        DebugLogger.shared.warn("WifiAdb", "[WARN] [AUTO] \(key)\(detail.map { " \($0)" } ?? "")")
     }
 
     /// 실패 표시 — 원문(adb stderr 등)을 함께 노출 (AGENTS.local §4 [표시②])
@@ -256,15 +450,88 @@ final class WifiAdbController: ObservableObject {
     }
 
     /// 외부 명령 실패 원인 — WifiAdbError.cause 우선, 없으면 빈 문자열 (내부 코드 노출 금지)
-    private func cause(_ error: Error) -> String {
-        (error as? WifiAdbError)?.cause ?? ""
-    }
+    private func cause(_ error: Error) -> String { WifiAdbLogic.cause(error) }
 }
 
 /// adb 실행 실패 — 실제 stderr 원인을 보존 (AGENTS.local §4 [표시②])
 struct WifiAdbError: LocalizedError, Sendable {
     let cause: String
     var errorDescription: String? { cause.isEmpty ? nil : cause }
+}
+
+/// IP 도달 확인 — 닿지 않는 기기에 tcpip 을 걸면 **adbd 만 재시작된 채** 끝난다
+///
+/// ## 왜 ping 이 아니라 TCP 포트 확인인가 (2026-09-27 실측)
+///
+/// 스크립트는 `ping -c 1` 을 쓰지만 **이 기기(핫스팟 + 셀룰러)에서는 ping 이 실패한다.**
+/// ```
+/// 맥 → 10.233.247.205 ping      : 100.0% packet loss   ← 실패
+/// 폰 → 10.233.247.205 ping(자기) : 0% packet loss, 0.142ms  ← 같은 주소가 통함
+/// 맥 → nc -z 10.233.247.205 5555: succeeded            ← adb 포트는 열려 있음
+/// ```
+/// 즉 **경로가 막힌 게 아니라 폰이 ICMP 응답을 안 하는 것**이다. ping 이 유일한 기준이면
+/// 실제로 연결 가능한 기기를 "닿지 않습니다" 로 오판해 tcpip 을 건너뛴다.
+/// 그래서 **실제 서비스 포트(adb 5555)** 로 확인한다 — 우리가 하려는 일의 대상이 그 포트이니
+/// 더 직접적인 신호다.
+enum PingProbe {
+    /// adb TCP 포트 도달 확인
+    static func reachable(ip: String, port: Int = WifiAdbLogic.defaultPort) -> Bool {
+        guard WifiAdbLogic.isIPv4(ip), !WifiAdbLogic.isLoopback(ip) else { return false }
+        let proc = Process()
+        proc.executableURL = URL(fileURLWithPath: "/usr/bin/nc")
+        // -z : 연결만 하고 데이터 없음 · -G : 타임아웃(초) · -w : 전체 대기 제한
+        proc.arguments = ["-z", "-G", "2", "-w", "2", ip, String(port)]
+        let out = Pipe()
+        proc.standardOutput = out
+        proc.standardError = Pipe()
+        do {
+            try proc.run()
+        } catch {
+            return false
+        }
+        _ = out.fileHandleForReading.readDataToEndOfFile()
+        proc.waitUntilExit()
+        return proc.terminationStatus == 0
+    }
+}
+
+/// 맥 기본 게이트웨이 — **핫스팟 폰이면 곧 폰 IP** 다 (스크립트와 동일 아이디어)
+enum MacRoute {
+    static func defaultGateway() -> String? {
+        let proc = Process()
+        proc.executableURL = URL(fileURLWithPath: "/sbin/route")
+        proc.arguments = ["-n", "get", "default"]
+        let out = Pipe()
+        proc.standardOutput = out
+        proc.standardError = Pipe()
+        do {
+            try proc.run()
+        } catch {
+            return nil
+        }
+        let text = String(decoding: out.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+        proc.waitUntilExit()
+        for line in text.split(separator: "\n") {
+            let t = line.trimmingCharacters(in: .whitespaces)
+            guard t.hasPrefix("gateway:") else { continue }
+            let ip = t.replacingOccurrences(of: "gateway:", with: "")
+                .trimmingCharacters(in: .whitespaces)
+            if WifiAdbLogic.isIPv4(ip) { return ip }
+        }
+        return nil
+    }
+
+    /// 테스트용 — `route -n get default` 출력 파싱
+    static func parseGateway(_ text: String) -> String? {
+        for line in text.split(separator: "\n") {
+            let t = line.trimmingCharacters(in: .whitespaces)
+            guard t.hasPrefix("gateway:") else { continue }
+            let ip = t.replacingOccurrences(of: "gateway:", with: "")
+                .trimmingCharacters(in: .whitespaces)
+            if WifiAdbLogic.isIPv4(ip) { return ip }
+        }
+        return nil
+    }
 }
 
 /// adb 프로세스 실행 (Controller에서만)

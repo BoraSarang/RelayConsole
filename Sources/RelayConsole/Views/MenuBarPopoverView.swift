@@ -3,6 +3,8 @@ import AppKit
 
 struct MenuBarPopoverView: View {
     @ObservedObject var store: ConsoleStore
+    /// 자동 Wi-Fi ADB 상태 (실패 배지용)
+    @ObservedObject private var wifi = WifiAdbController.shared
     var openConsole: () -> Void
     var openDebug: () -> Void = {}
     var openSettings: () -> Void = {}
@@ -159,6 +161,7 @@ struct MenuBarPopoverView: View {
                         .truncationMode(.tail)
                     // 연결 종류: USB | IP:5555
                     connectionBadge(d)
+                    autoWifiFailBadge(for: d)
                     StatusDot(state: d.isOnline ? .ok : .bad)
                     Text(d.isOnline
                         ? L10n.string("menubar.status.connected")
@@ -248,6 +251,31 @@ struct MenuBarPopoverView: View {
                 RoundedRectangle(cornerRadius: 4)
                     .stroke(OPColor.border, lineWidth: 1)
             )
+    }
+
+    /// 자동 Wi-Fi ADB 실패 배지 — 사용자가 아무것도 안 했는데 실패했으므로
+    /// 조용히 사라지면 "설치만 하면 된다" 는 잘못된 믿음이 남는다 ([표시②])
+    private func autoWifiFailBadge(for d: DeviceSnapshot) -> some View {
+        // USB 로 꽂혀 있고, 그 기기가 TCP 로도 열려 있지 않을 때만 (안 열렸는데 실패한 것)
+        let usbDevice = d.connectionKind == .usb
+        let hasNetworkTwin = store.inventory.devices.contains {
+            $0.serial != d.serial && $0.connectionKind == .network
+        }
+        if !usbDevice || hasNetworkTwin || !wifi.autoFailed { return AnyView(EmptyView()) }
+        return AnyView(
+            Text(L10n.string("wifi.badge.autoFailed"))
+                .font(OPFont.number(9))
+                .foregroundStyle(OPColor.warn)
+                .lineLimit(1)
+                .padding(.horizontal, 5)
+                .padding(.vertical, 2)
+                .background(OPColor.card, in: RoundedRectangle(cornerRadius: 4))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 4)
+                        .stroke(OPColor.warn.opacity(0.35), lineWidth: 1)
+                )
+                .help(wifi.statusMessage ?? "")
+        )
     }
 
     // MARK: - Device list / detail expand

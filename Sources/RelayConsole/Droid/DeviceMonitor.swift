@@ -1026,6 +1026,14 @@ actor DeviceMonitor {
             Task { @MainActor in
                 ScreenshotService.shared.refresh(serial: s, adbPath: path)
             }
+            // USB 신규 감지 → Wi-Fi ADB 자동 개방 (2026-09-27 · PLAN_wifi_auto_tcpip)
+            // "USB 를 뽑아도 IP 로 계속" 의 전제 — 케이블을 뽑는 것은 adbd 를 죽이지 않는다.
+            // tcpip 은 **재부팅마다** 다시 필요하고, 재부팅하면 USB 를 다시 꽂게 된다.
+            if conn.kind == .usb {
+                Task { @MainActor in
+                    await WifiAdbController.shared.autoEnableIfEnabled(serial: s)
+                }
+            }
         }
 
         // 끊김 — 활성 gate synthetic clear (후속조치 영구잔류 방지)

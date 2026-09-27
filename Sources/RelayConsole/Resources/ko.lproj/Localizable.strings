@@ -753,3 +753,10 @@
 "droid.logs.preset.fatal" = "FATAL EXCEPTION";
 "droid.logs.preset.died" = "has died";
 "droid.logs.preset.dropbox" = "dropbox";
+"wifi.setting.auto" = "USB 연결 시 자동으로 Wi-Fi ADB 열기";
+"wifi.setting.auto.help" = "케이블을 뽑아도 IP 로 계속 연결됩니다. 기기를 재부팅하면 USB 를 다시 꽂을 때마다 한 번씩 필요합니다.";
+"wifi.auto.notReachable" = "%@ 에 닿지 않습니다 — 같은 Wi-Fi 에 있는지 확인하세요";
+"wifi.auto.waiting" = "adb 연결 대기 중… (%d/%d)";
+"wifi.auto.alreadyOpen" = "이미 Wi-Fi 로 열려 있습니다 — %@";
+"wifi.badge.autoFailed" = "자동 연결 실패";
+"settings.wifi.section" = "Wi-Fi ADB";
