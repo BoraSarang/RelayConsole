@@ -9,25 +9,11 @@
 - [ ] **로그 창 VoiceOver 노출** — `System Events` 의 `entire contents` 가 **0개**.
       SwiftUI 내용이 보조기술에 노출되지 않는다(배지 버튼만 `.accessibilityLabel` 로 처리).
       측정 우회로 **팝오버 클릭 자동 검증도 불가능**해져 육안 대기 항목이 되었다 (PLAN_log_tag_picker §8-1)
-- [ ] **한자(중국어) 혼입 잔재** — `scripts/scan-cjk.py` 로 전수 스캔. **2026-09-28 재기준: 38건 / 12파일**
-    (앞선 "24건 / 20파일" 기록은 다른 도구 기준 — **이제 도구 출력이 기준**이다. 재실행: `python3 scripts/scan-cjk.py`)
-    - **우선순위가 다르다 — 소스·규칙 파일이 먼저다** (사용자에게 보이는 글자이므로)
-      ① `AGENTS.local.md:60` — "밝은 테마/웹**風** 버튼/print 금지" → "웹풍" (규칙 문서 오타)  # scan-cjk: allow
-      ② `Sources/RelayConsole/Droid/DeviceMonitor.swift:605` — 주석 `内`  # scan-cjk: allow
-      ③ `Sources/RelayConsole/Views/InsightsView.swift:350` — 주석 `年`·`月`  # scan-cjk: allow
-      → **이 3건은 주석·문서 1줄 수정이니 위험이 거의 없다. 파일 단위로 묶어 바로 해도 된다**
-    - 그다음 docs 9파일: `PLAN_v0.3`(6) · `PLAN_v0.5`(3) · `PLAN_refactor_perf_stability`(2) ·
-      `RESEARCH_adb_file_browser`(4) · `RESEARCH_droid_devicecare`(3) · `RESEARCH_apple_relay`(2) ·
-      `PLAN_v0.4`(2) · `PLAN_v0.1`(1) · `PLAN_wifi_*`(2)
-    - **왜 묶어 놓았나**: 세션 마무리 시점에 12파일 무분별 수정은 검토 없이 코드를 건드리는 것.
-      소스 3건은 별도 커밋으로 먼저 처리하는 게 맞다
-    - **진짜 해법은 커밋 훅** — 한자 혼입이 한 세션에 4회 재발했다. 스캔 스크립트는 만들었고
-      (`# scan-cjk: allow` 로 **인용이 필요한 문서**는 예외 처리 — 검출기를 못 쓰게 하느니 근거를 남길 자리를 만듦),
-      **훅 등록만 남음**
-- [ ] **강제 종료 시 고아 `adb logcat`** — 앱이 `pkill`/크래시로 죽으면 로그 창의 adb 자식이
-      **PPID 1 로 남고 계속 스트리밍**한다. 2026-09-27 에 28분짜리 잔존으로 확인됐고
-      2026-09-28 에도 재확인 — 측정 중 adb 자식 2개로 오판할 수 있으니 **PPID 로 구분해야 한다.**
-      정상 종료 경로에서는 `onDisappear` → `stop()` 이 죽이므로 **강제 종료 때만** 남는다
+- [ ] **한자 스캔을 커밋 훅으로** — 스캔 도구는 완성(`scripts/scan-cjk.py`)이고 **저장소 0건**이다.
+      **훅 등록만 남았다** — 한자 혼입이 한 세션에 4회 재발한 것은 기억으로 못 막기 때문
+      (`git commit` 시 자동 실행). 도구가 방금 두 번 배웠다: 디렉터리 인자를 안 따라가면
+      **아무것도 안 보고 0건 으로 통과**하고, `#` 표시가 Swift 주석을 지시자로 파싱해 **컴파일을 깨운다**
+- [ ] **로그 창 VoiceOver 노출** — `System Events` 의 `entire contents` 가 **0개** (PR #54)
 - [ ] **S3 관제 규칙 Rules as Code (로컬 YAML)** — TIER S 중 유일 미착수
 - [ ] **A7** Dock 배지 / 그룹화 (라이브액티비티·위젯은 1.15.0으로 완료)
 - **TIER A**: Things·캘린더 연동 · 스샷 스크랩북 · 멀티 스냅샷 그리드 · Prometheus/JSON export · cron 기기 태그 · 충전 방치 리포트
