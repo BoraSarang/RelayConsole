@@ -2,7 +2,16 @@
 > 작업 추적 — bd 연동 (이슈 prefix: RelayConsole)
 
 ## 진행 중 (bd ready)
-- (없음 — 아래 완료 항목 참조)
+- [ ] **stale TCP 엔드포인트 미정리** (2026-09-27 자동 모드 실기 검증 중 발견) —
+  Wi-Fi IP 가 바뀌면 `adb devices` 에 옛 항목이 남아 **같은 폰이 2개 기기로 잡히고 폴링도 2배**
+  (adb 자식 3개 실측). `autoEnableIfEnabled` 가 "이미 열려 있으면 skip" 만 하고 정리하지 않는다.
+  후보: TCP 전환 성공 시 **같은 기기의 옛 엔드포인트**를 `adb disconnect` — 단, "같은 기기" 판별은
+  USB serial 과의 매핑이 필요하므로 **추측 금지 원칙상 실측 후 착수**
+- [ ] **`@Published` 20개 세분화** (2026-09-27 알림 지연 조사 제안 3) — 알림 1건이 여전히
+  `objectWillChange` **2회**를 발생시킨다. 계산 비용은 캐시로 없앴지만 SwiftUI 재평가 비용은 남는다.
+  `ConsoleStore` 를 `DeviceStore`/`EventStore`/`SettingsStore` 로 분리하거나 최소한
+  `recentWatchEvents` 를 별도 ObservableObject 로 분리. **14개 View 의존성 전부 재매핑 필요** —
+  09-26 보류 전례 있음. **제안 1·2 적용 후 체감 재확인 → 통과하면 미착수**
 
 ## 다음 스프린트 (리서치 §8 잔여 · 미착수)
 - [ ] **S3 관제 규칙 Rules as Code (로컬 YAML)** — TIER S 중 유일 미착수
@@ -25,8 +34,14 @@
   (adb 자식 3개 실측). `autoEnableIfEnabled` 가 "이미 열려 있으면 skip" 만 하고 정리하지 않는다.
   후보: TCP 전환 성공 시 **같은 기기의 옛 엔드포인트**를 `adb disconnect` — 단, "같은 기기" 판별은
   USB serial 과의 매핑이 필요하므로 **추측 금지 원칙상 실측 후 착수**
+- [ ] **`@Published` 20개 세분화** (2026-09-27 알림 지연 조사 제안 3) — 알림 1건이 여전히
+  `objectWillChange` **2회**를 발생시킨다. 계산 비용은 캐시로 없앴지만 SwiftUI 재평가 비용은 남는다.
+  최소한 `recentWatchEvents` 를 별도 ObservableObject 로 분리해 **이벤트 변경이 기기/설정 탭까지
+  무효화하지 않게** 한다. **14개 View 의존성 재매핑 필요** — 09-26 보류 전례 있음.
+  **제안 1·2 적용 후 체감 재확인 → 통과하면 미착수**
 
 ## 완료 (2026-09-27)
+
 - [x] **T-2026-09-27-5 알림 유입 시 전 탭 지연 — 제안 1·2 적용** — `RESEARCH_alert_tab_slowness` · 테스트 10건 신규
   - **조사 결론**: "데이터가 많아서" 가 **아니다**. 실측 — 알림 1건 유입 = **0.12ms**,
     실제 유입률 **15분에 11건**. 느린 곳은 **InsightsView 하나**(body 1회 6.2ms)였고
