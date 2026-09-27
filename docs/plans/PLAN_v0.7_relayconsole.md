@@ -112,3 +112,11 @@ findScrcpy(): relay.scrcpy.path → /opt/homebrew/bin → /usr/local/bin → PAT
 - [x] 헤더 썸네일 A안 — 미니 썸네일 제거 · `ScreenshotPreviewSheet`
 - [x] 실기 육안 — scrcpy 설치→미러링 / Bsoh·RSRP 주입 / 복구 알림 / 썸네일 / 로그창 (사용자 확인 ✓)
 - [x] TODO · AGENTS.local · 세션로그 갱신
+
+## 8. 로그 뷰어 결함 2건 (2026-09-27 · 계측)
+
+- **크래시** — 로그 버튼을 누르면 즉시 죽었다. `%@` 문자열에 `Int` 를 넣어 CFString 이 정수를 **포인터로** 읽었고
+  2221(0x8ad) 에 `objc_msgSend` → `EXC_BAD_ACCESS`. `L10n.format` 가 인자 타입에 맞춰 변환자를 교정하도록 변경.
+- **누적** — 필터 전환마다 `adb logcat` 이 하나씩 남았다. `terminationHandler` 알림이 늦게 도착해 새 프로세스의
+  자리를 지운 것이 원인 → `LogcatProcessSlot` 으로 교체된 프로세스 알림이 자리를 건드리지 않게 함.
+- 상세·계측: `docs/TODO.md` "완료 (2026-09-27)" 2건 · `.agent/session-2026-09-27-2-macos.md`
