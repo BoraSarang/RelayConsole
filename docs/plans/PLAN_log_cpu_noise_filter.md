@@ -176,3 +176,61 @@ adb shell logcat -v time '*:W' --regex=(?i)ActivityManager
 
 → 엔진이 문자클래스를 지원하고 **양쪽 대소문자를 모두 찾는다**는 것이 실기로 증명됐다.
 회귀 고정: `caseInsensitiveNeverUsesInlineFlags` (되돌리면 잡힌다).
+
+---
+
+## 10. 3번째 태그 — 안전 필터가 검증된 태그를 버리고 있었다
+
+`ThermalManagerService$ThermalHalWrapper` 는 TODO 에 "**실기 검증 후** 다룬다" 로 남아 있었다.
+검증부터 했다.
+
+### 10-1. 선행 검증 — `$` 와 39자가 문제인가
+
+| 항목 | 결과 |
+|---|---|
+| 버퍼 덤프 중 해당 태그 | **2,874줄** (기록 형태 `E/ThermalManagerService$ThermalHalWrapper: …`) |
+| `'<tag>:S'>` 적용 후 | **0줄** ✅ |
+| 과잉 제외 여부 | 전체 194,910 → 185,309 = **딱 2,874줄만 감소** ✅ |
+| 메시지 종류 | 2 (`no cooling device for cooling type 0` · `no threshold data for temperature type 0`) |
+
+→ **`$` 도 길이 39자도 문제가 아니다.** 필터식 문법에서 `$` 는 특별하지 않다.
+
+### 10-2. 그런데 내 안전 필터는 이 태그를 버렸다
+
+직전 세션에서 만든 `safeTags` 의 허용 집합은 `A-Za-z0-9_` 였다 → **`$` 가 있는 이 태그는
+조용히 탈락했다.** 실효가 아니라 **실패처럼 보이는** 상태였다(제외 안 되는데 배지만 뜬다).
+`noisyTagsAreFilterSafe` 테스트가 이걸 잡아냈다 — 방어선을 먼저 깔아둔 것이 값을 했다.
+
+→ **검증된 예외는 예외로 들여다보다.** `$` 를 허용 집합에 넣고, 왜 안전한지는 계측값으로 남겼다.
+회귀 테스트 `dollarSignTagSurvivesTheSafetyFilter` 추가.
+
+### 10-3. 지형을 재 보고 목록을 멈췄다
+
+3종 제외 후 잔여 버퍼 13,811줄의 전수:
+
+| 태그 | 건수 | 비중 | 메시지종류 | 판정 |
+|---|---:|---:|---:|---|
+| `ActivityManager` | 5,574 | 40.4% | 101 (94%가 1종) | **남긴다** |
+| `BluetoothPowerStatsCollector` | 1,104 | 8.0% | 23 | 남긴다 |
+| `System.err` | 710 | 5.1% | 186 | 남긴다 |
+| `PermissionService` | 590 | 4.3% | **1** | **보류** |
+| `LocalDisplayAdapter` | 513 | 3.7% | 513 | 남긴다 |
+| `DeviceStorageMonitorService` | 332 | 2.4% | **2** | **보류** |
+
+**`ActivityManager` 를 왜 남겼나** — 반복도로 보면 소음이다(5,247줄이 동일한 한 줄).
+그런데 그 줄은 **범인 앱 이름을 담고 있다**(버퍼에 앱 7종):
+`Foreground service started from background … : service com.nisargjhaveri.netspeed/.IndicatorService`.
+`Empty traffic data` 와 달리 **"무엇이 이 기기를 망가뜨리는가" 를 말해주는 신호**다.
+→ 기본 제외하지 않는다. **사용자가 고르게 하는 것이 정답**이며 태그 선택 UI 는 별도 과목.
+
+**`PermissionService` · `DeviceStorageMonitorService` 를 왜 보류했나** — 순수 반복이라
+제외 대상으로는 유효하다. 그러나 이미 7% 로 줄인 잔여량에서 **6.7%** 뿐이고,
+숨기는 `E` 레벨 줄이 늘어날수록 배지보다 **침묵** 이 된다.
+→ **뺄 이유가 부족하다.** 측정값과 판단 근거를 남기고 TODO 로 넘긴다.
+
+## 11. 남은 설계 질문 — 목록이 아니라 **선택지** 로
+
+사용자가 "이 태그를 숨겨라" 를 직접 할 수 있으면, 위의 모든 판단
+(`ActivityManager` 를 남긴 이유 · `PermissionService` 를 뺀 이유)이 **사용자에게 넘어간다.**
+그게 [표시②] 관점에서 가장 정직한 형태다 — AI 가 대신 판단하는 것보다.
+→ **태그 선택 UI** 를 별도 과목으로 등록.
