@@ -77,7 +77,11 @@ if wins.isEmpty {
 //   ★ 다만 **클릭 모드에서는 초점을 건드리지 않는다** — 로그 창을 key 로 만들면
 //   **팝오버가 닫힌다**(초점이 다른 곳으로 가면 팝오버는 사라진다).
 //   실측: --window 를 붙인 채 클릭하면 팝오버 요소가 보이지 않아 "대상 없음" 이 된다.
-if mode != "--click" {
+// ★ **읽기 전용 모드는 초점을 건드리지 않는다** (2026-09-28 실측)
+//   초점을 옮기면 **팝오버가 닫힌다** → 요소를 못 보고 "대상 없음" 으로 조용히 실패한다.
+//   클릭·조회·계수 어느 쪽이든 **보는 동작**은 사용자의 화면을 바꾸지 않아야 한다.
+let readOnlyModes: Set<String> = ["--click", "--values", "--count", "--rows"]
+if !readOnlyModes.contains(mode) {
     if let needle = windowNeedle, let w = wins.first(where: {
         str($0, kAXTitleAttribute).contains(needle)
     }) {
@@ -120,6 +124,49 @@ if mode == "--click" {
     let err = AXUIElementPerformAction(hit.el, kAXPressAction as CFString)
     print("클릭 \(hit.role) '\(hit.name)' → \(err == .success ? "성공" : "실패 \(err.rawValue)")")
     exit(err == .success ? 0 : 1)
+}
+
+// ★ `--rows` — **이름이 있는 요소를 전부** (읽기 전용)
+//   태그 선택 표의 행은 이름이 `Watchdog, 5종 이상, 2,215줄` 형태인데
+//   `--buttons` 는 상호작용 요소만 보고 `--values` 는 AXValue 만 본다 →
+//   **이 둘 다 표 행을 잡지 못했다.** 읽기 전용이라 초점을 건드리지 않는다.
+if mode == "--rows" {
+    var shown = 0
+    for n in nodes where !n.name.isEmpty {
+        let pad = String(repeating: "  ", count: min(n.depth, 6))
+        print("\(pad)\(n.role) — \(n.name)")
+        shown += 1
+        if shown > 200 { print("… (200개 초과 잘림)"); break }
+    }
+    print("— 이름 있는 요소 \(shown)개 / 전체 \(nodes.count)개 —")
+    exit(0)
+}
+
+// ★ `--values` / `--count` — **텍스트 내용**을 읽는다 (2026-09-28 추가)
+//   왜 필요했나: 로그 행처럼 SwiftUI 가 AX **이름이 아니라 값**으로 내는 요소가 있다.
+//   이름만 보면 "요소 237개 · 이름 없음" 에서 끝나고, **무엇이 화면에 있는지 알 수 없다.**
+//   MANUAL_VERIFY 8·9 는 "몇 줄이 보이느냐" 라는 **숫자**가 판별 기준이라 값이 필수였다.
+if mode == "--values" || mode == "--count" {
+    var texts: [String] = []
+    for n in nodes {
+        guard n.role == kAXStaticTextRole || n.role == kAXTextFieldRole
+                || n.role == kAXTextAreaRole else { continue }
+        guard let v = attr(n.el, kAXValueAttribute) as? String, !v.isEmpty else { continue }
+        texts.append(v)
+    }
+    if mode == "--count" {
+        guard let re = try? NSRegularExpression(pattern: needle, options: [.caseInsensitive]) else {
+            FileHandle.standardError.write(Data("정규식 오류: \(needle)\n".utf8))
+            exit(2)
+        }
+        let hit = texts.filter { re.firstMatch(in: $0, range: NSRange($0.startIndex..., in: $0)) != nil }
+        print("텍스트 요소 \(texts.count)개 중 '\(needle)' 와 일치 \(hit.count)개")
+        for t in hit.prefix(5) { print("  · \(t.prefix(90))") }
+        exit(0)
+    }
+    for t in texts { print(t) }
+    print("— 텍스트 요소 \(texts.count)개 —")
+    exit(0)
 }
 
 print("요소 \(nodes.count) 개 · 창 \(wins.count)개")

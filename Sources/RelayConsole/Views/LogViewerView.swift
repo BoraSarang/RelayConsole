@@ -228,6 +228,12 @@ enum LogcatFilter {
             var messagesSaturated = false
             /// 제외 중인가 — **집계값은 유지한 채 상태만 다르다**
             var excluded = false
+            /// ★ 이 값을 **실제로 셌는가** (2026-09-28 추가)
+            ///
+            /// 앱을 다시 띄우면 집계를 비우고, 제외된 태그는 기기에서 안 오므로
+            /// **집계 항목이 아예 생기지 않는다.** 그때 합성한 행의 `count` 는 0 이지만
+            /// "0 줄 이다" 는 **거짓말**이다 — "몰라" 를 0 으로 말하면 안 된다.
+            var counted = true
         }
 
         var entries: [String: Entry] = [:]
@@ -285,15 +291,32 @@ enum LogcatFilter {
             }
         }
 
-        /// 건수 내림차순 상위 N — **제외된 태그도 그대로 둔다.**
-        /// 기기에서 걸러 버린 태그는 더 이상 도착하지 않으므로, 감추면
-        /// "내가 뭘 숨겼는지" 를 기억으로 되돌려야 한다. (PLAN_log_tag_picker §1-②)
-        func snapshot(limit: Int = 8) -> [(tag: String, entry: Entry)] {
-            entries
+        /// 건수 내림차순 상위 N — **제외된 태그는 집계가 없어도 반드시 포함한다.**
+        ///
+        /// ## 왜 이게 버그였나 (2026-09-28 실측)
+        /// 이 주석은 "제외된 태그도 그대로 둔다" 고 **문서화되어 있었다.**
+        /// 그런데 제외된 태그는 기기에서 걸러져 **더 이상 도착하지 않으므로**
+        /// 앱을 다시 띄운 뒤에는 **집계 항목 자체가 없다.**
+        /// → 목록에서 사라져 체크를 해제할 수단이 없어졌다.
+        /// 실측: 앱 재시작 후 사용자가 추가한 `Watchdog` 가 목록에서 사라졌고,
+        /// `기본값 복원` 을 눌러도 **돌아오지 않았다** (기본 3종으로만 복귀).
+        /// 되돌릴 수 없는 상태였다.
+        ///
+        /// 집계는 창을 *연* 시점에 비워지는데(`resetStats: true`),
+        /// 제외 태그는 **재시작 후 영원히 집계가 안 쌓인다** — 그래서 이 처리가 필수다.
+        func snapshot(limit: Int = 8, excluding: [String] = []) -> [(tag: String, entry: Entry)] {
+            var rows = entries
                 .map { (tag: $0.key, entry: $0.value) }
                 .sorted { $0.entry.count > $1.entry.count }
                 .prefix(limit)
                 .map { $0 }
+            let listed = Set(rows.map(\.tag))
+            // 집계에 없는 제외 태그를 **뒤에** 붙인다 — 건수가 0 으로 "상위" 가 된다면
+            // 정직하지 않다. "모른다" 를 0 으로 말하지 않는다 (count 0 · counted=false)
+            for tag in excluding where !listed.contains(tag) {
+                rows.append((tag: tag, entry: Entry(count: 0, messages: [], excluded: true, counted: false)))
+            }
+            return rows
         }
 
         /// 태그가 몇 개나 집계됐나 (빈 상태와 "데이터 없음" 을 구분하기 위해)
@@ -306,9 +329,19 @@ enum LogcatFilter {
     /// 구분 규칙은 **정직성 규칙**이라(표본이 5개를 넘으면 "N" 이 아니라 "N 이상" 이다)
     /// 반드시 테스트가 있어야 한다.
     static func messageSummary(_ e: TagStats.Entry) -> (key: String, args: [CVarArg]) {
-        e.messagesSaturated
+        // ★ 셌지 않은 값은 개수를 말하지 않는다 (2026-09-28)
+        //   "0종" 은 "한 번도 안 봤다" 와 "0종 이다" 를 구분하지 못한다
+        guard e.counted else { return ("droid.logs.picker.unknown", []) }
+        return e.messagesSaturated
             ? ("droid.logs.picker.msgs.more", [e.messages.count])
             : ("droid.logs.picker.msgs", [e.messages.count])
+    }
+
+    /// 행의 건수 문구 — 셌지 않은 값은 **"몰라"** 를 말한다
+    static func countSummary(_ e: TagStats.Entry) -> (key: String, args: [CVarArg]) {
+        e.counted
+            ? ("droid.logs.picker.countN", [e.count])
+            : ("droid.logs.picker.countUnknown", [])
     }
 
     /// adb `logcat --regex=<패턴>` 에 넘길 값.
@@ -1189,7 +1222,7 @@ struct LogTagPickerView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
             } else {
                 VStack(alignment: .leading, spacing: 2) {
-                    ForEach(stats.snapshot(), id: \.tag) { row in
+                    ForEach(stats.snapshot(excluding: excluded), id: \.tag) { row in
                         rowView(row)
                     }
                 }
@@ -1239,7 +1272,8 @@ struct LogTagPickerView: View {
                                  LogcatFilter.messageSummary(row.entry).args))
                     .font(OPFont.number(9))
                     .foregroundStyle(OPColor.inkDim)
-                Text(L10n.format("droid.logs.picker.countN", row.entry.count))
+                Text(L10n.format(LogcatFilter.countSummary(row.entry).key,
+                                 LogcatFilter.countSummary(row.entry).args))
                     .font(OPFont.number(10))
                     .foregroundStyle(OPColor.inkDim)
             }
@@ -1248,7 +1282,9 @@ struct LogTagPickerView: View {
         }
         .buttonStyle(.plain)
         .help(isExcluded
-              ? L10n.format("droid.logs.picker.row.excluded", row.entry.count)
+              ? (row.entry.counted
+                  ? L10n.format("droid.logs.picker.row.excluded", row.entry.count)
+                  : L10n.string("droid.logs.picker.row.excludedUnknown"))
               : L10n.format("droid.logs.picker.row.visible", row.entry.count))
     }
 }
