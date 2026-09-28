@@ -58,6 +58,29 @@ struct RulesConfig: Equatable, Sendable {
         }
     }
 
+    /// 배터리 **방치** 기준 — 잔량 임계 1개
+    ///
+    /// ## 왜 `Rule` 이 아닌가
+    /// `Rule` 은 `enter > clear` hysteresis 불변식이 있는 구조다. 방치는
+    /// **임계 1개**라 clear 가 없다. 억지로 넣으면 "가짜 clear" 를 만들어
+    /// `precondition` 검증과 싸운다(S3 §15-1). **불변식이 겹치지 않게** 별도로 둔다.
+    ///
+    /// ## 왜 "얼마나 지속되면 위험한가" 는 앱이 정하지 않는가
+    /// 그건 **모니터링 시스템의 일**이다. `/metrics` (PR #61) 로 초를 노출하면
+    /// Prometheus 규칙에서 임계를 정할 수 있다. 앱에 `minutes` 를 넣으면
+    /// **쓰이지 않는 설정**이 되어 dead config 가 된다 — 넣지 않는다.
+    struct Battery: Equatable, Sendable {
+        /// 방치로 볼 배터리 잔량(%) — 이 값 **이하** + 충전 중이 아닐 때
+        var neglectPercent: Int
+
+        /// 0 이면 "방치 없음" 이 아니라 **"배터리가 0 인 건 방치로 치지 않는다"** 라는 모호함이 생긴다
+        static let percentRange = 1...100
+
+        static let builtIn = Battery(neglectPercent: 20)
+
+        var isValid: Bool { Self.percentRange.contains(neglectPercent) }
+    }
+
     /// 코드에 박혀 있던 값이 곧 **기본값**이다 — YAML 이 없어도 이 값으로 동작한다
     static let builtIn: [Kind: Rule] = [
         .throttling: Rule(enter: 3, clear: 2, cooldown: 60),
@@ -71,19 +94,28 @@ struct RulesConfig: Equatable, Sendable {
 
     /// 사용자가 덮어쓴 값 (없으면 `builtIn`) — 몇 개가 적용됐는지 표시할 때 쓴다
     private(set) var overrides: [Kind: Rule]
+    /// 배터리 방치 기준 — 사용자가 안 쓰면 `Battery.builtIn` (20% · 120분)
+    public private(set) var battery: Battery = .builtIn
     /// 파싱은 성공했지만 **검증에서 걸린 항목** — 적용하지 않는다
     public private(set) var rejected: [String] = []
     /// 파일이 없었는가 — 없는 것은 **오류가 아니다**
     public private(set) var fileMissing: Bool = true
 
-    init(overrides: [Kind: Rule] = [:], rejected: [String] = [], fileMissing: Bool = true) {
+    init(overrides: [Kind: Rule] = [:], battery: Battery = .builtIn,
+         rejected: [String] = [], fileMissing: Bool = true) {
         self.overrides = overrides
+        self.battery = battery
         self.rejected = rejected
         self.fileMissing = fileMissing
     }
 
     /// 파일 없이 시작하는 구성 — **지금과 정확히 동일하게 동작한다**
     static var builtInConfig: RulesConfig { RulesConfig() }
+
+    /// 배터리 방치 기준의 최종값 — **반환값은 언제나 유효하다** (검증이 앞에서 끝난다)
+    func safeBattery() -> Battery {
+        battery.isValid ? battery : Battery.builtIn
+    }
 
     /// 규칙 하나의 최종 임계값
     ///
@@ -140,6 +172,37 @@ struct RulesConfig: Equatable, Sendable {
         case rejected(String)
     }
 
+    /// 배터리 본문 파싱 결과
+    enum BatteryResult: Equatable {
+        case ok(Battery)
+        case rejected(String)
+    }
+
+    /// `battery: { neglectPercent: 20 }` 형태만 읽는다
+    private static func parseBatteryBody(_ line: String, lineno: Int) -> BatteryResult {
+        guard let open = line.firstIndex(of: "{"),
+              let close = line.lastIndex(of: "}"), close > open
+        else { return .rejected("중괄호 형태가 아님 (\(lineno)행)") }
+
+        var b = Battery.builtIn
+        for piece in line[line.index(after: open)..<close].split(separator: ",") {
+            let p = piece.trimmingCharacters(in: .whitespaces)
+            guard let colon = p.firstIndex(of: ":") else { continue }
+            let key = p[p.startIndex..<colon].trimmingCharacters(in: .whitespaces)
+            let val = p[p.index(after: colon)...].trimmingCharacters(in: .whitespaces)
+            guard key == "neglectPercent" else {
+                return .rejected("모르는 키 `\(key)` (neglectPercent 만 가능)")
+            }
+            // 정수만 받는다 — 20.5% 같은 값은 "몇 퍼센트인지" 를 말하지 못한다
+            guard let i = Int(val) else { return .rejected("`\(key)` 값이 정수가 아님: \(val)") }
+            b.neglectPercent = i
+        }
+        guard b.isValid else {
+            return .rejected("neglectPercent 가 \(Battery.percentRange) 범위가 아님: \(b.neglectPercent)")
+        }
+        return .ok(b)
+    }
+
     static func load(from url: URL = defaultURL) -> LoadResult {
         guard FileManager.default.fileExists(atPath: url.path) else { return .missing }
         guard let data = try? Data(contentsOf: url) else { return .failed("읽기 실패") }
@@ -159,22 +222,51 @@ struct RulesConfig: Equatable, Sendable {
     static func parse(_ text: String) -> LoadResult {
         var version: String?
         var inRules = false
+        var inBattery = false
         var overrides: [Kind: Rule] = [:]
+        var battery = Battery.builtIn
         var rejected: [String] = []
 
         for (lineno, raw) in text.split(separator: "\n", omittingEmptySubsequences: false).enumerated() {
             let line = stripComment(raw)
             if line.isEmpty { continue }
 
-            if !inRules {
+            // ── 최상위 섹션 전환 ──
+            // ★ 한 줄짜리 본문(`battery: { ... }`)을 **스위치하면서 건너뛰지 않는다**
+            //   — 건너뛰면 파싱은 "성공"인데 값이 적용되지 않는다(조용한 실패)
+            var justEnteredBattery = false
+            if line.hasPrefix("battery:") {
+                inRules = false
+                inBattery = true
+                justEnteredBattery = true
+            } else if line.hasPrefix("rules:") {
+                inBattery = false
+                inRules = true
+                // 규칙은 줄마다 하나씩 이름을 갖는다 — 본문이 같은 줄에 없다
+                continue
+            } else if !inRules, !inBattery {
                 if line.hasPrefix("version:") {
                     version = String(line.dropFirst("version:".count))
                         .trimmingCharacters(in: .whitespaces)
-                } else if line.hasPrefix("rules:") {
-                    inRules = true
                 } else if let key = topLevelKey(line) {
                     // 그 외 최상위 키는 모르는 것 — 조용히 넘기지 않는다
                     return .failed("모르는 최상위 키 `\(key)` (\(lineno + 1)행)")
+                }
+                continue
+            }
+
+            // ── battery 본문 ──
+            if inBattery {
+                let body = String(line.dropFirst("battery:".count))
+                    .trimmingCharacters(in: .whitespaces)
+                // `battery:` 만 있고 다음 줄에 중괄호가 오는 형태도 받는다
+                let source = body.isEmpty ? line : "battery:" + body
+                guard !justEnteredBattery || !body.isEmpty || line.contains("{") else { continue }
+                switch parseBatteryBody(source, lineno: lineno + 1) {
+                case .rejected(let why):
+                    rejected.append("battery: \(why)")
+                case .ok(let b):
+                    battery = b
                 }
                 continue
             }
@@ -192,16 +284,16 @@ struct RulesConfig: Equatable, Sendable {
                 } else {
                     // ★ 이것이 크래시가 날 지점이다 — 검증 없이 게이트를 만들지 않는다
                     rejected.append(
-                        "\(kind.rawValue): enter(\(rule.enter)) > clear(\(rule.clear)) 여야 하고 cooldown ≥ 0 이어야 한다")
+                        "\(kind.rawValue): enter(\(rule.enter)) > clear(\(rule.clear)) 여야하고 cooldown ≥ 0 이어야 한다")
                 }
             }
         }
 
-        if !inRules { return .failed("`rules:` 블록이 없다") }
+        if !inRules, !inBattery { return .failed("`rules:` 또는 `battery:` 블록이 없다") }
         if let version, version != "1" {
             return .failed("스키마 버전 \(version) 는 지원하지 않음 (1만 지원)")
         }
-        return .ok(RulesConfig(overrides: overrides, rejected: rejected, fileMissing: false))
+        return .ok(RulesConfig(overrides: overrides, battery: battery, rejected: rejected, fileMissing: false))
     }
 
     // MARK: - 파서 도우미

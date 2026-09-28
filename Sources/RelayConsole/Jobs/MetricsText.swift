@@ -15,6 +15,8 @@ struct MetricsSnapshot: Equatable, Sendable {
         var isOnline: Bool
         /// nil = **확인하지 못했다** (0% 와 다른 값이다 — 행을 내지 않는다)
         var batteryPercent: Int?
+        /// 충전 방치 지속 초 — nil = **방치 중이 아니다** (0 초와 다른 값이다)
+        var neglectSeconds: Int?
     }
 
     struct Site: Equatable, Sendable {
@@ -54,7 +56,8 @@ enum MetricsSnapshotBuilder {
         jobs: [Job],
         events: [WatchEvent],
         now: Date = .now,
-        version: String = AppVersion.display
+        version: String = AppVersion.display,
+        neglect: [String: Int] = [:]
     ) -> MetricsSnapshot {
         var snap = MetricsSnapshot(version: version, build: version)
         snap.devices = devices.map { d in
@@ -64,7 +67,9 @@ enum MetricsSnapshotBuilder {
                 connectionKind: d.connectionKind?.rawValue ?? "unknown",
                 isOnline: d.isOnline,
                 // 오프라인 기기의 배터리는 "확인하지 못했다" — 저장값이 있어도 내지 않는다
-                batteryPercent: d.isOnline ? d.batteryLevel : nil
+                batteryPercent: d.isOnline ? d.batteryLevel : nil,
+                // 방치 시간은 **관측이 쌓인 결과**다 — 기기가 목록에서 사라지면 같이 사라진다
+                neglectSeconds: d.isOnline ? neglect[d.serial] : nil
             )
         }
         // 비활성 사이트/잡은 **행을 내지 않는다** — 끈 것을 죽은 것으로 세지 않는다
@@ -164,6 +169,14 @@ enum MetricsTextBuilder {
             // 미확인은 0 이 아니라 **행 없음** — 0% 는 "확인했다가 0" 이라는 뜻이 된다
             guard let pct = d.batteryPercent else { continue }
             out += line("relay_device_battery_percent", ["serial": d.serial], String(pct)) + "\n"
+        }
+
+        out += "# HELP relay_device_battery_neglect_seconds 임계 이하 배터리가 충전 없이 지속된 초 (방치 중이 아니면 행이 없다)\n"
+        out += "# TYPE relay_device_battery_neglect_seconds gauge\n"
+        for d in snap.devices {
+            // 방치 **중인** 기기만 행을 낸다 — 0 초는 "방치 중이지만 0 초" 라는 모순이다
+            guard let neg = d.neglectSeconds else { continue }
+            out += line("relay_device_battery_neglect_seconds", ["serial": d.serial], String(neg)) + "\n"
         }
 
         out += "# HELP relay_site_up 사이트가 올라와 있는가 (비활성·판정 유보는 행이 없다)\n"
