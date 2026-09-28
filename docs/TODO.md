@@ -1,18 +1,11 @@
 # TODO.md
 > 작업 추적 — bd 연동 (이슈 prefix: RelayConsole)
-> **육안 검증 대기는 `docs/MANUAL_VERIFY.md` 한 곳에 모았다** (2026-09-28) —
-> 여러 세션에 흩어져 있어 "남은 게 뭐였지" 를 한 번에 볼 수 없었다.
 
 ## 진행 중 (bd ready)
-- (0건)
+- **PR #55** `fix/macos-orphan-adb-logcat` — 강제 종료 정리 (검토 대기)
 - bd 이슈: (0건 — 이번 작업은 TODO T-번호로 관리)
 
 ## 다음 스프린트 (리서치 §8 잔여 · 미착수)
-- [ ] **S3 관제 규칙 Rules as Code (로컬 YAML)** — TIER S 중 유일 미착수
-      (착수 시 계측부터 — "규칙 문법" 을 먼저 정하면 문법이 쓰이기 전에 완성된다)
-- [ ] **로그 창 VoiceOver 노출** — `System Events` 의 `entire contents` 가 **0개**.
-      SwiftUI 내용이 보조기술에 노출되지 않는다(배지 버튼만 `.accessibilityLabel` 로 처리).
-      측정 우회로 **팝오버 클릭 자동 검증도 불가능**해져 육안 대기 항목이 되었다 (PLAN_log_tag_picker §8-1)
 - [ ] **로그 창 VoiceOver 노출** — `System Events` 의 `entire contents` 가 **0개**.
       SwiftUI 내용이 보조기술에 노출되지 않는다(배지 버튼만 `.accessibilityLabel` 로 처리).
       측정 우회로 **팝오버 클릭 자동 검증도 불가능**해져 육안 대기 항목이 되었다 (PLAN_log_tag_picker §8-1)
@@ -107,7 +100,7 @@
   - **검증 [HARD]**: `swift test` **528 + 104 = 632 / 0 failed** (착수 시 612, **+20**) ·
     `./scripts/build-macos.sh debug` **EXIT=0** · 재기동 후 신규 크래시 **0건** ·
     L10n **779키 en/ko 1:1** (+11, 죽은 키 1 제거) · U+FFFD 0건
-  - **육안 대기** → `docs/MANUAL_VERIFY.md` 2~7번 (팝오버가 **자동 검증 불가** — §5 에 이유)
+  - **육안 대기**: 배지 클릭 → 팝오버 · 태그 켜기/끄기 · `기본값 복원` · 제외됨 항목 표시
   - **부수 발견**: AX 계층이 비어 있어 **클릭 자동 검증이 불가능** → VoiceOver 노출도 별도 과목으로 등록
 
 - [x] **T-2026-09-28-2 로그 창 CPU — 소음 태그를 기기에서 제외** — `PLAN_log_cpu_noise_filter` ·
