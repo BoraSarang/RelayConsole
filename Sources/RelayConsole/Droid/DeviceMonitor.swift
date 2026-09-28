@@ -200,6 +200,37 @@ actor DeviceMonitor {
         await logLast("[FAIL] \(NotifyChannel.maskSerial(serial)) \(message)")
     }
 
+    // MARK: - 온라인 판정 (2026-09-28 · 결함 A 수정)
+
+    /// ★ `isOnline` 판정 — **ADB 가 실제로 응답해야** 온라인이다 (2026-09-28)
+    ///
+    /// ## 무엇이 깨져 있었나
+    /// 종전엔 `pollDevice` 맨 위에서 `snap.isOnline = true` 를 **무조건** 하드코딩했다.
+    /// 그 아래서 `gotAnyResponse` 로 실제 응답 유무를 따로 계산하면서도
+    /// **`isOnline` 은 그 결과를 쓰지 않았다.** 그래서:
+    /// - 기기가 끊겨도 adb 서버가 transport 를 캐시한 동안 **계속 온라인**으로 보였다
+    ///   (실측: `adb disconnect` 후 2초 `online=1` → 5초 `0` → **10초에 다시 `1`** — 진동)
+    /// - `markOffline` 으로 `false` 를 찍어도 다음 tick 의 하드코딩 `true` 가 **즉시 되돌렸다**
+    ///   → "연결이 종료했는데 기기 상세가 보임" 의 근본
+    ///
+    /// ## 왜 연속 실패를 세는가 — 핑퐁 방지
+    /// adb 한 번이 실패해도 실제로는 살아 있을 수 있다(USB 허브 일시적 떨림).
+    /// **한 번 실패했다고 끊겼다고 말하지 않는다.** 연속 `offlineAfterFailures` 회를
+    /// 넘어야 "끊겼다" 고 말한다 — `ThresholdGate` 의 cooldown 철학과 같다.
+    /// 반대로 한 번이라도 응답이 오면 **즉시** 온라인으로 복귀한다
+    /// (복구는 확신이 있어서 오래 기다릴 이점이 없다).
+    static let offlineAfterFailures = 2
+
+    /// adb 응답 유무와 연속 실패 횟수로 온라인 여부를 정한다 — **순수 함수**
+    static func isOnline(
+        gotAnyResponse: Bool,
+        failureStreak: Int,
+        threshold: Int = offlineAfterFailures
+    ) -> Bool {
+        if gotAnyResponse { return true }              // 지금 응답 = 온라인
+        return failureStreak < threshold               // 연속 실패가 임계 미만이면 아직 살아 있다고 본다
+    }
+
     // MARK: - Per-device poll
 
     private func pollDevice(
@@ -212,7 +243,8 @@ actor DeviceMonitor {
         var snap = DeviceSnapshot()
         snap.serial = serial
         snap.model = state.model ?? ""
-        snap.isOnline = true
+        // isOnline 은 **아래 신선도 판정에서** 정한다 — 여기서 true 를 하드코딩하면
+        // markOffline 을 즉시 되돌린다 (2026-09-28 결함 A)
         let conn = AdbClient.parseConnection(serial)
         snap.connectionKind = conn.kind
         snap.connectionLabel = conn.label
@@ -249,6 +281,20 @@ actor DeviceMonitor {
             await logLast(msg)
         }
         snap.failureStreak = state.failureStreak
+        // ★ 온라인 여부는 **여기서** 정한다 (하드코딩하지 않는다 — 결함 A)
+        //   연속 실패가 임계를 넘으면 오프라인이 되고, adb 목록에서 빠질 때까지
+        //   markDeviceOffline 가 inventory 를 정리한다.
+        snap.isOnline = Self.isOnline(
+            gotAnyResponse: gotAnyResponse,
+            failureStreak: state.failureStreak
+        )
+        // 오프라인으로 넘어간 순간 — `markDeviceOffline` 으로 정리하고
+        // Wi‑Fi ADB 재연결을 시도한다 (기기가 살아 있으면 스스로 붙는다)
+        if !snap.isOnline, state.failureStreak == Self.offlineAfterFailures {
+            await MainActor.run {
+                ConsoleStore.shared.markDeviceOffline(serial)
+            }
+        }
 
         if let battText = batch[.battery] {
             let batt = AdbClient.parseBatteryEx(battText)
