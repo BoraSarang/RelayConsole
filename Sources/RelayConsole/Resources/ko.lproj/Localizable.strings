@@ -784,3 +784,13 @@
 "rules.path.title" = "관제 규칙 파일";
 "rules.path.hint" = "없으면 내장 기본값을 씁니다 · 임계값을 여기서 덮어씁니다";
 "rules.path.open" = "폴더 열기";
+"calendar.add" = "캘린더에 추가";
+"calendar.added.title" = "캘린더에 넣음";
+"calendar.added" = "%@ 을(를) 캘린더 일정에 넣었습니다.";
+"calendar.denied.title" = "캘린더 권한 없음";
+"calendar.denied" = "시스템 설정 → 개인정보 보호 → 캘린더 에서 Relay Console 을 켜주세요. 그때까지 일정은 생기지 않습니다.";
+"calendar.noCalendar.title" = "캘린더 없음";
+"calendar.noCalendar" = "넣을 캘린더가 없습니다. 캘린더 앱에서 하나를 만든 뒤 다시 눌러주세요.";
+"calendar.failed.title" = "넣지 못함";
+"calendar.failed" = "실패 사유: %@";
+"calendar.note.added" = "캘린더 일정에 넣음: %@";

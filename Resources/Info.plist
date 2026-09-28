@@ -44,6 +44,8 @@
 	<string>1</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>26.0</string>
+	<key>NSCalendarsWriteOnlyAccessUsageDescription</key>
+	<string>알림을 캘린더 일정에 추가할 때 사용합니다. 캘린더 내용을 읽지는 않습니다.</string>
 	<key>LSUIElement</key>
 	<true/>
 	<key>NSPrincipalClass</key>

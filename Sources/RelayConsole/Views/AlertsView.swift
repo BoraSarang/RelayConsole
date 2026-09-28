@@ -19,6 +19,8 @@ struct AlertsView: View {
     @State private var editingNote: UUID?
     @State private var exportMessage: String?
     @State private var exportFailed = false
+    /// 캘린더 연동 결과 — **실패 사유를 그대로** 보여준다 ([표시②])
+    @State private var calendarState: CalendarBridgeState?
 
     var body: some View {
         ZStack {
@@ -38,6 +40,18 @@ struct AlertsView: View {
             if period == .h24 {
                 period = AlertsPeriod(raw: defaultPeriodRaw) ?? .h24
             }
+        }
+        // 캘린더 결과 — **성공도 실패도** 같은 자리에서 말한다 (숨기지 않는다)
+        .alert(
+            calendarAlertTitle,
+            isPresented: Binding(
+                get: { calendarState != nil },
+                set: { if !$0 { calendarState = nil } }
+            )
+        ) {
+            Button(L10n.string("alerts.ok"), role: .cancel) {}
+        } message: {
+            Text(calendarAlertMessage)
         }
         .alert(
             L10n.string(exportFailed ? "alerts.export.failed" : "alerts.export.done"),
@@ -404,8 +418,44 @@ struct AlertsView: View {
         .padding(.vertical, 8)
     }
 
+    // MARK: - 캘린더 결과 문구 — **상태가 스스로 말한다** (여기서 분기하지 않는다)
+
+    private var calendarAlertTitle: String {
+        L10n.string(calendarState?.titleKey ?? "calendar.add")
+    }
+
+    private var calendarAlertMessage: String {
+        guard let s = calendarState else { return "" }
+        return L10n.format(s.messageArgs.key, s.messageArgs.args)
+    }
+
     private func rowActions(_ e: WatchEvent) -> some View {
         HStack(spacing: 4) {
+            // ── 캘린더에 추가 (2026-09-28) ──
+            // **사용자가 누를 때만** 넣는다. 앱이 대신 넣지 않는다 —
+            // 캘린더는 사용자 데이터이고, 판단은 사람이 해야 한다 (PLAN_alert_calendar §1)
+            Button {
+                Task {
+                    let state = await CalendarBridge.addToCalendar(
+                        detail: "\(e.title)\(e.detail.isEmpty ? "" : " · \(e.detail)")",
+                        serialLabel: store.identLabel(for: e.serial)
+                    )
+                    calendarState = state
+                    // 넣었다는 사실을 앱 안에도 남긴다 — "누가 이걸 넣었나" 를 알 수 있어야 한다
+                    if case .added(let title) = state {
+                        store.setWatchNote(id: e.id, note: L10n.format("calendar.note.added", title))
+                    }
+                }
+            } label: {
+                Image(systemName: "calendar.badge.plus")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(OPColor.cta)
+                    .frame(width: 22, height: 22)
+                    .background(OPColor.cta.opacity(0.12), in: RoundedRectangle(cornerRadius: 5))
+            }
+            .buttonStyle(.plain)
+            .help(L10n.string("calendar.add"))
+
             if IncidentBundleLogic.captures(kind: e.kind) && !e.isClear {
                 Button {
                     IncidentBundleStore.shared.capture(

@@ -784,3 +784,13 @@
 "rules.path.title" = "Monitoring rules file";
 "rules.path.hint" = "Absent = built-in defaults · override thresholds here";
 "rules.path.open" = "Reveal in Finder";
+"calendar.add" = "Add to calendar";
+"calendar.added.title" = "Added to calendar";
+"calendar.added" = "Added to your calendar: %@";
+"calendar.denied.title" = "No calendar access";
+"calendar.denied" = "Turn on Relay Console in System Settings → Privacy & Security → Calendars. No event is created until then.";
+"calendar.noCalendar.title" = "No calendar";
+"calendar.noCalendar" = "There is no calendar to add to. Create one in Calendar, then try again.";
+"calendar.failed.title" = "Could not add";
+"calendar.failed" = "Failed: %@";
+"calendar.note.added" = "Added to calendar: %@";
