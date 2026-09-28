@@ -19,13 +19,6 @@
 - [ ] **로그 창 VoiceOver 노출** — `System Events` 의 `entire contents` 가 **0개**.
       SwiftUI 내용이 보조기술에 노출되지 않는다(배지 버튼만 `.accessibilityLabel` 로 처리).
       측정 우회로 **팝오버 클릭 자동 검증도 불가능**해져 육안 대기 항목이 되었다 (PLAN_log_tag_picker §8-1)
-- [ ] **로그 창 VoiceOver 노출** — `System Events` 의 `entire contents` 가 **0개**.
-      SwiftUI 내용이 보조기술에 노출되지 않는다(배지 버튼만 `.accessibilityLabel` 로 처리).
-      측정 우회로 **팝오버 클릭 자동 검증도 불가능**해져 육안 대기 항목이 되었다 (PLAN_log_tag_picker §8-1)
-- [ ] **한자 스캔을 커밋 훅으로** — 스캔 도구는 완성(`scripts/scan-cjk.py`)이고 **저장소 0건**이다.
-      **훅 등록만 남았다** — 한자 혼입이 한 세션에 4회 재발한 것은 기억으로 못 막기 때문
-      (`git commit` 시 자동 실행). 도구가 방금 두 번 배웠다: 디렉터리 인자를 안 따라가면
-      **아무것도 안 보고 0건 으로 통과**하고, `#` 표시가 Swift 주석을 지시자로 파싱해 **컴파일을 깨운다**
 - [ ] **A7** Dock 배지 / 그룹화 (라이브액티비티·위젯은 1.15.0으로 완료)
 - **TIER A**: Things·캘린더 연동 · 스샷 스크랩북 · 멀티 스냅샷 그리드 · Prometheus/JSON export · cron 기기 태그 · 충전 방치 리포트
 
