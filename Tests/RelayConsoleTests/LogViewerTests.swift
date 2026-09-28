@@ -356,6 +356,72 @@ struct LogTagPickerTests {
         #expect(s.entries["T"]?.messagesSaturated == true)
     }
 
+    // MARK: - ★ 되돌릴 수 없는 상태를 막는다 (2026-09-28 실측 결함)
+
+    /// 앱을 다시 띄우면 집계를 비운다. **제외된 태그는 기기에서 안 오므로 집계가 생기지 않는다.**
+    /// 그 상태에서 목록에서 사라지면 사용자는 **되돌릴 방법이 없다.**
+    @Test func excludedTagWithoutStatsStillAppears() {
+        var s = LogcatFilter.TagStats()
+        s.record(.init(level: "E", tag: "Visible", pid: 1, message: "m"))
+        let rows = s.snapshot(limit: 8, excluding: ["SemApTrafficData"])
+        #expect(rows.contains { $0.tag == "SemApTrafficData" },
+                "집계가 없어도 제외 태그는 목록에 있어야 해제할 수 있다")
+    }
+
+    @Test func synthesizedRowIsMarkedUncounted() {
+        var s = LogcatFilter.TagStats()
+        let rows = s.snapshot(limit: 8, excluding: ["Watchdog"])
+        let row = rows.first { $0.tag == "Watchdog" }
+        #expect(row?.entry.excluded == true)
+        #expect(row?.entry.counted == false, "셌지 않았는데 count 0 이면 거짓말이다")
+    }
+
+    /// 셌지 않은 값을 "0줄 / 0종" 으로 말하지 않는다 — [표시②]
+    @Test func uncountedRowSaysUnknownNotZero() {
+        var s = LogcatFilter.TagStats()
+        let e = s.snapshot(limit: 8, excluding: ["Watchdog"]).first { $0.tag == "Watchdog" }!.entry
+        #expect(LogcatFilter.countSummary(e).key == "droid.logs.picker.countUnknown")
+        #expect(LogcatFilter.messageSummary(e).key == "droid.logs.picker.unknown")
+    }
+
+    /// 실제로 셌던 태그는 기존 문구를 유지한다 (회귀)
+    @Test func countedRowKeepsNumbers() {
+        var s = LogcatFilter.TagStats()
+        s.record(.init(level: "E", tag: "Watchdog", pid: 1, message: "m"))
+        let e = s.snapshot(limit: 8, excluding: ["Watchdog"]).first { $0.tag == "Watchdog" }!.entry
+        #expect(e.counted == true)
+        #expect(LogcatFilter.countSummary(e).key == "droid.logs.picker.countN")
+        #expect(LogcatFilter.messageSummary(e).key == "droid.logs.picker.msgs")
+    }
+
+    /// 중복으로 두 번 나오지 않는다
+    @Test func excludedTagWithStatsIsNotDuplicated() {
+        var s = LogcatFilter.TagStats()
+        s.record(.init(level: "E", tag: "Watchdog", pid: 1, message: "m"))
+        let rows = s.snapshot(limit: 8, excluding: ["Watchdog"])
+        #expect(rows.filter { $0.tag == "Watchdog" }.count == 1)
+    }
+
+    /// 상한을 넘어도 **제외 태그는 빠지지 않는다** — 이것이 목적이므로
+    @Test func excludedTagsSurviveTheLimit() {
+        var s = LogcatFilter.TagStats()
+        for i in 0..<20 { s.record(.init(level: "E", tag: "T\(i)", pid: 1, message: "m")) }
+        let rows = s.snapshot(limit: 8, excluding: ["A", "B", "C"])
+        #expect(rows.count == 11, "상위 8 + 제외 3")
+        for t in ["A", "B", "C"] {
+            #expect(rows.contains { $0.tag == t }, "\(t) 가 밀려났다")
+        }
+    }
+
+    /// 순서는 건수 내림차순 유지 — 합성 행이 "상위" 로 올라오면 안 된다
+    @Test func synthesizedRowsGoLast() {
+        var s = LogcatFilter.TagStats()
+        for i in 0..<3 { s.record(.init(level: "E", tag: "Big", pid: 1, message: "m")) }
+        s.record(.init(level: "E", tag: "Small", pid: 1, message: "m"))
+        let rows = s.snapshot(limit: 8, excluding: ["Hidden"])
+        #expect(rows.map(\.tag) == ["Big", "Small", "Hidden"])
+    }
+
     /// 총 줄 상한 — **조용히 멈추지 않는다** (`capped` 로 알린다)
     @Test func totalLimitStopsAndFlags() {
         var s = LogcatFilter.TagStats()

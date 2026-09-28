@@ -777,6 +777,9 @@
 "droid.logs.picker.row.excluded" = "Excluded — last %d lines";
 "droid.logs.picker.row.visible" = "Shown — %d lines";
 "droid.logs.picker.restore" = "Restore defaults";
+"droid.logs.picker.unknown" = "not counted";
+"droid.logs.picker.countUnknown" = "count unknown";
+"droid.logs.picker.row.excludedUnknown" = "Excluded — not counted since this window opened";
 "rules.problem" = "Could not apply the monitoring rules file";
 "rules.path.title" = "Monitoring rules file";
 "rules.path.hint" = "Absent = built-in defaults · override thresholds here";
