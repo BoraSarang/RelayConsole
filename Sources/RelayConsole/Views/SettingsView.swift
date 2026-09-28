@@ -112,6 +112,7 @@ struct SettingsView: View {
             Toggle(L10n.string("settings.menubarMetrics"), isOn: $menubarMetrics)
             Toggle(L10n.string("settings.briefing"), isOn: $store.briefingEnabled)
             autoWifiSection
+            rulesPathSection
             floatSection
             loginSection
         }
@@ -127,6 +128,39 @@ struct SettingsView: View {
                 .font(OPFont.body(10))
                 .foregroundStyle(OPColor.inkDim)
                 .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    // MARK: - S3 관제 규칙 파일
+
+    private var rulesPath: String { store.rulesConfigPath }
+
+    /// 규칙 파일 **경로를 그대로 보여 준다** — "설정을 어디서 고치지?" 가 이 기능의 실패 지점이다.
+    ///
+    /// 파일 편집 UI 는 두지 않는다(읽기 전용). 경로를 알고, 직접 고치게 한다.
+    private var rulesPathSection: some View {
+        Section(L10n.string("rules.path.title")) {
+            Text(L10n.string("rules.path.hint"))
+                .font(OPFont.body(10))
+                .foregroundStyle(OPColor.inkDim)
+                .fixedSize(horizontal: false, vertical: true)
+            Text(rulesPath)
+                .font(OPFont.number(10))
+                .foregroundStyle(OPColor.ink)
+                .textSelection(.enabled)
+                .fixedSize(horizontal: false, vertical: true)
+            if let problem = store.rulesProblem {
+                Text(problem)
+                    .font(OPFont.number(10))
+                    .foregroundStyle(OPColor.warn)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Button(L10n.string("rules.path.open")) {
+                NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: rulesPath)])
+            }
+            .buttonStyle(.plain)
+            .font(OPFont.body(11))
+            .foregroundStyle(OPColor.cta)
         }
     }
 

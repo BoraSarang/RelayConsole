@@ -777,3 +777,7 @@
 "droid.logs.picker.row.excluded" = "Excluded — last %d lines";
 "droid.logs.picker.row.visible" = "Shown — %d lines";
 "droid.logs.picker.restore" = "Restore defaults";
+"rules.problem" = "Could not apply the monitoring rules file";
+"rules.path.title" = "Monitoring rules file";
+"rules.path.hint" = "Absent = built-in defaults · override thresholds here";
+"rules.path.open" = "Reveal in Finder";

@@ -229,9 +229,53 @@ final class ConsoleStore: ObservableObject {
         )
     }
 
+    // MARK: - S3 관제 규칙 (로컬 YAML)
+
+    /// 규칙 파일 위치 — **설정 화면에서 경로를 보여 준다** ("여기서 고치지?" 를 없애기 위해)
+    var rulesConfigPath: String { RulesConfig.defaultURL.path }
+
+    /// 규칙 설정 문제 (nil 이면 정상) — **파일에 문제가 있다는 사실 자체**를 사용자에게 알린다
+    @Published private(set) var rulesProblem: String?
+
+    /// 규칙을 1회 읽어 `WatchEngine` 에 넣는다
+    ///
+    /// - **파일이 없으면 아무것도 하지 않는다** (선택 사항 · 없는 것은 오류가 아니다)
+    /// - **문제가 있으면 적용하지 않고 사유를 남긴다** — 조용히 기본값으로 대체하지 않는다 [표시②]
+    ///   사용자가 고쳐도 안 바뀌는 상태를 "적용됨" 으로 말하는 것이 더 나쁘다
+    private func loadRules() {
+        switch RulesConfig.load() {
+        case .missing:
+            rulesProblem = nil
+            WatchEngine.shared.setRules(.builtInConfig)
+            DebugLogger.shared.info("Rules", "[INFO] [RULES] rules.yaml 없음 — 내장 기본값 사용")
+        case .ok(let config):
+            WatchEngine.shared.setRules(config)
+            if config.rejected.isEmpty {
+                rulesProblem = nil
+                DebugLogger.shared.info(
+                    "Rules", "[INFO] [RULES] rules.yaml 적용",
+                    meta: "rules=\(config.overrides.count)")
+            } else {
+                // 항목별로 걸린 것과 **적용된 것**을 함께 남긴다
+                let applied = config.overrides.count
+                let why = config.rejected.joined(separator: " · ")
+                rulesProblem = why
+                DebugLogger.shared.error(
+                    "Rules",
+                    "[ERROR] [RULES] rules.yaml 일부 무시 — 사유: \(why)",
+                    meta: "applied=\(applied) rejected=\(config.rejected.count)")
+            }
+        case .failed(let why):
+            rulesProblem = why
+            WatchEngine.shared.setRules(.builtInConfig)
+            DebugLogger.shared.error("Rules", "[ERROR] [RULES] rules.yaml 읽기 실패 — \(why)")
+        }
+    }
+
     func start() {
         guard !started else { return }
         started = true
+        loadRules()
         DebugLogger.shared.info("Store", "[INFO] [FEATURE] ConsoleStore 시작 (relay.*)", meta: "keyPrefix=relay.")
         let handler: @Sendable (DeviceSnapshot) -> Void = { [weak self] snapshot in
             Task { @MainActor in
