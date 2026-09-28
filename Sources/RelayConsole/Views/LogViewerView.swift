@@ -474,7 +474,20 @@ final class LogcatStreamer: ObservableObject {
     /// 태그별 반복 집계 — 배지 클릭 시 표를 그린다
     @Published private(set) var tagStats = LogcatFilter.TagStats()
 
-    /// 태그 하나를 켜고 끈다 — 저장 후 스트림을 다시 띄운다
+    /// 태그 하나를 켜고 끈다 — **스트림 재기동은 디바운스 뒤** (2026-09-28 실측)
+    ///
+    /// ## 왜 즉시 재기동하지 않는가
+    ///
+    /// 태그를 켜자마자 `start()` 하면 두 가지가 동시에 잃는다:
+    /// ① **팝오버가 닫힌다** — `@Published` 변경 → 부모 body 재평가 → `.popover` 콘텐츠가
+    ///    새로 만들어지며 SwiftUI 가 닫아 버린다. 여러 개를 연속으로 고를 수 없는 상태가 된다
+    ///    (실측: 태그 1개 켜고 팝오버 사라짐 — 고치지 않으면 기능이 반만 된다)
+    /// ② **adb 를 매 클릭마다 다시 띄운다** — 개방할 때마다 링 버퍼를 다시 받는다
+    ///    (이 기기에서 1.6만 줄). 태그 3개를 고르면 3번 받는 셈
+    ///
+    /// 체크박스 표시는 `setExcluded` 로 **즉시** 바뀌고(`tagStats` 갱신),
+    /// 배지는 **실제로 적용된 뒤**의 값(`appliedExcludedTags`)을 말하므로
+    /// 0.6초 동안 배지가 옛 값인 것은 "아직 적용 안 됨" 이라는 **참이다**.
     func toggleTag(_ tag: String) {
         var next = excludedTags
         if let idx = next.firstIndex(of: tag) {
@@ -483,12 +496,30 @@ final class LogcatStreamer: ObservableObject {
             next.append(tag)
         }
         setExcludedTags(next)
+        scheduleRestart()
     }
 
     /// 기본 시드로 되돌린다 (사용자가 지운 기본 태그를 되살린다)
     func restoreDefaultExcludedTags() {
         setExcludedTags(LogcatFilter.defaultExcludedTags)
+        scheduleRestart()
     }
+
+    /// 재기동 예약 — 사람 속도(연속 클릭)에서 1회로 합쳐진다
+    private func scheduleRestart() {
+        restartTask?.cancel()
+        let (serial, adb) = (currentSerial, currentAdbPath)
+        guard !serial.isEmpty else { return }
+        restartTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(Self.tagToggleDebounce))
+            guard let self, !Task.isCancelled else { return }
+            self.start(serial: serial, adbPath: adb)
+        }
+    }
+
+    /// 태그 토글 → 재기동 대기 — 검색 디바운스와 같은 목적(0.3s)지만 조금 길다.
+    /// 스트림 재기동이 버퍼 재수신을 포함하므로 "깜빡임" 이 눈에 보여야 한다
+    static let tagToggleDebounce: TimeInterval = 0.6
 
     /// 제외 목록을 저장한다 — **안전 필터를 통과한 것만** (명령을 망가뜨리는 값이 여기서 막힌다)
     func setExcludedTags(_ tags: [String]) {
@@ -506,6 +537,11 @@ final class LogcatStreamer: ObservableObject {
     private var tickTask: Task<Void, Never>?
     /// adb 1차 필터 재기동 대기 — 입력 중 adb 를 새로 띄우지 않기 위한 디바운스
     private var searchTask: Task<Void, Never>?
+    /// 태그 토글 디바운스 예약
+    private var restartTask: Task<Void, Never>?
+    /// 마지막으로 기동한 대상 — 태그 토글 뒤 재기동에 쓴다
+    private var currentSerial: String = ""
+    private var currentAdbPath: String?
     private let stderrTail = StderrTail()
     private var nextID: UInt64 = 0
     /// 링 버퍼 상한
@@ -584,6 +620,8 @@ final class LogcatStreamer: ObservableObject {
             return
         }
         lastError = nil
+        currentSerial = serial
+        currentAdbPath = adb
         stderrTail.reset()
         lines.removeAll()
         nextID = 0
@@ -688,6 +726,8 @@ final class LogcatStreamer: ObservableObject {
         tickTask = nil
         searchTask?.cancel()
         searchTask = nil
+        restartTask?.cancel()
+        restartTask = nil
         if let p = slot.current, p.isRunning {
             p.terminate()
         }
@@ -1104,15 +1144,9 @@ struct LogViewerContent: View {
                 LogTagPickerView(
                     stats: streamer.tagStats,
                     excluded: streamer.excludedTags,
-                    onToggle: { tag in
-                        streamer.toggleTag(tag)
-                        // 집계는 유지한다 — 태그를 켜고 끄는 동안 목록이 비면 무엇을 고르는지 안 보인다
-                        streamer.start(serial: serial, adbPath: adbPath)
-                    },
-                    onRestoreDefaults: {
-                        streamer.restoreDefaultExcludedTags()
-                        streamer.start(serial: serial, adbPath: adbPath)
-                    }
+                    // 재기동은 streamer 가 디바운스한다 — 여기서 부르면 팝오버가 닫힌다
+                    onToggle: { streamer.toggleTag($0) },
+                    onRestoreDefaults: { streamer.restoreDefaultExcludedTags() }
                 )
             }
         }

@@ -25,9 +25,14 @@
   - **육안 대기** → `docs/MANUAL_VERIFY.md` 13번
   - **남긴 것**: 규칙 추가·편집 UI·hotswap 은 **의도적으로 제외**(계획 §9 에 사유)
 
-- [ ] **로그 창 VoiceOver 노출** — `System Events` 의 `entire contents` 가 **0개**.
-      SwiftUI 내용이 보조기술에 노출되지 않는다(배지 버튼만 `.accessibilityLabel` 로 처리).
-      측정 우회로 **팝오버 클릭 자동 검증도 불가능**해져 육안 대기 항목이 되었다 (PLAN_log_tag_picker §8-1)
+- [x] **T-2026-09-28-6 로그 창 AX 노출 + 팝오버 자동 검증** — **"노출되지 않는다" 는 틀린 결론이었다**
+  - **왜 틀렸나**: `System Events` 의 `entire contents` 재귀가 SwiftUI 트리에서 실패했을 뿐,
+    앱의 문제가 아니었다. 앱이 frontmost 가 아니면 **어떤 창이 key 인지가 서브트리를 정한다**.
+    계측: 로그 창 **AX 요소 270개** · 배지 버튼이 `AXButton — 기기에서 3개 태그 제외` 로 노출
+  - **해결**: `scripts/ax-dump.swift` (AXChildren 직접 순회 + 클릭). `entire contents` 안 쓴다
+  - **인해 열린 것**: MANUAL_VERIFY **2~7번 육안 항목 → 자동 검증 완료** · 13번의 "읽히지 않는다" 는 근거 없음
+  - **인해 찾은 결함**: 태그를 켜면 팝오버가 닫혀 **여러 개를 고를 수 없었다** → 0.6초 디바운스로 수정
+  - 미확정 관측 1건(스스로 기본값으로 복귀) → `docs/MANUAL_VERIFY.md` §9.2 에 **해결한 척 없이** 남김
 - [ ] **A7** Dock 배지 / 그룹화 (라이브액티비티·위젯은 1.15.0으로 완료)
 - **TIER A**: Things·캘린더 연동 · 스샷 스크랩북 · 멀티 스냅샷 그리드 · Prometheus/JSON export · cron 기기 태그 · 충전 방치 리포트
 
@@ -113,7 +118,7 @@
   - **검증 [HARD]**: `swift test` **528 + 104 = 632 / 0 failed** (착수 시 612, **+20**) ·
     `./scripts/build-macos.sh debug` **EXIT=0** · 재기동 후 신규 크래시 **0건** ·
     L10n **779키 en/ko 1:1** (+11, 죽은 키 1 제거) · U+FFFD 0건
-  - **육안 대기** → `docs/MANUAL_VERIFY.md` 2~7번 (팝오버가 **자동 검증 불가** — §5 에 이유)
+  - **육안 대기였다가 자동 검증으로 대체됨** → MANUAL_VERIFY 2~7번 **✅** (2026-09-28 · `scripts/ax-dump.swift`)
   - **부수 발견**: AX 계층이 비어 있어 **클릭 자동 검증이 불가능** → VoiceOver 노출도 별도 과목으로 등록
 
 - [x] **T-2026-09-28-2 로그 창 CPU — 소음 태그를 기기에서 제외** — `PLAN_log_cpu_noise_filter` ·
