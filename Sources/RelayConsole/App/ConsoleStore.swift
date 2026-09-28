@@ -336,7 +336,27 @@ final class ConsoleStore: ObservableObject {
                     self?.heartbeatLastError = nil
                     self?.heartbeatErrorDetail = nil
                 }
-            }
+            },
+            onMetrics: { [weak self] in await self?.renderMetrics() ?? "" }
+        )
+    }
+
+    /// `/metrics` 본문 — **MainActor 밖에서 호출되므로** 한 번 옮겨 타야 한다
+    ///
+    /// 서버는 store 를 모른다. 스냅숿을 만들고 텍스트로 굽는 것까지만 여기서 하고,
+    /// 판정은 전부 기존 로직(`effectiveUp`·`isOverdue`·`activeCriticalCount`)에 맡긴다 —
+    /// 같은 값을 두 군데서 계산하면 **어느 쪽이 맞는지 알 수 없다.**
+    func renderMetrics() -> String {
+        MetricsTextBuilder.render(makeMetricsSnapshot())
+    }
+
+    func makeMetricsSnapshot(now: Date = .now) -> MetricsSnapshot {
+        MetricsSnapshotBuilder.make(
+            devices: inventory.devices,
+            sites: sites,
+            jobs: jobs,
+            events: recentWatchEvents,
+            now: now
         )
     }
 
