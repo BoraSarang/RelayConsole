@@ -47,25 +47,60 @@ enum WifiAdbLogic {
 
     /// IP 후보 결정 — **순서가 곧 정확도다.**
     ///
-    /// ① 맥 기본 게이트웨이 — 폰이 핫스팟이면 **게이트웨이가 곧 폰 IP** (기기한테 묻지 않아도 안다)
-    /// ② 기기 `ip addr` 의 Wi-Fi 인터페이스 (`swlan0` 등)
-    /// ③ 기기 `ifconfig` 전체
-    /// ④ `ip route get` 의 `src` — **마지막**이다. 인터넷으로 나가는 쪽의 주소라
-    ///    핫스팟 + 셀룰러 동시 켜진 기기에서는 **셀룰러 IP** 가 나온다 (실측 `10.148.183.154`).
-    ///    게다가 빈 값이 아니라 **값을 반환해서** ②③에 도달하지 못하게 만든다.
+    /// ## ★ 2026-09-28 개편 — 게이트웨이를 "정답" 으로 두지 않는다
+    /// 종전엔 **맥의 게이트웨이를 최우선**으로 반환했다. 근거는 "폰이 핫스팟이면
+    /// 게이트웨이가 곧 폰 IP" 였다. 그런데:
+    ///
+    /// - 그 전제는 **SoftAP 일 때만** 성립한다. `dumpsys wifi` 로 확인한 결과
+    ///   이 기기는 `SoftApManagers:0` — **SoftAP 가 아니었다.** 같은 IP 가 나올 뿐,
+    ///   근거가 아니라 **우연**이었다.
+    /// - 집 Wi-Fi 에서 같은 로직이 **라우터로 붙으러 간다** → "USB 로는 연결되는데
+    ///   인터넷으로 넘어가면 감지를 못 한다" 의 근본
+    /// - 게다가 게이트웨이는 **빈 값이 아니라 값을 반환해서** 뒤 후보에 도달하지 못한다
+    ///
+    /// → **후보들을 순서대로 돌려 실제로 붙는 것을 시도**한다
+    ///   (`autoReconnect` 가 `connect` 를 시도하고 실패하면 다음 후보로 넘어간다).
+    ///   순서는 **기기에게 직접 물은 값**을 앞에 둔다.
+    ///
+    /// ① 기기 `ip addr` 의 Wi-Fi 인터페이스 (`swlan0` 등) — **기기 자신의 주소. 가장 정확**
+    /// ② 기기 `ifconfig` 전체
+    /// ③ 맥 게이트웨이 — SoftAP 일 때만 정답이라 **뒤로** 내린다
+    /// ④ `ip route get` 의 `src` — **마지막**. 인터넷으로 나가는 쪽이라
+    ///    핫스팟 + 셀룰러 동시 켜진 기기에서는 **셀룰러 IP** 가 나온다 (실측 `10.148.183.154`)
+    static func resolveIpCandidates(
+        gateway: String?,
+        ifAddrText: String?,
+        ifconfigText: String?,
+        routeText: String?
+    ) -> [String] {
+        var out: [String] = []
+        func add(_ ip: String?) {
+            guard let ip else { return }
+            let v = ip.trimmingCharacters(in: .whitespaces)
+            guard isIPv4(v), !isLoopback(v), !out.contains(v) else { return }
+            out.append(v)
+        }
+        add(ifAddrText.flatMap(parseWifiIp(fromIfAddr:)))
+        add(ifconfigText.flatMap(parseWlanIp(from:)))
+        // 게이트웨이는 **뒤로** — SoftAP 가 아닐 수 있다 (2026-09-28)
+        add(gateway)
+        add(routeText.flatMap(parseWlanIp(from:)))
+        return out
+    }
+
+    /// 첫 후보 — 후보가 하나일 때 쓰는 편의 (기존 호출부 호환)
     static func resolveIp(
         gateway: String?,
         ifAddrText: String?,
         ifconfigText: String?,
         routeText: String?
     ) -> String? {
-        if let gw = gateway.map({ $0.trimmingCharacters(in: .whitespaces) }), isIPv4(gw), !isLoopback(gw) {
-            return gw
-        }
-        if let t = ifAddrText, let ip = parseWifiIp(fromIfAddr: t) { return ip }
-        if let t = ifconfigText, let ip = parseWlanIp(from: t) { return ip }
-        if let t = routeText, let ip = parseWlanIp(from: t) { return ip }
-        return nil
+        resolveIpCandidates(
+            gateway: gateway,
+            ifAddrText: ifAddrText,
+            ifconfigText: ifconfigText,
+            routeText: routeText
+        ).first
     }
 
     /// 이미 해당 엔드포인트가 열려 있으면 tcpip 을 다시 걸지 않는다.
@@ -328,31 +363,89 @@ final class WifiAdbController: ObservableObject {
         defer { autoInFlight.remove(lostSerial) }
 
         // IP 는 **다시 판별**한다 — 옛 IP 로는 붙을 수 없다
-        guard let ip = MacRoute.defaultGateway().flatMap({ WifiAdbLogic.isIPv4($0) ? $0 : nil }) else {
+        //
+        // ★ 2026-09-28: 종전엔 **게이트웨이 IP 하나만** 보고 곧바로 붙으려 했다.
+        //   게이트웨이 = 기기 IP 는 **SoftAP 일 때만** 성립한다(실측 `SoftApManagers:0` —
+        //   이 기기는 SoftAP 가 아니었다). 집 Wi-Fi 에서 같은 로직은 **라우터로** 붙으러 가고,
+        //   거기 adbd 가 없으니 "USB 로는 붙는데 인터넷으로 넘어가면 못 찾는다" 가 된다.
+        //   → **후보들을 순서대로 시도**하고, **실제로 붙은 것을 확인**한다.
+        let candidates = await resolveReconnectCandidates(adb: adb, lostSerial: lostSerial)
+        guard !candidates.isEmpty else {
             reconnectFailures += 1
             failAuto("wifi.reconnect.ipNotFound")
             return
         }
-        let endpoint = WifiAdbLogic.defaultEndpoint(ip: ip)
-        // adbd 가 이미 TCP 모드다(TCP 로 붙어 있었으니) — **tcpip 은 건드리지 않는다**
-        // tcpip 은 adbd 를 재시작해서 그 순간 연결을 **또** 끊는다
-        guard PingProbe.reachable(ip: ip) else {
-            reconnectFailures += 1
-            failAuto("wifi.reconnect.notReachable", detail: endpoint)
-            return
+
+        var lastFailureDetail = ""
+        for endpoint in candidates {
+            guard let ip = endpoint.split(separator: ":").first.map(String.init) else { continue }
+            // adbd 가 이미 TCP 모드다(TCP 로 붙어 있었으니) — **tcpip 은 건드리지 않는다**
+            // tcpip 은 adbd 를 재시작해서 그 순간 연결을 **또** 끊는다
+            guard PingProbe.reachable(ip: ip) else {
+                lastFailureDetail = L10n.format("wifi.reconnect.notReachable", endpoint)
+                continue
+            }
+            do {
+                try? WifiAdbRunner.run(adb, WifiAdbLogic.disconnectArgs(endpoint: endpoint))
+                try WifiAdbRunner.run(adb, WifiAdbLogic.connectArgs(endpoint: endpoint))
+                // 붙었다는 근거는 connect 의 **성공**이 아니라, adb 가 그 기기를
+                // **실제로 device 로 인식했는지** 다 (router 로 붙으면 즉시 떨어진다)
+                guard await Self.isConnectedAsDevice(adb: adb, endpoint: endpoint) else {
+                    lastFailureDetail = L10n.format("wifi.reconnect.failed", endpoint)
+                    continue
+                }
+                reconnectFailures = 0
+                lastEndpoint = endpoint
+                statusIsError = false
+                statusMessage = L10n.format("wifi.reconnect.done", endpoint)
+                DebugLogger.shared.info("WifiAdb", "[INFO] 재연결 성공 \(lostSerial) → \(endpoint)")
+                await disconnectStaleEndpoints(adb: adb, keep: endpoint)
+                return
+            } catch {
+                lastFailureDetail = cause(error)
+            }
         }
-        do {
-            try? WifiAdbRunner.run(adb, WifiAdbLogic.disconnectArgs(endpoint: endpoint))
-            try WifiAdbRunner.run(adb, WifiAdbLogic.connectArgs(endpoint: endpoint))
-            reconnectFailures = 0
-            lastEndpoint = endpoint
-            statusIsError = false
-            statusMessage = L10n.format("wifi.reconnect.done", endpoint)
-            DebugLogger.shared.info("WifiAdb", "[INFO] 재연결 성공 \(lostSerial) → \(endpoint)")
-            await disconnectStaleEndpoints(adb: adb, keep: endpoint)
-        } catch {
-            reconnectFailures += 1
-            failAuto("wifi.reconnect.failed", detail: cause(error))
+
+        // 후보를 전부 시도해도 안 붙었다 — 사유를 그대로 남긴다 ([표시②])
+        reconnectFailures += 1
+        failAuto("wifi.reconnect.failed", detail: lastFailureDetail.isEmpty ? "-" : lastFailureDetail)
+        DebugLogger.shared.info(
+            "WifiAdb",
+            "[INFO] 재연결 실패 \(lostSerial) · 후보 \(candidates.count)개 모두 불명"
+        )
+    }
+
+    /// 재연결 후보 IP — **순서대로 시도**한다 (2026-09-28)
+    ///
+    /// 게이트웨이 하나에 의존하지 않는다. **아직 USB 로 붙어 있는 기기**라면
+    /// 기기에게 직접 `ip addr` / `ifconfig` / `ip route` 를 물어 후보를 얻는다
+    /// (이게 "USB 로는 연결되는데 인터넷으로 넘어가면 못 찾는다" 의 해법이다).
+    /// 기기가 이미 떨어졌다면 물을 수 없으므로 게이트웨이(SoftAP 가정)를 후보로 넣는다.
+    private func resolveReconnectCandidates(adb: String, lostSerial: String) async -> [String] {
+        // ① 기기가 아직 살아 있으면(USB 로) 직접 물어본다 — **가장 정확한 정보**
+        var ifAddr: String?
+        var ifconfig: String?
+        var route: String?
+        if let probe = lostSerial.split(separator: ":").first.map(String.init) {
+            ifAddr = try? await WifiAdbRunner.runCapture(adb, ["-s", probe, "shell", "ip", "-f", "inet", "addr"])
+            ifconfig = try? await WifiAdbRunner.runCapture(adb, ["-s", probe, "shell", "ifconfig"])
+            route = try? await WifiAdbRunner.runCapture(
+                adb, ["-s", probe, "shell", "ip", "route", "get", "1.1.1.1"])
+        }
+        let candidates = WifiAdbLogic.resolveIpCandidates(
+            gateway: MacRoute.defaultGateway(),  // 뒤순위 (SoftAP 전용 가정)
+            ifAddrText: ifAddr,
+            ifconfigText: ifconfig,
+            routeText: route
+        )
+        return candidates.map { WifiAdbLogic.defaultEndpoint(ip: $0) }
+    }
+
+    /// adb 가 그 엔드포인트를 **실제 device 로** 인식했는지 확인
+    private static func isConnectedAsDevice(adb: String, endpoint: String) async -> Bool {
+        guard let out = try? await WifiAdbRunner.runCapture(adb, ["devices"]) else { return false }
+        return out.split(separator: "\n").contains { line in
+            line.hasPrefix(endpoint) && line.contains("device")
         }
     }
 
