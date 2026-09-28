@@ -794,3 +794,5 @@
 "calendar.failed.title" = "넣지 못함";
 "calendar.failed" = "실패 사유: %@";
 "calendar.note.added" = "캘린더 일정에 넣음: %@";
+"droid.card.stale" = "마지막 %@";
+"droid.card.stale.hint" = "오래된 값";

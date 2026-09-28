@@ -11,6 +11,7 @@ enum DroidCards {
         backgroundOpacity: Double = 1,
         trailing: AnyView? = nil,
         fillsRow: Bool = false,
+        stale: StaleInfo? = nil,
         @ViewBuilder content: () -> some View
     ) -> some View {
         let bgAlpha = min(max(backgroundOpacity, 0), 1)
@@ -22,7 +23,15 @@ enum DroidCards {
                     .lineLimit(1)
                     .truncationMode(.tail)
                 Spacer(minLength: 0)
-                trailing
+                if let stale {
+                    // 배너를 읽지 않아도 "이 값이 언제 것인지" 보이게 한다
+                    Text(L10n.format("droid.card.stale", stale.at.formatted(date: .omitted, time: .shortened)))
+                        .font(OPFont.number(9))
+                        .foregroundStyle(OPColor.warn)
+                        .lineLimit(1)
+                } else {
+                    trailing
+                }
             }
             content()
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -46,6 +55,24 @@ enum DroidCards {
             RoundedRectangle(cornerRadius: OPSpace.radiusCard)
                 .stroke(OPColor.border.opacity(0.5 * bgAlpha), lineWidth: 1)
         )
+        // 오프라인이면 **읽히되 "지금" 이 아닌 것**으로 보이게 (2026-09-28)
+        .opacity(stale == nil ? 1 : 0.45)
+        .accessibilityLabel(stale == nil ? "" : L10n.string("droid.card.stale.hint"))
+    }
+
+    /// "이 값은 언제 것인가" — 오프라인일 때만 존재한다
+    struct StaleInfo: Equatable {
+        var at: Date
+    }
+
+    /// 기기가 오프라인이면 "마지막 측정" 정보를 만든다 — **모르면 nil**
+    ///
+    /// `measuredAt` 이 nil 이면(한 번도 측정하지 못함) 표시하지 않는다.
+    /// "언젠지 모르는 값" 을 "오래된 값" 처럼 말하면 그것도 **거짓말**이다.
+    static func staleInfo(for device: DeviceSnapshot?, now: Date = .now) -> StaleInfo? {
+        guard let device, !device.isOnline else { return nil }
+        guard let at = device.measuredAt, now > at else { return nil }
+        return StaleInfo(at: at)
     }
 
     // MARK: - CPU
@@ -60,7 +87,8 @@ enum DroidCards {
             L10n.string("droid.card.cpu.title"),
             accent: OPColor.inkDim,
             backgroundOpacity: backgroundOpacity,
-            fillsRow: fillsRow
+            fillsRow: fillsRow,
+            stale: staleInfo(for: device)
         ) {
             Text(cpuValue(device))
                 .font(OPFont.number(16))
@@ -122,7 +150,8 @@ enum DroidCards {
         shell(
             L10n.string("droid.card.gpu.title"),
             backgroundOpacity: backgroundOpacity,
-            fillsRow: fillsRow
+            fillsRow: fillsRow,
+            stale: staleInfo(for: device)
         ) {
             Text(gpuValue(device))
                 .font(OPFont.number(16))
@@ -166,7 +195,8 @@ enum DroidCards {
         shell(
             L10n.string("droid.card.memory.title"),
             backgroundOpacity: backgroundOpacity,
-            fillsRow: fillsRow
+            fillsRow: fillsRow,
+            stale: staleInfo(for: device)
         ) {
             Text(memoryValue(device))
                 .font(OPFont.number(16))
@@ -232,7 +262,7 @@ enum DroidCards {
         metrics: DroidMetrics?,
         fillsRow: Bool = false
     ) -> some View {
-        shell(L10n.string("droid.card.sensors.title"), fillsRow: fillsRow) {
+        shell(L10n.string("droid.card.sensors.title"), fillsRow: fillsRow, stale: staleInfo(for: device)) {
             Text(sensorsValue(device))
                 .font(OPFont.number(16))
                 .foregroundStyle(OPColor.ink)
@@ -288,7 +318,7 @@ enum DroidCards {
         metrics: DroidMetrics?,
         fillsRow: Bool = false
     ) -> some View {
-        shell(L10n.string("droid.card.battery.title"), fillsRow: fillsRow) {
+        shell(L10n.string("droid.card.battery.title"), fillsRow: fillsRow, stale: staleInfo(for: device)) {
             Text(batteryValue(device))
                 .font(OPFont.number(16))
                 .foregroundStyle(OPColor.ink)
@@ -353,7 +383,8 @@ enum DroidCards {
             L10n.string("droid.card.network.title"),
             backgroundOpacity: backgroundOpacity,
             trailing: AnyView(SignalGradeChip(device: device)),
-            fillsRow: fillsRow
+            fillsRow: fillsRow,
+            stale: staleInfo(for: device)
         ) {
             HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 2) {
@@ -439,7 +470,8 @@ enum DroidCards {
         shell(
             L10n.string("droid.card.thermal.title"),
             accent: OPColor.thermal,
-            fillsRow: fillsRow
+            fillsRow: fillsRow,
+            stale: staleInfo(for: device)
         ) {
             HStack(spacing: 8) {
                 Text(thermalValue(device))
@@ -503,7 +535,7 @@ enum DroidCards {
         metrics: DroidMetrics?,
         fillsRow: Bool = false
     ) -> some View {
-        shell(L10n.string("droid.card.storage.title"), fillsRow: fillsRow) {
+        shell(L10n.string("droid.card.storage.title"), fillsRow: fillsRow, stale: staleInfo(for: device)) {
             Text(storageValue(device))
                 .font(OPFont.number(16))
                 .foregroundStyle(OPColor.ink)
@@ -565,7 +597,8 @@ enum DroidCards {
         shell(
             L10n.string("droid.card.health.title"),
             accent: OPColor.cta,
-            fillsRow: fillsRow
+            fillsRow: fillsRow,
+            stale: staleInfo(for: device)
         ) {
             if let s = HealthScoreLogic.score(from: device ?? DeviceSnapshot()) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
