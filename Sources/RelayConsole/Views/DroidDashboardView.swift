@@ -62,6 +62,9 @@ struct DroidDashboardView: View {
                         if let problem = store.storeProblem {
                             storeProblemBanner(problem)
                         }
+                        if let rules = store.rulesProblem {
+                            rulesProblemBanner(rules)
+                        }
                         if devices.count > 1 {
                             devicePicker
                         }
@@ -224,6 +227,35 @@ struct DroidDashboardView: View {
         .overlay(
             RoundedRectangle(cornerRadius: 10)
                 .stroke(OPColor.bad.opacity(0.45), lineWidth: 1)
+        )
+    }
+
+    /// 규칙 파일 문제 배너 — "내 파일이 안 읽혔다" 를 **숨기지 않는다** [표시②]
+    ///
+    /// 조용히 기본값으로 대체하면 사용자는 "고쳤는데 왜 그대로지?" 를 본다.
+    /// 사유를 그대로 보여 주는 게 낫다.
+    private func rulesProblemBanner(_ why: String) -> some View {
+        HStack(spacing: OPSpace.sm) {
+            Image(systemName: "slider.horizontal.below.rectangle.badge.exclamationmark")
+                .font(OPFont.body(12))
+                .foregroundStyle(OPColor.warn)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(L10n.string("rules.problem"))
+                    .font(OPFont.body(12))
+                    .foregroundStyle(OPColor.ink)
+                Text(why)
+                    .font(OPFont.number(10))
+                    .foregroundStyle(OPColor.inkDim)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(OPSpace.md)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(OPColor.warn.opacity(0.12), in: RoundedRectangle(cornerRadius: 10))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(OPColor.warn.opacity(0.45), lineWidth: 1)
         )
     }
 

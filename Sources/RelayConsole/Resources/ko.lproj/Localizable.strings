@@ -777,3 +777,7 @@
 "droid.logs.picker.row.excluded" = "제외 중 — 마지막 %d줄";
 "droid.logs.picker.row.visible" = "표시 중 — %d줄";
 "droid.logs.picker.restore" = "기본값 복원";
+"rules.problem" = "관제 규칙 파일을 적용하지 못했습니다";
+"rules.path.title" = "관제 규칙 파일";
+"rules.path.hint" = "없으면 내장 기본값을 씁니다 · 임계값을 여기서 덮어씁니다";
+"rules.path.open" = "폴더 열기";

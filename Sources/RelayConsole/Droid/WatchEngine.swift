@@ -35,7 +35,33 @@ final class WatchEngine {
     private var crashLastAt: [String: Date] = [:]
     private let logcatFatalCooldown: TimeInterval = 300
 
-    private init() {}
+    /// 테스트에서 격리 인스턴스를 만들 수 있게 internal 로 둔다
+    ///
+    /// 싱글턴으로만 만들면 "값이 없으면 지금과 동일한가" 를 **검증할 수 없다** —
+    /// 앞선 테스트가 남긴 게이트 상태가 다음 테스트를 물들이기 때문이다.
+    /// (2026-09-27 에 `ConsoleStore.shared` 로 같은 함정에 빠진 전례가 있다)
+    init() {}
+
+    /// S3 — 임계값은 **기본값이 코드에 있고, 사용자가 덮어쓸 수 있다**
+    ///
+    /// 파일이 없으면 `builtInConfig` 이므로 **지금과 정확히 동일하게 동작한다.**
+    /// `setRules` 는 앱 기동 시 1회만 부른다 — 게이트가 이미 만들어진 뒤에는 바꾸지 않는다
+    /// (이미 만들어진 게이트의 상태는 그대로 두고 값만 바꾸면 판정 기준이 어중간해진다).
+    private var rules: RulesConfig = .builtInConfig
+
+    func setRules(_ config: RulesConfig) { rules = config }
+
+    /// 규칙 종류로 임계값 게이트를 만든다 — **여기서 `precondition` 이 죽지 않도록**
+    /// `safeRule` 로 한 번 더 검증한다 (파싱 검증과 이중 안전장치)
+    private func makeGate(_ kind: RulesConfig.Kind, cores: Int = 0) -> ThresholdGate {
+        let r = rules.safeRule(kind, cores: cores)
+        return ThresholdGate(enter: r.enter, clear: r.clear, cooldown: r.cooldown)
+    }
+
+    /// 전이 전용 게이트 — `enter/clear` 가 없다
+    private func makeTransitionGate(_ kind: RulesConfig.Kind) -> TransitionGate {
+        TransitionGate(cooldown: rules.safeRule(kind).cooldown)
+    }
 
     /// 기기 식별 라벨 해석기 — ConsoleStore가 DeviceInventory 기반으로 주입 (기본: serial 원문 · AGENTS.local §4)
     var ident: @MainActor (String) -> String = { $0 }
@@ -46,7 +72,7 @@ final class WatchEngine {
     func thermalGate(for serial: String) -> ThresholdGate {
         if let g = thermalGates[serial] { return g }
         // clear ≤2 (SEVERE 이탈) — Status 2 구간에서 후속조치 잔류 방지, 60s 쿨다운 유지
-        let g = ThresholdGate(enter: 3, clear: 2, cooldown: 60)
+        let g = makeGate(.throttling)
         thermalGates[serial] = g
         return g
     }
@@ -55,7 +81,7 @@ final class WatchEngine {
 
     /// thermalStatus 0~6 — enter ≥3, clear ≤2 (SEVERE 이탈), 60s
     func feedThermal(serial: String, status: Int, now: Date = .now) -> WatchEvent? {
-        var gate = thermalGates[serial] ?? ThresholdGate(enter: 3, clear: 2, cooldown: 60)
+        var gate = thermalGates[serial] ?? makeGate(.throttling)
         let action = gate.evaluate(value: Double(status), now: now)
         thermalGates[serial] = gate
         guard action != .none else { return nil }
@@ -85,7 +111,7 @@ final class WatchEngine {
 
     /// 충전 전이 (true/false 변경)
     func feedCharging(serial: String, charging: Bool, now: Date = .now) -> WatchEvent? {
-        var gate = chargeGates[serial] ?? TransitionGate(cooldown: 5)
+        var gate = chargeGates[serial] ?? makeTransitionGate(.chargeChanged)
         let action = gate.evaluate(current: charging, now: now)
         chargeGates[serial] = gate
         guard action == .enter else { return nil }
@@ -106,7 +132,7 @@ final class WatchEngine {
 
     /// 보호모드 0→1 / 1→0
     func feedProtection(serial: String, enabled: Bool, now: Date = .now) -> WatchEvent? {
-        var gate = protectionGates[serial] ?? TransitionGate(cooldown: 10)
+        var gate = protectionGates[serial] ?? makeTransitionGate(.protectionChanged)
         let action = gate.evaluate(current: enabled, now: now)
         protectionGates[serial] = gate
         guard action == .enter else { return nil }
@@ -128,7 +154,7 @@ final class WatchEngine {
 
     /// 저전력/절전 모드 0↔1
     func feedLowPower(serial: String, enabled: Bool, now: Date = .now) -> WatchEvent? {
-        var gate = lowPowerGates[serial] ?? TransitionGate(cooldown: 10)
+        var gate = lowPowerGates[serial] ?? makeTransitionGate(.lowPowerChanged)
         let action = gate.evaluate(current: enabled, now: now)
         lowPowerGates[serial] = gate
         guard action == .enter else { return nil }
@@ -199,7 +225,7 @@ final class WatchEngine {
 
     /// PSI memory some avg10 — enter ≥5.0, clear ≤3.0, 120s
     func feedPsi(serial: String, avg10: Double, now: Date = .now) -> WatchEvent? {
-        var gate = psiGates[serial] ?? ThresholdGate(enter: 5.0, clear: 3.0, cooldown: 120)
+        var gate = psiGates[serial] ?? makeGate(.psiPressure)
         let action = gate.evaluate(value: avg10, now: now)
         psiGates[serial] = gate
         guard action != .none else { return nil }
@@ -229,8 +255,7 @@ final class WatchEngine {
     /// load1 급증 — enter ≥ cores×2, clear ≤ cores×1, 60s
     func feedLoad(serial: String, load1: Double, cores: Int, now: Date = .now) -> WatchEvent? {
         guard cores > 0 else { return nil }
-        var gate = loadGates[serial]
-            ?? ThresholdGate(enter: Double(cores) * 2, clear: Double(cores), cooldown: 60)
+        var gate = loadGates[serial] ?? makeGate(.loadSpike, cores: cores)
         let action = gate.evaluate(value: load1, now: now)
         loadGates[serial] = gate
         guard action != .none else { return nil }
@@ -259,7 +284,7 @@ final class WatchEngine {
 
     /// MemAvailable 부족 — usedPct = 100−avail% · enter ≥90 (avail<10%), clear ≤80 (avail>20%), 60s
     func feedMemory(serial: String, usedPct: Double, now: Date = .now) -> WatchEvent? {
-        var gate = memGates[serial] ?? ThresholdGate(enter: 90, clear: 80, cooldown: 60)
+        var gate = memGates[serial] ?? makeGate(.memoryLow)
         let action = gate.evaluate(value: usedPct, now: now)
         memGates[serial] = gate
         guard action != .none else { return nil }
