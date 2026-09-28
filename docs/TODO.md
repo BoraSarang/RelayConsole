@@ -4,12 +4,18 @@
 > 여러 세션에 흩어져 있어 "남은 게 뭐였지" 를 한 번에 볼 수 없었다.
 
 ## 진행 중 (bd ready)
-- (0건)
+- **PR #57** `chore/macos-cjk-hook` — 한자 커밋 훅 + 육안 목록 문서화 (검토 대기)
+- **착수 준비** S3 Rules as Code — `docs/plans/PLAN_rules_yaml.md` (조사 완료 · 구현 착수 지점 명시)
 - bd 이슈: (0건 — 이번 작업은 TODO T-번호로 관리)
 
 ## 다음 스프린트 (리서치 §8 잔여 · 미착수)
 - [ ] **S3 관제 규칙 Rules as Code (로컬 YAML)** — TIER S 중 유일 미착수
-      (착수 시 계측부터 — "규칙 문법" 을 먼저 정하면 문법이 쓰이기 전에 완성된다)
+      **조사 완료** (`docs/plans/PLAN_rules_yaml.md`) — 구현 착수 지점까지 확정
+      - **엔진은 이미 있다** — `WatchEngine` 규칙 7종 + `ThresholdGate`(hysteresis·쿨다운) 구현됨.
+        없는 것은 **임계값의 입구**뿐 → 범위를 "확장" 이 아니라 **"덮어쓰기"** 로 좁혔다
+      - **★ 1순위 위험** — `ThresholdGate.init` 의 `precondition(enter > clear)` 때문에
+        **사용자가 쓴 파일로 앱이 죽는다.** 파서보다 이 경로가 먼저다
+      - 파일이 없으면 지금과 **완전히 동일**하게 동작해야 한다 (선택 사항)
 - [ ] **로그 창 VoiceOver 노출** — `System Events` 의 `entire contents` 가 **0개**.
       SwiftUI 내용이 보조기술에 노출되지 않는다(배지 버튼만 `.accessibilityLabel` 로 처리).
       측정 우회로 **팝오버 클릭 자동 검증도 불가능**해져 육안 대기 항목이 되었다 (PLAN_log_tag_picker §8-1)
@@ -20,8 +26,6 @@
       **훅 등록만 남았다** — 한자 혼입이 한 세션에 4회 재발한 것은 기억으로 못 막기 때문
       (`git commit` 시 자동 실행). 도구가 방금 두 번 배웠다: 디렉터리 인자를 안 따라가면
       **아무것도 안 보고 0건 으로 통과**하고, `#` 표시가 Swift 주석을 지시자로 파싱해 **컴파일을 깨운다**
-- [ ] **로그 창 VoiceOver 노출** — `System Events` 의 `entire contents` 가 **0개** (PR #54)
-- [ ] **S3 관제 규칙 Rules as Code (로컬 YAML)** — TIER S 중 유일 미착수
 - [ ] **A7** Dock 배지 / 그룹화 (라이브액티비티·위젯은 1.15.0으로 완료)
 - **TIER A**: Things·캘린더 연동 · 스샷 스크랩북 · 멀티 스냅샷 그리드 · Prometheus/JSON export · cron 기기 태그 · 충전 방치 리포트
 
