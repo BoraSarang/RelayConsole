@@ -88,6 +88,91 @@ enum WifiAdbLogic {
         return out
     }
 
+    /// `arp -an` 출력에서 **해당 서브넷의 IPv4 만** 뽑는다 — 순수
+    ///
+    /// 실제 출력 한 줄:
+    /// `? (10.38.120.211) at e6:82:5d:b7:32:b4 on en0 ifscope [ethernet]`
+    static func parseArpIPs(_ text: String, onSubnet prefix: String) -> [String] {
+        var out: [String] = []
+        for line in text.split(separator: "\n") {
+            guard let open = line.firstIndex(of: "(") else { continue }
+            let after = line[line.index(after: open)...]
+            guard let close = after.firstIndex(of: ")") else { continue }
+            let ip = String(after[after.startIndex..<close])
+            guard isIPv4(ip), ip.hasPrefix(prefix + "."), !out.contains(ip) else { continue }
+            // ★ 브로드캐스트/멀티캐스트는 **붙을 대상이 아니다** (2026-09-28 테스트가 잡음)
+            //   `adb connect 10.38.120.255:5555` 는 무의미하다 — 게다가 오염을 남긴다
+            guard !isBroadcastOrMulticast(ip) else { continue }
+            out.append(ip)
+        }
+        return out
+    }
+
+    /// 브로드캐스트(`x.x.x.255`)·멀티캐스트(`224.0.0.0/4`) 주소인가
+    static func isBroadcastOrMulticast(_ ip: String) -> Bool {
+        let parts = ip.split(separator: ".").compactMap { Int($0) }
+        guard parts.count == 4 else { return false }
+        if parts[0] >= 224 && parts[0] <= 239 { return true }   // 멀티캐스트
+        return parts[3] == 255                                  // /24 브로드캐스트
+    }
+
+    /// `/24` 기준 서브넷 접두사 — `"10.38.120.211"` → `"10.38.120"`
+    ///
+    /// 게이트웨이가 같은 서브넷인지 확인할 때 쓴다. `/24` 만 다룬다
+    /// (그 이상 세분화하면 후보가 폭발하고, 그보다 넓으면 이웃이 오염된다).
+    static func subnetPrefix(ip: String) -> String? {
+        let parts = ip.split(separator: ".").map(String.init)
+        guard parts.count == 4, parts.allSatisfy({ Int($0) != nil }) else { return nil }
+        return "\(parts[0]).\(parts[1]).\(parts[2])"
+    }
+
+    /// `host:port` 에서 IP 만 — 후보 정리에 쓴다
+    static func host(ofEndpoint endpoint: String) -> String? {
+        guard let h = endpoint.split(separator: ":").first.map(String.init), isIPv4(h) else { return nil }
+        return h
+    }
+
+    /// ★ 재연결 후보의 **순서** — 순수 (2026-09-28 · 사용자 지적으로 보강)
+    ///
+    /// ## 왜 이 순서인가
+    /// 사용자 지적: *"전에 연결되었던 IP — 게이트웨이가 연결 상태면 adb wifi 다시 연결 시도 안하니?"*
+    /// 맞다. 종전엔 **게이트웨이 하나만** 보고 그것으로 서달랐다.
+    /// 게이트웨이 = 기기 IP 는 **SoftAP 일 때만** 성립하므로
+    /// (실측 `SoftApManagers:0` — 이 기기는 SoftAP 아님) 집 Wi-Fi 에서 **반드시 실패**했다.
+    ///
+    /// 순서:
+    /// ① **전에 붙었던 IP** — DHCP 가 IP 를 그대로 줬을 때 이것 하나로 복구된다 (가장 빠름)
+    /// ② 방금 잃어버린 serial 의 IP — 위와 같을 수 있지만 **정리 후 연결**된 경우
+    /// ③ **기기가 살아 있으면(USB) 직접 물어본 값** — 가장 정확
+    /// ④ 게이트웨이 — SoftAP 전용 가정이라 뒤쪽
+    /// ⑤ ARP 이웃 — 라우터가 살아있을 때 넓이를 늘린다 (아래 한계)
+    ///
+    /// ## ⑤ 의 한계 — 감수한다
+    /// **새 IP 로 바뀐 기기는 ARP 에 없다** (아직 통신한 적이 없으므로).
+    /// ⑤ 는 "DHCP 가 이전에 쓰던 IP 를 다시 준 경우"에만 도움이 된다.
+    /// 정말 모르면 — **사용자에게 사유를 보여주는 것**이 정보다.
+    static func reconnectCandidateOrder(
+        lastEndpoint: String?,
+        lostSerial: String,
+        deviceReported: [String],
+        gateway: String?,
+        arpNeighbours: [String]
+    ) -> [String] {
+        var out: [String] = []
+        func add(_ ip: String?) {
+            guard let ip else { return }
+            let v = ip.trimmingCharacters(in: .whitespaces)
+            guard isIPv4(v), !isLoopback(v), !out.contains(v) else { return }
+            out.append(v)
+        }
+        add(lastEndpoint.flatMap { host(ofEndpoint: $0) })
+        add(host(ofEndpoint: lostSerial))
+        deviceReported.forEach { add($0) }
+        add(gateway)
+        arpNeighbours.forEach { add($0) }
+        return out
+    }
+
     /// 첫 후보 — 후보가 하나일 때 쓰는 편의 (기존 호출부 호환)
     static func resolveIp(
         gateway: String?,
@@ -378,10 +463,18 @@ final class WifiAdbController: ObservableObject {
 
         var lastFailureDetail = ""
         for endpoint in candidates {
-            guard let ip = endpoint.split(separator: ":").first.map(String.init) else { continue }
+            guard let ip = WifiAdbLogic.host(ofEndpoint: endpoint) else { continue }
             // adbd 가 이미 TCP 모드다(TCP 로 붙어 있었으니) — **tcpip 은 건드리지 않는다**
             // tcpip 은 adbd 를 재시작해서 그 순간 연결을 **또** 끊는다
             guard PingProbe.reachable(ip: ip) else {
+                lastFailureDetail = L10n.format("wifi.reconnect.notReachable", endpoint)
+                continue
+            }
+            // ★ **adbd 포트가 열려 있는지 먼저 본다** (2026-09-28 실측)
+            //   후보가 여러 개일 때 `adb connect` 를 전부 시도하면 adb 서버 상태가
+            //   오염된다(connect 실패가 device 로 남음). 계측에서 ARP 이웃 3개 중
+            //   **5555 가 열린 것은 1개뿐**이었다 — 포트로 거르면 2회 시도가 사라진다.
+            guard Self.adbdPortOpen(ip: ip, port: WifiAdbLogic.defaultPort) else {
                 lastFailureDetail = L10n.format("wifi.reconnect.notReachable", endpoint)
                 continue
             }
@@ -422,23 +515,32 @@ final class WifiAdbController: ObservableObject {
     /// (이게 "USB 로는 연결되는데 인터넷으로 넘어가면 못 찾는다" 의 해법이다).
     /// 기기가 이미 떨어졌다면 물을 수 없으므로 게이트웨이(SoftAP 가정)를 후보로 넣는다.
     private func resolveReconnectCandidates(adb: String, lostSerial: String) async -> [String] {
-        // ① 기기가 아직 살아 있으면(USB 로) 직접 물어본다 — **가장 정확한 정보**
-        var ifAddr: String?
-        var ifconfig: String?
-        var route: String?
-        if let probe = lostSerial.split(separator: ":").first.map(String.init) {
-            ifAddr = try? await WifiAdbRunner.runCapture(adb, ["-s", probe, "shell", "ip", "-f", "inet", "addr"])
-            ifconfig = try? await WifiAdbRunner.runCapture(adb, ["-s", probe, "shell", "ifconfig"])
-            route = try? await WifiAdbRunner.runCapture(
-                adb, ["-s", probe, "shell", "ip", "route", "get", "1.1.1.1"])
+        // 기기가 아직 살아 있으면(USB 로) **직접 물어본다** — 가장 정확한 정보
+        var deviceReported: [String] = []
+        if let probe = WifiAdbLogic.host(ofEndpoint: lostSerial) {
+            let ifAddr = try? await WifiAdbRunner.runCapture(adb, ["-s", probe, "shell", "ip", "-f", "inet", "addr"])
+            let ifconfig = try? await WifiAdbRunner.runCapture(adb, ["-s", probe, "shell", "ifconfig"])
+            let route = try? await WifiAdbRunner.runCapture(adb, ["-s", probe, "shell", "ip", "route", "get", "1.1.1.1"])
+            deviceReported = WifiAdbLogic.resolveIpCandidates(
+                gateway: nil, ifAddrText: ifAddr, ifconfigText: ifconfig, routeText: route
+            )
         }
-        let candidates = WifiAdbLogic.resolveIpCandidates(
-            gateway: MacRoute.defaultGateway(),  // 뒤순위 (SoftAP 전용 가정)
-            ifAddrText: ifAddr,
-            ifconfigText: ifconfig,
-            routeText: route
+
+        // 같은 서브넷에서 이미 대화한 적 있는 이웃 — **포트 확인 전 후보**로만 쓴다
+        let gateway = MacRoute.defaultGateway()
+        let neighbours = gateway
+            .flatMap { WifiAdbLogic.subnetPrefix(ip: $0) }
+            .map { MacRoute.arpNeighbours(onSubnet: $0) } ?? []
+
+        // 순서는 **순수 함수**가 정한다 — 여기서 손대지 않는다 (테스트가 고정한다)
+        let order = WifiAdbLogic.reconnectCandidateOrder(
+            lastEndpoint: lastEndpoint,
+            lostSerial: lostSerial,
+            deviceReported: deviceReported,
+            gateway: gateway,
+            arpNeighbours: neighbours
         )
-        return candidates.map { WifiAdbLogic.defaultEndpoint(ip: $0) }
+        return order.map { WifiAdbLogic.defaultEndpoint(ip: $0) }
     }
 
     /// adb 가 그 엔드포인트를 **실제 device 로** 인식했는지 확인
@@ -447,6 +549,25 @@ final class WifiAdbController: ObservableObject {
         return out.split(separator: "\n").contains { line in
             line.hasPrefix(endpoint) && line.contains("device")
         }
+    }
+
+    /// adbd 포트가 열려 있는지 — **TCPconnect 만** 하고 즉시 끊는다
+    ///
+    /// 왜 이게 필요한가 (2026-09-28 실측)
+    /// 후보가 여러 개일 때 전부 `adb connect` 를 시도하면 **adb 서버 상태가 오염된다.**
+    /// 실패한 connect 가 `devices` 에 남아 다음 판정을 흐리게 만든다.
+    /// 계측: ARP 이웃 3개 중 5555 가 열린 것은 **1개뿐**이었다.
+    /// → 포트로 먼저 걸러내면 **시도 횟수가 줄고** adb 가 깨끗하게 남는다.
+    static func adbdPortOpen(ip: String, port: Int, timeoutSeconds: Int = 2) -> Bool {
+        // `nc -z` 는 데이터 없이 연결만 시도하고 바로 닫는다 (adb 를 건드리지 않는다)
+        let proc = Process()
+        proc.executableURL = URL(fileURLWithPath: "/usr/bin/nc")
+        proc.arguments = ["-z", "-G", String(timeoutSeconds), ip, String(port)]
+        proc.standardOutput = Pipe()
+        proc.standardError = Pipe()
+        do { try proc.run() } catch { return false }
+        proc.waitUntilExit()
+        return proc.terminationStatus == 0
     }
 
     /// USB 기기: tcpip → IP 판별 → connect
@@ -803,6 +924,28 @@ enum PingProbe {
 
 /// 맥 기본 게이트웨이 — **핫스팟 폰이면 곧 폰 IP** 다 (스크립트와 동일 아이디어)
 enum MacRoute {
+    /// 같은 서브넷에서 **이미 통신한 적 있는** IP — ARP 테이블에 있는 것만
+    ///
+    /// ## 왜 ping 스캔을 하지 않는가 (2026-09-28)
+    /// 새 기기 IP 를 모를 때 "같은 LAN 에 누가 있나" 를 아는 유일한 단서가 ARP 테이블이다.
+    /// 그런데 **전체 스캔(ping sweep)은 하지 않는다:**
+    /// - 라우터·배터리 소모 (256 회 ping)
+    /// - 응답 없는 기기까지 후보가 되어 **connect 시도**가 폭발한다
+    /// → **이미 대화한 적이 있는** 이웃만 쓴다. 비용 0, 오탐 적음
+    static func arpNeighbours(onSubnet prefix: String) -> [String] {
+        let proc = Process()
+        proc.executableURL = URL(fileURLWithPath: "/usr/sbin/arp")
+        proc.arguments = ["-an"]
+        let pipe = Pipe()
+        proc.standardOutput = pipe
+        proc.standardError = Pipe()
+        do { try proc.run() } catch { return [] }
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        proc.waitUntilExit()
+        let out = String(data: data, encoding: .utf8) ?? ""
+        return WifiAdbLogic.parseArpIPs(out, onSubnet: prefix)
+    }
+
     static func defaultGateway() -> String? {
         let proc = Process()
         proc.executableURL = URL(fileURLWithPath: "/sbin/route")
