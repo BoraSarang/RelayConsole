@@ -246,29 +246,44 @@ final class ConsoleStore: ObservableObject {
         switch RulesConfig.load() {
         case .missing:
             rulesProblem = nil
-            WatchEngine.shared.setRules(.builtInConfig)
-            DebugLogger.shared.info("Rules", "[INFO] [RULES] rules.yaml 없음 — 내장 기본값 사용")
+            applyRules(.builtInConfig, applied: 0, rejected: 0, note: "rules.yaml 없음 — 내장 기본값 사용")
         case .ok(let config):
-            WatchEngine.shared.setRules(config)
-            if config.rejected.isEmpty {
-                rulesProblem = nil
-                DebugLogger.shared.info(
-                    "Rules", "[INFO] [RULES] rules.yaml 적용",
-                    meta: "rules=\(config.overrides.count)")
-            } else {
-                // 항목별로 걸린 것과 **적용된 것**을 함께 남긴다
-                let applied = config.overrides.count
-                let why = config.rejected.joined(separator: " · ")
-                rulesProblem = why
-                DebugLogger.shared.error(
-                    "Rules",
-                    "[ERROR] [RULES] rules.yaml 일부 무시 — 사유: \(why)",
-                    meta: "applied=\(applied) rejected=\(config.rejected.count)")
-            }
+            applyRules(config, applied: config.overrides.count, rejected: config.rejected.count)
         case .failed(let why):
             rulesProblem = why
-            WatchEngine.shared.setRules(.builtInConfig)
-            DebugLogger.shared.error("Rules", "[ERROR] [RULES] rules.yaml 읽기 실패 — \(why)")
+            applyRules(.builtInConfig, applied: 0, rejected: 0, note: "rules.yaml 읽기 실패 — \(why)")
+        }
+    }
+
+    /// 규칙을 **실제로 적용하는 단일 지점** — 엔진과 방치 트래커가 여기서 함께 움직인다
+    ///
+    /// ## 왜 한 곳에 모았는가
+    /// 처음엔 `WatchEngine.setRules` 만 불렀다. 그랬더니 `battery: { neglectPercent }` 가
+    /// **파싱만 되고 아무 효과가 없었다** — 사용자가 고른 값이 조용히 버려지는 최악의 형태.
+    /// 두 적용 지점이 따로 놀면 **반쪽만 적용되는 상태**가 반드시 생긴다.
+    private func applyRules(
+        _ config: RulesConfig, applied: Int, rejected: Int, note: String? = nil
+    ) {
+        WatchEngine.shared.setRules(config)
+        // 방치 임계가 바뀌면 **지금까지 잰 시간이 다른 뜻**이 된다 → 계측을 다시 시작한다
+        BatteryNeglectTracker.shared.setThreshold(config.safeBattery().neglectPercent)
+
+        if config.rejected.isEmpty, let note {
+            rulesProblem = nil
+            DebugLogger.shared.info("Rules", "[INFO] [RULES] \(note)")
+        } else if config.rejected.isEmpty {
+            rulesProblem = nil
+            DebugLogger.shared.info(
+                "Rules", "[INFO] [RULES] rules.yaml 적용",
+                meta: "rules=\(applied) neglect=\(config.safeBattery().neglectPercent)%")
+        } else {
+            // 항목별로 걸린 것과 **적용된 것**을 함께 남긴다
+            let why = config.rejected.joined(separator: " · ")
+            rulesProblem = why
+            DebugLogger.shared.error(
+                "Rules",
+                "[ERROR] [RULES] rules.yaml 일부 무시 — 사유: \(why)",
+                meta: "applied=\(applied) rejected=\(rejected)")
         }
     }
 
@@ -356,7 +371,9 @@ final class ConsoleStore: ObservableObject {
             sites: sites,
             jobs: jobs,
             events: recentWatchEvents,
-            now: now
+            now: now,
+            // 방치 시간은 트래커가 들고 있다 (폴링이 먹고, 여기서 읽는다)
+            neglect: BatteryNeglectTracker.shared.snapshot(now: now)
         )
     }
 
