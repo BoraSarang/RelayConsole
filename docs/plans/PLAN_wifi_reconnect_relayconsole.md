@@ -52,7 +52,7 @@ TCP 엔드포인트가 adb devices 에서 사라짐 (DeviceMonitor 끊김 루프
 |---|---|
 | connect 실패 → **무한 재시도** (폴링 5초마다 → adb 폭주) | **쿨다운** 기본 60초 · 연속 실패 시 지수 증가 |
 | USB 로도 붙어 있는데 TCP 로 붙으려 함 (adbd USB 모드) | USB 존재 시 `tcpip` 먼저 (기존 auto 경로 재사용) |
-| 사용자가 Wi-Fi ADB 를 끄고 싶은데 계속 붙음 | 설정 OFF 시完全不동 (`autoModeKey` 존중) |
+| 사용자가 Wi-Fi ADB 를 끄고 싶은데 계속 붙음 | 설정 OFF 시완 무동 (`autoModeKey` 존중) |
 | 재연결 중 새 이벤트 발산 | 재연결은 **끊김 1회당 1회**만 — 성공하면 루프 종료 |
 
 ## 3. IN / OUT

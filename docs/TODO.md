@@ -9,25 +9,11 @@
 - [ ] **로그 창 VoiceOver 노출** — `System Events` 의 `entire contents` 가 **0개**.
       SwiftUI 내용이 보조기술에 노출되지 않는다(배지 버튼만 `.accessibilityLabel` 로 처리).
       측정 우회로 **팝오버 클릭 자동 검증도 불가능**해져 육안 대기 항목이 되었다 (PLAN_log_tag_picker §8-1)
-- [ ] **한자(중국어) 혼입 잔재** — `scripts/scan-cjk.py` 로 전수 스캔. **2026-09-28 재기준: 38건 / 12파일**
-    (앞선 "24건 / 20파일" 기록은 다른 도구 기준 — **이제 도구 출력이 기준**이다. 재실행: `python3 scripts/scan-cjk.py`)
-    - **우선순위가 다르다 — 소스·규칙 파일이 먼저다** (사용자에게 보이는 글자이므로)
-      ① `AGENTS.local.md:60` — "밝은 테마/웹**風** 버튼/print 금지" → "웹풍" (규칙 문서 오타)  # scan-cjk: allow
-      ② `Sources/RelayConsole/Droid/DeviceMonitor.swift:605` — 주석 `内`  # scan-cjk: allow
-      ③ `Sources/RelayConsole/Views/InsightsView.swift:350` — 주석 `年`·`月`  # scan-cjk: allow
-      → **이 3건은 주석·문서 1줄 수정이니 위험이 거의 없다. 파일 단위로 묶어 바로 해도 된다**
-    - 그다음 docs 9파일: `PLAN_v0.3`(6) · `PLAN_v0.5`(3) · `PLAN_refactor_perf_stability`(2) ·
-      `RESEARCH_adb_file_browser`(4) · `RESEARCH_droid_devicecare`(3) · `RESEARCH_apple_relay`(2) ·
-      `PLAN_v0.4`(2) · `PLAN_v0.1`(1) · `PLAN_wifi_*`(2)
-    - **왜 묶어 놓았나**: 세션 마무리 시점에 12파일 무분별 수정은 검토 없이 코드를 건드리는 것.
-      소스 3건은 별도 커밋으로 먼저 처리하는 게 맞다
-    - **진짜 해법은 커밋 훅** — 한자 혼입이 한 세션에 4회 재발했다. 스캔 스크립트는 만들었고
-      (`# scan-cjk: allow` 로 **인용이 필요한 문서**는 예외 처리 — 검출기를 못 쓰게 하느니 근거를 남길 자리를 만듦),
-      **훅 등록만 남음**
-- [ ] **강제 종료 시 고아 `adb logcat`** — 앱이 `pkill`/크래시로 죽으면 로그 창의 adb 자식이
-      **PPID 1 로 남고 계속 스트리밍**한다. 2026-09-27 에 28분짜리 잔존으로 확인됐고
-      2026-09-28 에도 재확인 — 측정 중 adb 자식 2개로 오판할 수 있으니 **PPID 로 구분해야 한다.**
-      정상 종료 경로에서는 `onDisappear` → `stop()` 이 죽이므로 **강제 종료 때만** 남는다
+- [ ] **한자 스캔을 커밋 훅으로** — 스캔 도구는 완성(`scripts/scan-cjk.py`)이고 **저장소 0건**이다.
+      **훅 등록만 남았다** — 한자 혼입이 한 세션에 4회 재발한 것은 기억으로 못 막기 때문
+      (`git commit` 시 자동 실행). 도구가 방금 두 번 배웠다: 디렉터리 인자를 안 따라가면
+      **아무것도 안 보고 0건 으로 통과**하고, `#` 표시가 Swift 주석을 지시자로 파싱해 **컴파일을 깨운다**
+- [ ] **로그 창 VoiceOver 노출** — `System Events` 의 `entire contents` 가 **0개** (PR #54)
 - [ ] **S3 관제 규칙 Rules as Code (로컬 YAML)** — TIER S 중 유일 미착수
 - [ ] **A7** Dock 배지 / 그룹화 (라이브액티비티·위젯은 1.15.0으로 완료)
 - **TIER A**: Things·캘린더 연동 · 스샷 스크랩북 · 멀티 스냅샷 그리드 · Prometheus/JSON export · cron 기기 태그 · 충전 방치 리포트
@@ -43,6 +29,30 @@
 - [ ] **Apple 크래시 리포트 수집 (반드시 해야 할 작업)** — `idevicecrashreport`로 iOS `.ips` crash/ANR를 IncidentBundle에 첨부. 기기 확보 시 1순위. Trust USB + `idevicecrashreport -u <udid> copy` 패턴. Android `logcat -b crash`/dropbox 대응 Apple 쪽 원재료 — **기기 확보 전 구현 불가, 반드시 기억할 것**
 
 ## 완료 (2026-09-28)
+- [x] **T-2026-09-28-5 한자 혼입 38건 정리 + xcstrings 삭제** — 1 PR · 스캔 도구 보강 2건
+  - **한자 38건 → 0건** (저장소 전수 `python3 scripts/scan-cjk.py` → 0)
+    - 소스·규칙 3건: `AGENTS.local.md` '웹風'→'웹풍' · `DeviceMonitor` '기기内'→'기기 내' ·  scan-cjk: allow
+      `InsightsView` `yyyy年 M月` → **값 변경 없음**  scan-cjk: allow
+    - docs 10파일 35건 — **의도된 한국어로 되돌렸다**(직역하면 뜻이 달라진다):
+      属실→실제 · 過長→'김' · 现状→현황 · 解耦→분리 · 纳秒→나노초 · 側→측 · 收尾→마무리  scan-cjk: allow
+  - **★ 1건은 오탐이었다 — 그게 이 작업의 진짜 수확**
+    - `f.dateFormat = "yyyy年 M月"` 은 **날짜 형식 문자열**이다. 달력 헤더 표기라 한자가 맞다  scan-cjk: allow
+    - "소스 3건은 주석 1줄이라 위험이 거의 없다" 고 TODO 에 적었는데 **틀렸다.**
+      스캐너는 **텍스트와 코드를 구분하지 못한다** → 값은 그대로 두고 예외 표기로 남겼다
+  - **★ 도구 버그 2건 — 이번에 같이 고쳤다**
+    ① **디렉터리 인자를 안 따라가서 아무것도 안 보고 0건 으로 통과했다.**
+       "아무것도 안 봤는데 문제가 없다" 는 가장 위험한 보고다 → 재귀 탐색 + 자기 검증 2건
+    ② 허용 표기를 `# scan-cjk: allow` 로 썼더니 **Swift 의 # 지시자로 파싱되어 컴파일이 깨졌다.**
+       → 마커를 '#' 없이 정의. 컴파일러가 잡아줘서 ship 되지 않았다는 사실도 기록
+  - **xcstrings 삭제** — 612키 낙오 사본. **읽는 코드가 한 군데도 없다** 를 확인했다
+    (`Bundle.module` 은 .lproj 만 · 위젯은 .lproj 참조 · 테스트 2종도 .lproj · 빌드 스크립트는 복사만)
+    - `build-macos.sh` 가 **매 빌드마다 앱 번들에 복사**하고 있었다(죽은 데이터 100KB)
+    - 함정: "여기서 고치면 되겠지" → 고쳐도 **아무 일도 일어나지 않는다**
+    - 삭제 + 복사 블록 제거(사유 주석) + `L10n.swift` 주석 정정
+  - **검증 [HARD]**: `swift test` **531 + 104 = 635 / 0 failed** ·
+    `./scripts/build-macos.sh debug` **EXIT=0** · 번들에 `*.xcstrings` 0건 ·
+    **앱 구동 스크린샷으로 국문 UI 정상 확인**(삭제해도 이 파일이 아무 역할도 하지 않았다는 실증)
+
 - [x] **T-2026-09-28-4 강제 종료(SIGTERM)에서도 정리 — 고아 adb · 저장 유실** — 테스트 3건 신규
   - **계측으로 갈라놓은 것** — 종료 경로가 둘이었고 **하나는 멀쩡했다**
     - ⏎ 정상 종료 → 앱의 adb 자식 사라짐(`onDisappear` → `stop()`). **이 경로에는 결함이 없었다**

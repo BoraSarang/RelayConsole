@@ -58,9 +58,10 @@ mkdir -p "$APP_BUNDLE/Contents/Resources"
 cp "$BINARY" "$APP_BUNDLE/Contents/MacOS/"
 cp "Resources/Info.plist" "$APP_BUNDLE/Contents/"
 cp "error_message_ko.json" "$APP_BUNDLE/Contents/Resources/" 2>/dev/null || true
-if [ -f "Resources/Localizable.xcstrings" ]; then
-  cp "Resources/Localizable.xcstrings" "$APP_BUNDLE/Contents/Resources/"
-fi
+# ★ Resources/Localizable.xcstrings 는 2026-09-28 에 삭제했다 (왜: TODO 참조).
+#   앱은 Sources/RelayConsole/Resources/{en,ko}.lproj/Localizable.strings 만 읽고,
+#   이 파일은 612키로 낙오해 있어 **"여기서 고쳐도 아무 일도 안 일어나는" 함정**이 된다.
+#   Xcode 워크플로가 필요하면 그때 .lproj 에서 다시 생성할 것.
 
 # SwiftPM resource bundle (Bundle.module — L10n 필수, 없으면 fatalError)
 RES_BUNDLE="$BUILD_DIR/$BUILD_MODE_DIR/${APP_NAME}_${APP_NAME}.bundle"

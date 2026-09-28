@@ -602,7 +602,7 @@ actor DeviceMonitor {
             snap.gpuRenderer = state.cacheGpuRenderer
             snap.gpuEsVersion = state.cacheGpuEs
 
-            // ── P2: SENSORS summary (기기内 grep — 단일 shell 문자열)
+            // ── P2: SENSORS summary (기기 내 grep — 단일 shell 문자열)
             if let sensText = batch[.sensors] {
                 let s = AdbClient.parseSensorsSummary(sensText)
                 if s.total != nil || s.activeCount != nil || !s.activeNames.isEmpty {

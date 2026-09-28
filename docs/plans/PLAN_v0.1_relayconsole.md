@@ -93,7 +93,7 @@ DroidMetrics — 링버버 60점 = 5분치 (5s × 60)
 
 - UI는 오직 `inventory.devices`만 읽음 (P0-a)
 - 메인 스레드 차단 금지 · ADB 폴링은 백그라운드
-- **금지:** `dumpsys meminfo` 상시 (3.3s), 대형 dumpsys 미가공 수신 — 기기内 grep
+- **금지:** `dumpsys meminfo` 상시 (3.3s), 대형 dumpsys 미가공 수신 — 기기 내 grep
 
 ### 3-2. 신규 파서 (AdbClient 순수 함수 + Tests)
 

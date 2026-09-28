@@ -31,7 +31,7 @@
 
 | 항목 | 명령 | 주기 |
 |------|------|------|
-| GPU 모델/ES | `dumpsys SurfaceFlinger \| grep GLES` (기기内 grep) | 연결 시 1회 캐시 |
+| GPU 모델/ES | `dumpsys SurfaceFlinger \| grep GLES` (기기 내 grep) | 연결 시 1회 캐시 |
 | GPU busy% | `cat /sys/class/kgsl/kgsl-3d0/gpu_busy_percentage` | 15s |
 | GPU clk | `cat /sys/class/kgsl/kgsl-3d0/gpuclk` | 15s |
 | Sensors | `dumpsys sensorservice \| head -c …` 또는 grep `Total`+active | 15s |
@@ -66,7 +66,7 @@
 - [x] GPU 카드: GLES renderer + ES 버전 + busy% + MHz + 스파크라인 (kgsl 실측 OK)
 - [x] SENSORS 카드: Total/active count + Samsung 활성 이름(주기 ms) + 없을 때 `droid.card.sensors.none`
 - [x] 대시보드·팝오버 **동일** `DroidCards` 8카드 (공용 컴포넌트)
-- [x] merge nil 보존 (P2 10필드) · shell 기기内 grep 단일 문자열
+- [x] merge nil 보존 (P2 10필드) · shell 기기 내 grep 단일 문자열
 - [x] 버전 0.4.0 반영 (Info.plist/build-macos/AppDelegate/Settings/Popover/AGENTS.local)
 - [x] i18n ko/en/xcstrings **69키 3곳 정합**
 - [x] 실기기 육안 1회 — 8카드 형식·센서 이름+주기·GPU/STORAGE 사용자 확인 ✓

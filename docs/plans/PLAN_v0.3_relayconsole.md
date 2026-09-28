@@ -56,7 +56,7 @@ v0.1은 목업에서 의도적으로 축소(6카드·단일 기기·단순 헤�
 - bundleId `com.borasarang.relayconsole`, `relay.*` 키만
 - Scrcpy 버튼 없음
 - iStat/Outpost 라벨 0, material/glass 0, print 0, `.borderedProminent` 기본 0
-- `dumpsys meminfo` 상시 금지 · 대형 dumpsys는 기기内 grep
+- `dumpsys meminfo` 상시 금지 · 대형 dumpsys는 기기 내 grep
 - 2표면 다크 고정 · SOLID `#0f111a` + 카드 `#1c1f2a` r16
 
 ---
@@ -207,17 +207,17 @@ ps -A -o RSS,NAME --sort=-rss | head -5
 ### 5-3. NETWORK
 - **up/down 분리 타일** (↑ sky / ↓ violet) — `netUpMBps` / `netDownMBps` 분리 표시 (합산 문자열 폐기)
 - 이중 area spark (또는 2선 spark)
-- **LTE**: `dumpsys telephony.registry | grep mSignalStrength` (기기内 grep) → RSRP
+- **LTE**: `dumpsys telephony.registry | grep mSignalStrength` (기기 내 grep) → RSRP
 - **Wi-Fi**: `cmd wifi status` → SSID/RSSI — off 시 `Wi-Fi off 안내`
 - IP pill (network 연결 시)
 
-**수집 (5~10s):** 기기内 grep 필수
+**수집 (5~10s):** 기기 내 grep 필수
 
 **파서:** `parseSignal`, `parseWifiStatus`
 
 ### 5-4. THERMAL
 - Status 배지 0~6 (색: 0~1 ok, 2 warn, ≥3 bad)
-- **전체 Temperature 목록** → 존 행 (이름 + 미니바 + °C) — 기기依存 존명 유연 파싱
+- **전체 Temperature 목록** → 존 행 (이름 + 미니바 + °C) — 기기 의존 존명 유연 파싱
 - 오렌지 강조 + 기존 배너 유지
 
 **파서:** `parseThermalZones` (기존 parseThermal 확장 또는 신규)
@@ -378,8 +378,8 @@ event.deviceDisconnected         기기 연결 끊김 %@ / Device disconnected %
 | `-s` 없는 shell 잔존 | 전수 grep 리뷰 + 테스트 |
 | PSI 없는 커널 | swap 규칙 fallback + `—` |
 | power_supply denied | CURRENT nil → `—` |
-| telephony/wifi 출력 기기依存 | 기기内 grep + optional |
-| 메뉴바 라벨過長 | lineLimit + 축약 폴백 |
+| telephony/wifi 출력 기기 의존 | 기기 내 grep + optional |
+| 메뉴바 라벨이 김 | lineLimit + 축약 폴백 |
 | 가짜 2번째 기기 디버그 코드 출시 유입 | `#if DEBUG` 전용 |
 | 다중 폴링 부하 | 기기당 5s/15s 유지, serial 수 ×는 기대 (≤3) |
 

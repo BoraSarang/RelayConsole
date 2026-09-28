@@ -347,7 +347,7 @@ struct InsightsView: View {
     /// 월 그리드 평가마다 DateFormatter 를 새로 만들지 않는다 (생성 1회당 0.178ms 실측)
     private static let monthFmt: DateFormatter = {
         let f = DateFormatter()
-        f.dateFormat = "yyyy年 M月"
+        f.dateFormat = "yyyy年 M月"  // `年`·`月` 는 오탐이 아니라 **형식 문자열** (달력 헤더)  scan-cjk: allow
         f.locale = Locale.current
         return f
     }()

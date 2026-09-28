@@ -38,7 +38,7 @@
 
 | 작업 | 명령 | 실측 결과 |
 |------|------|-----------|
-| 폴더 목록 | `ls -la --full-time <dir>/` | 이름·권한·소유자·크기·**纳秒 시각+타임존** 1회 조회 · **~70ms/폴더** |
+| 폴더 목록 | `ls -la --full-time <dir>/` | 이름·권한·소유자·크기·**나노초 시각+타임존** 1회 조회 · **~70ms/폴더** |
 | 재귀 검색 | `find -L <dir> -type f …` | toybox 0.8.12 · `-type -name -size -maxdepth -exec -printf` 전부 지원 · **748파일 / 0.3초** |
 | 파일 메타 | `stat -c "%n\|%s\|%Y\|%A"` | 동작 |
 | 폴더 크기 | `du -s` | 소규모 즉시 (대형 폴더는 느림 — 상시 호출 금지) |
@@ -49,7 +49,7 @@
 
 1. **`/sdcard`는 심볼릭 링크**(`/sdcard → /storage/self/primary → /storage/emulated/0`)
    - `find /sdcard -type f` → **0건 반환(무오류)** → 반드시 `find -L`
-   - `ls -la /sdcard` → 링크自身만 표시 → 목록은 **`ls -la /sdcard/` (.trailing slash)** 로 해야 함
+   - `ls -la /sdcard` → 링크 자신만 표시 → 목록은 **`ls -la /sdcard/` (.trailing slash)** 로 해야 함
 2. **`content query`(MediaStore CLI) 부적합** — 복수 컬럼 projection 미지원 · 느림(219행 1.2초) · 썸네일 URI 실패 → 브라우징은 `ls`/`find`가 정답
 3. **`adb shell`은 argv를 인용하지 않고 공백으로만 연결** (2026-09-25 실측)
    - `adb shell ls "/path/Windows 11/"` → 원격 sh가 재분리 → `ls: /path/Windows: No such file or directory`
@@ -89,10 +89,10 @@ lrw-r--r-- 1 root    root          21 2022-01-01 09:00:00.000000000 +0900 /sdcar
 
 | 항목 | 결론 |
 |------|------|
-| 기기側 썸네일 도구 | **없음** — MediaStore 썸네일 URI 실패 · 이미지 변환 도구 없음 |
+| 기기 측 썸네일 도구 | **없음** — MediaStore 썸네일 URI 실패 · 이미지 변환 도구 없음 |
 | adb sync | **범위 읽기 없음** (파일 단위 전체 이동만) |
 | 이미지 미리보기 | 전체 pull → 로컬 축소·캐시 (`GalleryStore` 패턴 계승) 또는 즉시 pull 후 시스템 앱 열기 |
-| 영상 썸네일 | **불가** (기기側 추출 불가) — 파일 정보(크기·시각)만 표시 |
+| 영상 썸네일 | **불가** (기기 측 추출 불가) — 파일 정보(크기·시각)만 표시 |
 | 대용량 가드 | 50MB 초과 파일은 더블클릭 열기 거부 + "가져오기 후 확인" 안내 |
 
 ---
