@@ -794,3 +794,5 @@
 "calendar.failed.title" = "Could not add";
 "calendar.failed" = "Failed: %@";
 "calendar.note.added" = "Added to calendar: %@";
+"droid.card.stale" = "last %@";
+"droid.card.stale.hint" = "stale value";
