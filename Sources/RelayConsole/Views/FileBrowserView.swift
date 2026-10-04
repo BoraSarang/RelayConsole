@@ -8,7 +8,6 @@ struct FileBrowserContent: View {
     @ObservedObject private var ctl = FileBrowserController.shared
 
     @State private var selection: Set<String> = []
-    @State private var pathInput: String = FileBrowserController.shared.path
     @State private var query: String = ""
     @State private var sortKey: FileBrowserLogic.SortKey = .name
     @State private var sortAscending = true
@@ -46,14 +45,32 @@ struct FileBrowserContent: View {
         .background(OPColor.popBG)
         .preferredColorScheme(ThemeManager.shared.mode.preferred)
         .onAppear {
-            pathInput = ctl.path
             if ctl.serial.isEmpty, let serial = store.selectedSerial {
                 ctl.open(serial: serial)
             }
         }
-        .onChange(of: ctl.path) { _, newPath in
-            pathInput = newPath
+        .onChange(of: ctl.path) {
             selection = []
+        }
+        .confirmationDialog(
+            L10n.format("files.delete.title", ctl.pendingDelete?.count ?? 0),
+            isPresented: Binding(
+                get: { ctl.pendingDelete != nil },
+                set: { if !$0 { ctl.cancelDelete() } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button(L10n.string("files.action.delete"), role: .destructive) {
+                ctl.confirmDelete()
+                selection = []
+            }
+            Button(L10n.string("files.action.cancel"), role: .cancel) {
+                ctl.cancelDelete()
+            }
+        } message: {
+            if let targets = ctl.pendingDelete {
+                Text(L10n.format("files.delete.message", deletePreview(targets)))
+            }
         }
     }
 
@@ -102,6 +119,25 @@ struct FileBrowserContent: View {
             .background(selection.isEmpty ? OPColor.card : OPColor.cta.opacity(0.16), in: Capsule())
             .overlay(Capsule().stroke(selection.isEmpty ? OPColor.border : OPColor.cta, lineWidth: 1))
             .disabled(selection.isEmpty || ctl.busy || ctl.loading)
+            Button {
+                ctl.requestDelete(selection: selection)
+            } label: {
+                Image(systemName: "trash")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(selection.isEmpty ? OPColor.inkDim : OPColor.bad)
+                    .frame(width: 26, height: 26)
+                    .background(
+                        selection.isEmpty ? OPColor.card : OPColor.bad.opacity(0.14),
+                        in: RoundedRectangle(cornerRadius: 13)
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 13)
+                            .stroke(selection.isEmpty ? OPColor.border : OPColor.bad, lineWidth: 1)
+                    )
+            }
+            .buttonStyle(.plain)
+            .help(L10n.string("files.action.delete"))
+            .disabled(selection.isEmpty || ctl.busy || ctl.loading)
         }
         .padding(.horizontal, OPSpace.md)
         .padding(.vertical, 8)
@@ -111,16 +147,37 @@ struct FileBrowserContent: View {
 
     private var pathBar: some View {
         HStack(spacing: 6) {
+            iconButton("chevron.backward", help: L10n.string("files.nav.back"), disabled: !ctl.canGoBack) { ctl.goBack() }
+            iconButton("chevron.forward", help: L10n.string("files.nav.forward"), disabled: !ctl.canGoForward) { ctl.goForward() }
             iconButton("chevron.up", help: L10n.string("files.nav.up")) { ctl.up() }
-            TextField("", text: $pathInput)
-                .textFieldStyle(.plain)
-                .font(OPFont.number(11))
-                .foregroundStyle(OPColor.ink)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 5)
-                .background(OPColor.card, in: RoundedRectangle(cornerRadius: 6))
-                .overlay(RoundedRectangle(cornerRadius: 6).stroke(OPColor.border, lineWidth: 1))
-                .onSubmit { ctl.navigate(to: pathInput) }
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 2) {
+                    let crumbs = FileBrowserLogic.crumbs(ctl.path)
+                    ForEach(Array(crumbs.enumerated()), id: \.offset) { idx, crumb in
+                        if idx > 0 {
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 8, weight: .bold))
+                                .foregroundStyle(OPColor.inkDim.opacity(0.6))
+                        }
+                        Button {
+                            ctl.navigate(to: crumb.path)
+                        } label: {
+                            Text(crumb.label)
+                                .font(OPFont.number(11))
+                                .foregroundStyle(idx == crumbs.count - 1 ? OPColor.cta : OPColor.ink)
+                                .lineLimit(1)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 5)
+                                .background(
+                                    idx == crumbs.count - 1
+                                        ? OPColor.cta.opacity(0.14) : Color.clear,
+                                    in: RoundedRectangle(cornerRadius: 6)
+                                )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
             HStack(spacing: 4) {
                 Image(systemName: "magnifyingglass")
                     .font(.system(size: 10))
@@ -144,24 +201,35 @@ struct FileBrowserContent: View {
         .padding(.vertical, 6)
     }
 
-    private func iconButton(_ symbol: String, help: String, action: @escaping () -> Void) -> some View {
+    private func iconButton(
+        _ symbol: String,
+        help: String,
+        disabled: Bool = false,
+        action: @escaping () -> Void
+    ) -> some View {
         Button(action: action) {
             Image(systemName: symbol)
                 .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(OPColor.inkDim)
+                .foregroundStyle(disabled ? OPColor.inkDim.opacity(0.35) : OPColor.inkDim)
                 .frame(width: 26, height: 26)
                 .background(OPColor.card, in: RoundedRectangle(cornerRadius: 6))
                 .overlay(RoundedRectangle(cornerRadius: 6).stroke(OPColor.border, lineWidth: 1))
         }
         .buttonStyle(.plain)
         .help(help)
+        .disabled(disabled)
     }
 
-    // MARK: 사이드바 — 즐겨찾기
+    // MARK: 사이드바 — 즐겨찾기 + 폴더 트리
 
     private var sidebar: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 2) {
+                Text(L10n.string("files.sidebar.favorites"))
+                    .font(OPFont.body(10))
+                    .foregroundStyle(OPColor.inkDim.opacity(0.8))
+                    .padding(.horizontal, 10)
+                    .padding(.top, 4)
                 ForEach(Array(FileBrowserLogic.favorites.enumerated()), id: \.offset) { _, fav in
                     Button {
                         ctl.navigate(to: fav.path)
@@ -187,10 +255,74 @@ struct FileBrowserContent: View {
                         in: RoundedRectangle(cornerRadius: 6)
                     )
                 }
+                Text(L10n.string("files.sidebar.folders"))
+                    .font(OPFont.body(10))
+                    .foregroundStyle(OPColor.inkDim.opacity(0.8))
+                    .padding(.horizontal, 10)
+                    .padding(.top, 8)
+                ForEach(FileBrowserController.treeRoots, id: \.self) { root in
+                    treeRow(root, depth: 0)
+                }
             }
             .padding(OPSpace.sm)
         }
         .background(OPColor.card.opacity(0.35))
+    }
+
+    /// 폴더 트리 행 — 삼각형=펼치기, 라벨=이동. 자식은 펼칠 때 lazy 로드
+    private func treeRow(_ dir: String, depth: Int) -> AnyView {
+        let label = dir == "/" ? "기기" : (dir as NSString).lastPathComponent
+        let expanded = ctl.treeExpanded.contains(dir)
+        let kids = ctl.treeChildren[dir] ?? []
+        let isCurrent = ctl.path == dir
+        return AnyView(VStack(spacing: 0) {
+            HStack(spacing: 2) {
+                Button {
+                    ctl.toggleTree(dir)
+                } label: {
+                    Image(systemName: expanded ? "chevron.down" : "chevron.right")
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundStyle(OPColor.inkDim)
+                        .frame(width: 14, height: 18)
+                }
+                .buttonStyle(.plain)
+                Button {
+                    ctl.navigate(to: dir)
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "folder")
+                            .font(.system(size: 11))
+                            .frame(width: 14)
+                        Text(label)
+                            .font(OPFont.body(11))
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                        Spacer()
+                    }
+                    .foregroundStyle(isCurrent ? OPColor.cta : OPColor.inkDim)
+                    .padding(.vertical, 4)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.leading, CGFloat(depth) * 12)
+            .background(
+                isCurrent ? OPColor.cta.opacity(0.14) : Color.clear,
+                in: RoundedRectangle(cornerRadius: 6)
+            )
+            if expanded {
+                if kids.isEmpty && ctl.treeChildren[dir] == nil {
+                    ProgressView()
+                        .controlSize(.mini)
+                        .padding(.leading, CGFloat(depth + 1) * 12 + 14)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                } else {
+                    ForEach(kids) { kid in
+                        treeRow(kid.path, depth: depth + 1)
+                    }
+                }
+            }
+        })
     }
 
     private func iconFor(_ label: String) -> String {
@@ -318,11 +450,29 @@ struct FileBrowserContent: View {
         .contextMenu {
             Button(L10n.string("files.action.open")) { ctl.openItem(item) }
             Button(L10n.string("files.pull.button")) { ctl.pull(selection: [item.id]) }
+            Button(L10n.string("files.action.delete"), role: .destructive) {
+                ctl.requestDelete(selection: [item.id])
+            }
         }
     }
 
-    private func fileIcon(_ item: FileBrowserLogic.Item) -> String {
-        switch (item.name as NSString).pathExtension.lowercased() {
+    /// 확인 다이얼로그 미리보기 — 최대 5개 이름 + 나머지는 개수만
+    private func deletePreview(_ targets: [FileBrowserLogic.Item]) -> String {
+        let names = targets.prefix(5).map(\.name).joined(separator: ", ")
+        return targets.count > 5 ? "\(names), … (+\(targets.count - 5))" : names
+    }
+
+    /// 진행 문구 — "전송 중 3/12 · a.zip · 45%". % 모르면 개수·이름만 (꾸미지 않는다)
+    private func progressText(_ p: FileBrowserController.TransferProgress) -> String {
+        let key = p.direction == .pull ? "files.progress.pullItem" : "files.progress.pushItem"
+        var s = L10n.format(key, p.fileIndex, p.fileCount, p.fileName)
+        if let f = p.fraction {
+            s += " · \(Int((f * 100).rounded()))%"
+        }
+        return s
+    }
+
+    private func fileIcon(_ item: FileBrowserLogic.Item) -> String {        switch (item.name as NSString).pathExtension.lowercased() {
         case "jpg", "jpeg", "png", "gif", "heic", "webp": return "photo.fill"
         case "mp4", "mkv", "mov", "avi": return "film.fill"
         case "mp3", "wav", "flac", "m4a": return "music.note"
@@ -337,7 +487,31 @@ struct FileBrowserContent: View {
 
     private var statusBar: some View {
         HStack(spacing: 8) {
-            if ctl.loading || ctl.busy {
+            if let p = ctl.progress {
+                if let f = p.fraction {
+                    ProgressView(value: f)
+                        .controlSize(.mini)
+                        .frame(width: 120)
+                } else {
+                    ProgressView()
+                        .controlSize(.mini)
+                }
+                Text(progressText(p))
+                    .font(OPFont.number(10))
+                    .foregroundStyle(OPColor.cta)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                Spacer()
+                Button {
+                    ctl.cancelTransfer()
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 14))
+                        .foregroundStyle(OPColor.warn)
+                }
+                .buttonStyle(.plain)
+                .help(L10n.string("files.transfer.cancel"))
+            } else if ctl.loading || ctl.busy {
                 ProgressView()
                     .controlSize(.mini)
                 Text(ctl.statusMessage ?? L10n.string("files.status.listing"))

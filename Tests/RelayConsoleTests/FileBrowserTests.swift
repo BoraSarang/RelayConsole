@@ -192,7 +192,6 @@ struct FileBrowserTests {
     }
 
     // MARK: 중복 회피 · 미리보기 가드
-
     @Test func uniqueDestCollisions() {
         let taken: Set<String> = ["/tmp/d/a.png", "/tmp/d/a (1).png"]
         let dest = FileBrowserLogic.uniqueDest(dir: "/tmp/d", name: "a.png") { taken.contains($0) }
@@ -210,6 +209,67 @@ struct FileBrowserTests {
         #expect(FileBrowserLogic.previewAllows(size: FileBrowserLogic.previewMaxBytes))
         #expect(!FileBrowserLogic.previewAllows(size: FileBrowserLogic.previewMaxBytes + 1))
         #expect(!FileBrowserLogic.previewAllows(size: -1))
+    }
+
+    // MARK: 삭제 가드 · 진행률
+
+    @Test func canDeleteOnlyInsideUserDataRoots() {
+        #expect(FileBrowserLogic.canDelete(path: "/sdcard/Download/a.png"))
+        #expect(FileBrowserLogic.canDelete(path: "/sdcard/DCIM/Camera/IMG.jpg"))
+        #expect(FileBrowserLogic.canDelete(path: "/data/local/tmp/x.log"))
+        // 루트 자체·상위·외부는 거부
+        #expect(!FileBrowserLogic.canDelete(path: "/sdcard"))
+        #expect(!FileBrowserLogic.canDelete(path: "/sdcard/"))
+        #expect(!FileBrowserLogic.canDelete(path: "/data/local/tmp"))
+        #expect(!FileBrowserLogic.canDelete(path: "/"))
+        #expect(!FileBrowserLogic.canDelete(path: ""))
+        #expect(!FileBrowserLogic.canDelete(path: "/system/build.prop"))
+        #expect(!FileBrowserLogic.canDelete(path: "/data/data/com.app/f"))
+        // 접두어 함정 — "/sdcard" 로 시작해도 하위가 아니면 거부
+        #expect(!FileBrowserLogic.canDelete(path: "/sdcardFake/x"))
+    }
+
+    @Test func deleteArgsQuotesPath() {
+        #expect(FileBrowserLogic.deleteArgs(path: "/sdcard/a.png") == [
+            "shell", "rm -rf '/sdcard/a.png'"
+        ])
+        #expect(FileBrowserLogic.deleteArgs(path: "/sdcard/My File.jpg") == [
+            "shell", "rm -rf '/sdcard/My File.jpg'"
+        ])
+    }
+
+    @Test func progressFractionClampsAndRejectsUnknown() {
+        #expect(FileBrowserLogic.progressFraction(done: 50, total: 100) == 0.5)
+        #expect(FileBrowserLogic.progressFraction(done: 0, total: 100) == 0.0)
+        #expect(FileBrowserLogic.progressFraction(done: 200, total: 100) == 1.0)
+        #expect(FileBrowserLogic.progressFraction(done: 10, total: 0) == nil)
+        #expect(FileBrowserLogic.progressFraction(done: -1, total: 100) == nil)
+    }
+
+    @Test func parseByteCountReadsStatAndDu() {
+        #expect(FileBrowserLogic.parseByteCount("69602\n") == 69602)
+        #expect(FileBrowserLogic.parseByteCount("123456\t/sdcard/Download") == 123456)
+        #expect(FileBrowserLogic.parseByteCount("") == nil)
+        #expect(FileBrowserLogic.parseByteCount("nope") == nil)
+    }
+
+    // MARK: 내비게이션
+
+    @Test func crumbsSplitPath() {
+        let c = FileBrowserLogic.crumbs("/sdcard/Download/DCIM")
+        #expect(c.map(\.label) == ["sdcard", "Download", "DCIM"])
+        #expect(c.map(\.path) == ["/sdcard", "/sdcard/Download", "/sdcard/Download/DCIM"])
+        #expect(FileBrowserLogic.crumbs("/").map(\.label) == ["기기"])
+        #expect(FileBrowserLogic.crumbs("/sdcard/").map(\.path) == ["/sdcard"])
+    }
+
+    @Test func childDirsOnlyDirsSorted() {
+        let items = [
+            mk("z.txt", dir: false),
+            mk("B", dir: true),
+            mk("a", dir: true),
+        ]
+        #expect(FileBrowserLogic.childDirs(items).map(\.name) == ["a", "B"])
     }
 
     // MARK: 헬퍼

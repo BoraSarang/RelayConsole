@@ -2,7 +2,7 @@ import Foundation
 import AppKit
 
 /// ADB 파일 탐색기 순수 로직 — ls 파싱 · 경로 · 정렬 · 필터 · adb 인자 (테스트 대상)
-/// 범위: 읽기 + 전송 (pull/push) — 삭제·이동·설치는 OUT (PLAN_file_browser §1)
+/// 범위: 읽기 + 전송 (pull/push) + 삭제 (사용자 확인 + 화이트리스트 경로만)
 enum FileBrowserLogic {
 
     // MARK: - 모델
@@ -200,6 +200,31 @@ enum FileBrowserLogic {
         return dir.hasSuffix("/") ? dir : dir + "/"
     }
 
+    // MARK: - 내비게이션 (breadcrumb · 트리)
+
+    /// 경로 조각 — (표시명, 전체경로). "/sdcard/Download" → [("sdcard","/sdcard"),("Download","/sdcard/Download")]
+    static func crumbs(_ path: String) -> [(label: String, path: String)] {
+        var p = path
+        while p.hasSuffix("/"), p.count > 1 { p.removeLast() }
+        guard !p.isEmpty else { return [("기기", "/")] }
+        if p == "/" { return [("기기", "/")] }
+        let parts = p.split(separator: "/").map(String.init)
+        var out: [(String, String)] = []
+        var acc = ""
+        for part in parts {
+            acc += "/" + part
+            out.append((part, acc))
+        }
+        return out
+    }
+
+    /// 트리 자식 — 디렉터리만, 이름순
+    static func childDirs(_ items: [Item]) -> [Item] {
+        items.filter(\.isDir).sorted {
+            $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
+        }
+    }
+
     /// 로컬 중복 회피 — "a.png" 선점 시 "a (1).png"
     static func uniqueDest(dir: String, name: String, exists: (String) -> Bool) -> String {
         let base = (name as NSString).deletingPathExtension
@@ -235,15 +260,55 @@ enum FileBrowserLogic {
     static func pushArgs(local: String, remoteDir: String) -> [String] {
         ["push", local, normalizedListDir(remoteDir)]
     }
+
+    /// 삭제 허용 루트 — 사용자 데이터 범위. 밖은 **거부** (되돌릴 수 없으므로)
+    /// 즐겨찾기와 같은 범위 (/sdcard 전체 + /data/local/tmp)
+    static func canDelete(path: String) -> Bool {
+        var p = path
+        while p.hasSuffix("/"), p.count > 1 { p.removeLast() }
+        guard !p.isEmpty, p != "/" else { return false }
+        let roots = ["/sdcard", "/data/local/tmp"]
+        // 루트 자체는 금지 · 접두어 함정 차단 ("/sdcardFake" 등)
+        return roots.contains { r in p != r && p.hasPrefix(r + "/") }
+    }
+
+    static func deleteArgs(path: String) -> [String] {
+        ["shell", "rm -rf " + shellQuote(path)]
+    }
+
+    // MARK: - 진행률
+
+    /// 0…1 분율 — total 미확인·음수면 nil (모르면 indeterminate 로 표시, 거짓 % 금지)
+    static func progressFraction(done: Int64, total: Int64) -> Double? {
+        guard total > 0, done >= 0 else { return nil }
+        return min(1, Double(done) / Double(total))
+    }
+
+    /// `stat -c %s` / `du -sb` 출력 첫 토큰 — 바이트 수
+    static func parseByteCount(_ text: String) -> Int64? {
+        let first = text.split(whereSeparator: \.isWhitespace).first.map(String.init) ?? ""
+        guard let v = Int64(first), v >= 0 else { return nil }
+        return v
+    }
 }
 
 // MARK: - 컨트롤러 (adb IO)
 
-/// 파일 탐색기 컨트롤러 — 목록/가져오기/전송 (MainActor)
-/// 실패 시 **stderr 원문을 상태줄에 노출** ([표시②]) + `E-MAC-ADB-0004~0006` 로그
+/// 파일 탐색기 컨트롤러 — 목록/가져오기/전송/삭제 (MainActor)
+/// 실패 시 **stderr 원문을 상태줄에 노출** ([표시②]) + `E-MAC-ADB-0004~0007` 로그
 @MainActor
 final class FileBrowserController: ObservableObject {
     static let shared = FileBrowserController()
+
+    /// 전송 진행 — nil = 진행 중 아님. fraction nil = indeterminate (모르면 %를 꾸미지 않는다)
+    struct TransferProgress: Equatable {
+        enum Direction: String { case pull, push }
+        var direction: Direction
+        var fileIndex: Int
+        var fileCount: Int
+        var fileName: String
+        var fraction: Double?
+    }
 
     @Published private(set) var serial: String = ""
     @Published private(set) var path: String = "/sdcard"
@@ -252,6 +317,109 @@ final class FileBrowserController: ObservableObject {
     @Published private(set) var busy = false
     @Published var statusMessage: String?
     @Published private(set) var destDir: String
+    @Published private(set) var progress: TransferProgress?
+    /// 삭제 확인 대기 — nil 이 아니면 확인 다이얼로그 표시
+    @Published private(set) var pendingDelete: [FileBrowserLogic.Item]?
+    /// 진행률 폴러 무효화 토큰 — 완료·취소 시 증가, 묵은 폴러의 화면 갱신 차단
+    private var progressToken = 0
+    /// 폴러가 읽는 슬롯 — 워커가 현재 항목마다 갱신 (값 복사, Sendable)
+    private var pollSlot: PollSlot?
+
+    /// 폴링 슬롯 — 폴러가 읽는다 (Sendable, 값 복사)
+    struct PollSlot: Sendable {
+        /// pull: 로컬 증가분 경로. push: nil (원격 조회)
+        var localPath: String?
+        /// 예상 전체 바이트 — 0 이하면 indeterminate
+        var expected: Int64
+        /// push: 원격 조회 스펙. pull: nil
+        var remote: RemoteSpec?
+    }
+
+    struct RemoteSpec: Sendable {
+        var adb: String
+        var serial: String
+        var path: String
+        var isDir: Bool
+    }
+
+    /// 진행 폴러 시작 — 워커와 형제 태스크 (중첩 detached 는 격리 에러)
+    /// - Returns: 무효화 토큰 + 폴러 핸들 (종료 시 워커가 cancel)
+    private func startProgressPoller() -> (Int, Task<Void, Never>) {
+        progressToken += 1
+        progress = nil
+        pollSlot = nil
+        let token = progressToken
+        let poller = Task.detached(priority: .utility) {
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 200_000_000)
+                guard !Task.isCancelled else { break }
+                let alive: Bool = await MainActor.run { self.progressToken == token }
+                guard alive else { break }
+                let slot: PollSlot? = await MainActor.run { self.pollSlot }
+                guard let slot, slot.expected > 0 else { continue }
+                let cur: Int64?
+                if let local = slot.localPath {
+                    cur = (try? FileManager.default.attributesOfItem(atPath: local)[.size] as? NSNumber)?
+                        .int64Value ?? 0
+                } else if let r = slot.remote {
+                    cur = Self.remoteByteSize(adb: r.adb, serial: r.serial, path: r.path, isDir: r.isDir)
+                } else {
+                    cur = nil
+                }
+                let frac = cur.flatMap { FileBrowserLogic.progressFraction(done: $0, total: slot.expected) }
+                await MainActor.run {
+                    if self.progressToken == token { self.progress?.fraction = frac }
+                }
+            }
+        }
+        return (token, poller)
+    }
+
+    /// 진행 종료 — 상태 정리 (폴러 취소 포함)
+    private func finishProgress(poller: Task<Void, Never>?) {
+        poller?.cancel()
+        progressToken += 1
+        progress = nil
+        pollSlot = nil
+    }
+
+    // MARK: 전송 취소
+
+    /// 실행 중인 adb 프로세스 + 취소 플래그 — 취소는 현재 항목에서 멈춘다
+    private var currentProc: Process?
+    private var cancelRequested = false
+
+    /// 전송 취소 — 실행 중 프로세스를 죽인다 (부분 파일은 남을 수 있음)
+    func cancelTransfer() {
+        guard busy else { return }
+        cancelRequested = true
+        currentProc?.terminate()
+    }
+
+    /// 취소 가능한 실행 — 프로세스를 등록해 두었다가 끝나면 해제
+    nonisolated private static func runTransfer(
+        adb: String,
+        args: [String],
+        register: @Sendable (Process?) async -> Void
+    ) async -> (out: String, err: String, code: Int32) {
+        let proc = Process()
+        proc.executableURL = URL(fileURLWithPath: adb)
+        proc.arguments = args
+        let pipe = Pipe()
+        proc.standardOutput = pipe
+        proc.standardError = pipe
+        do {
+            try proc.run()
+        } catch {
+            return ("", error.localizedDescription, -1)
+        }
+        await register(proc)
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        proc.waitUntilExit()
+        await register(nil)
+        let text = String(decoding: data, as: UTF8.self)
+        return (text, text, proc.terminationStatus)
+    }
 
     static let destKey = "relay.files.destDir"
 
@@ -263,12 +431,29 @@ final class FileBrowserController: ObservableObject {
 
     // MARK: 진입 · 이동
 
+    /// 뒤로/앞으로 — Finder식 히스토리
+    @Published private(set) var canGoBack = false
+    @Published private(set) var canGoForward = false
+    private var backStack: [String] = []
+    private var forwardStack: [String] = []
+
+    /// 트리 — 루트 고정 (/sdcard + /data/local/tmp, 삭제 허용 범위와 동일).
+    /// 자식은 펼칠 때 lazy 로드. 조용한 로드 (상태줄 오염 금지)
+    static let treeRoots = ["/sdcard", "/data/local/tmp"]
+    @Published private(set) var treeChildren: [String: [FileBrowserLogic.Item]] = [:]
+    @Published private(set) var treeExpanded: Set<String> = []
+
     func open(serial: String) {
         if serial != self.serial {
             self.serial = serial
             path = "/sdcard"
             items = []
             statusMessage = nil
+            backStack = []
+            forwardStack = []
+            updateNavFlags()
+            treeChildren = [:]
+            treeExpanded = []
         }
         DebugLogger.shared.info(
             "FileBrowser",
@@ -277,12 +462,74 @@ final class FileBrowserController: ObservableObject {
         load()
     }
 
-    func navigate(to target: String) {
+    func navigate(to target: String, recordHistory: Bool = true) {
         guard !busy, !loading else { return }
         let clean = target.trimmingCharacters(in: .whitespaces)
-        guard !clean.isEmpty else { return }
+        guard !clean.isEmpty, clean != path else { return }
+        if recordHistory {
+            backStack.append(path)
+            forwardStack = []
+        }
         path = clean
+        updateNavFlags()
         load()
+    }
+
+    func goBack() {
+        guard canGoBack, !busy, !loading, let p = backStack.popLast() else { return }
+        forwardStack.append(path)
+        path = p
+        updateNavFlags()
+        load()
+    }
+
+    func goForward() {
+        guard canGoForward, !busy, !loading, let p = forwardStack.popLast() else { return }
+        backStack.append(path)
+        path = p
+        updateNavFlags()
+        load()
+    }
+
+    private func updateNavFlags() {
+        canGoBack = !backStack.isEmpty
+        canGoForward = !forwardStack.isEmpty
+    }
+
+    /// 트리 펼치기/접기 — 펼 때 자식 없으면 조용히 로드
+    func toggleTree(_ dir: String) {
+        if treeExpanded.contains(dir) {
+            treeExpanded.remove(dir)
+        } else {
+            treeExpanded.insert(dir)
+            if treeChildren[dir] == nil {
+                loadTreeChildren(dir)
+            }
+        }
+    }
+
+    private func loadTreeChildren(_ dir: String) {
+        guard !serial.isEmpty, let adb = DeviceMonitor.adbPathNow() else { return }
+        let serial = self.serial
+        Task.detached(priority: .utility) {
+            let res = Self.runCapture(
+                adb: adb,
+                args: ["-s", serial] + FileBrowserLogic.listArgs(dir: dir)
+            )
+            guard res.code == 0 else { return }
+            let dirs = FileBrowserLogic.childDirs(FileBrowserLogic.parseLs(res.out, dir: dir))
+            await MainActor.run {
+                // 다른 기기로 바뀌었으면 버린다
+                guard self.serial == serial else { return }
+                self.treeChildren[dir] = dirs
+            }
+        }
+    }
+
+    /// 기기 변경 시 트리 무효화 — 경로가 통째로 달라진다
+    private func invalidateTree() {
+        treeChildren = [:]
+        treeExpanded = []
     }
 
     func up() {
@@ -345,23 +592,44 @@ final class FileBrowserController: ObservableObject {
         }
         busy = true
         statusMessage = nil
+        cancelRequested = false
+        currentProc = nil
         let adb = DeviceMonitor.adbPathNow()
         let serial = self.serial
         let dest = destDir
+        let (token, poller) = startProgressPoller()
         Task.detached(priority: .utility) {
             var okCount = 0
             var errorText: String?
             if let adb {
                 let fm = FileManager.default
                 try? fm.createDirectory(atPath: dest, withIntermediateDirectories: true)
-                for item in chosen {
+                let total = chosen.count
+                for (i, item) in chosen.enumerated() {
                     let target = FileBrowserLogic.uniqueDest(dir: dest, name: item.name) {
                         fm.fileExists(atPath: $0)
                     }
-                    let res = Self.runCapture(
+                    await MainActor.run {
+                        guard self.progressToken == token else { return }
+                        self.progress = TransferProgress(
+                            direction: .pull, fileIndex: i + 1, fileCount: total,
+                            fileName: item.name, fraction: nil
+                        )
+                        // 디렉터리는 전체 크기를 모르니 슬롯 비움 (indeterminate)
+                        self.pollSlot = (!item.isDir && item.size > 0)
+                            ? PollSlot(localPath: target, expected: item.size, remote: nil)
+                            : nil
+                    }
+                    let res = await Self.runTransfer(
                         adb: adb,
-                        args: ["-s", serial] + FileBrowserLogic.pullArgs(remote: item.path, local: target)
+                        args: ["-s", serial] + FileBrowserLogic.pullArgs(remote: item.path, local: target),
+                        register: { [weak self] proc in
+                            await MainActor.run { self?.currentProc = proc }
+                        }
                     )
+                    if await MainActor.run(body: { self.cancelRequested }) { break }
+                    let alive = await MainActor.run { self.progressToken == token }
+                    guard alive else { break }
                     if res.code == 0, fm.fileExists(atPath: target) {
                         okCount += 1
                     } else {
@@ -378,8 +646,13 @@ final class FileBrowserController: ObservableObject {
                 await DebugLogger.shared.error("FileBrowser", "[ERROR] E-MAC-ADB-0005 adb 바이너리 없음")
             }
             await MainActor.run {
+                self.finishProgress(poller: poller)
                 self.busy = false
-                if let errorText, !errorText.isEmpty {
+                self.currentProc = nil
+                if self.cancelRequested {
+                    self.cancelRequested = false
+                    self.statusMessage = L10n.string("files.transfer.cancelled")
+                } else if let errorText, !errorText.isEmpty {
                     self.statusMessage = errorText
                 } else if errorText != nil {
                     self.statusMessage = L10n.string("files.error.pull")
@@ -398,18 +671,46 @@ final class FileBrowserController: ObservableObject {
         guard !targets.isEmpty else { return }
         busy = true
         statusMessage = nil
+        cancelRequested = false
+        currentProc = nil
         let adb = DeviceMonitor.adbPathNow()
         let serial = self.serial
         let dir = path
+        let (token, poller) = startProgressPoller()
         Task.detached(priority: .utility) {
             var okCount = 0
             var errorText: String?
             if let adb {
-                for url in targets {
-                    let res = Self.runCapture(
+                let total = targets.count
+                for (i, url) in targets.enumerated() {
+                    let remotePath = FileBrowserLogic.join(dir: dir, name: url.lastPathComponent)
+                    let expected = Self.localTreeSize(url)
+                    let isDir = (try? FileManager.default.attributesOfItem(atPath: url.path)[.type]
+                        as? FileAttributeType) == .typeDirectory
+                    await MainActor.run {
+                        guard self.progressToken == token else { return }
+                        self.progress = TransferProgress(
+                            direction: .push, fileIndex: i + 1, fileCount: total,
+                            fileName: url.lastPathComponent, fraction: nil
+                        )
+                        // 원격 증가분 폴링 — stat/du 가 없으면 indeterminate 로 둔다
+                        self.pollSlot = expected > 0
+                            ? PollSlot(
+                                localPath: nil, expected: expected,
+                                remote: RemoteSpec(adb: adb, serial: serial, path: remotePath, isDir: isDir)
+                            )
+                            : nil
+                    }
+                    let res = await Self.runTransfer(
                         adb: adb,
-                        args: ["-s", serial] + FileBrowserLogic.pushArgs(local: url.path, remoteDir: dir)
+                        args: ["-s", serial] + FileBrowserLogic.pushArgs(local: url.path, remoteDir: dir),
+                        register: { [weak self] proc in
+                            await MainActor.run { self?.currentProc = proc }
+                        }
                     )
+                    if await MainActor.run(body: { self.cancelRequested }) { break }
+                    let alive = await MainActor.run { self.progressToken == token }
+                    guard alive else { break }
                     if res.code == 0 {
                         okCount += 1
                     } else {
@@ -426,13 +727,19 @@ final class FileBrowserController: ObservableObject {
                 await DebugLogger.shared.error("FileBrowser", "[ERROR] E-MAC-ADB-0006 adb 바이너리 없음")
             }
             await MainActor.run {
+                self.finishProgress(poller: poller)
                 self.busy = false
-                if let errorText, !errorText.isEmpty {
+                self.currentProc = nil
+                if self.cancelRequested {
+                    self.cancelRequested = false
+                    self.statusMessage = L10n.string("files.transfer.cancelled")
+                } else if let errorText, !errorText.isEmpty {
                     self.statusMessage = errorText
                 } else if errorText != nil {
                     self.statusMessage = L10n.string("files.error.push")
                 } else {
                     self.statusMessage = L10n.format("files.push.done", "\(okCount)")
+                    self.invalidateTree()
                     self.reloadQuietly(adb: adb, serial: serial, dir: dir)
                 }
             }
@@ -477,31 +784,51 @@ final class FileBrowserController: ObservableObject {
         let target = previewDir.appendingPathComponent(item.name).path
         busy = true
         statusMessage = L10n.string("files.preview.pulling")
+        cancelRequested = false
+        currentProc = nil
         let adb = DeviceMonitor.adbPathNow()
         let serial = self.serial
+        let (token, poller) = startProgressPoller()
         Task.detached(priority: .utility) {
             var errorText: String?
             var opened = false
             if let adb {
+                await MainActor.run {
+                    self.progress = TransferProgress(
+                        direction: .pull, fileIndex: 1, fileCount: 1,
+                        fileName: item.name, fraction: nil
+                    )
+                    self.pollSlot = item.size > 0
+                        ? PollSlot(localPath: target, expected: item.size, remote: nil)
+                        : nil
+                }
                 let res = Self.runCapture(
                     adb: adb,
                     args: ["-s", serial] + FileBrowserLogic.pullArgs(remote: item.path, local: target)
                 )
-                if res.code == 0, FileManager.default.fileExists(atPath: target) {
-                    opened = true
-                } else {
-                    errorText = Self.firstLine(res.err.isEmpty ? res.out : res.err)
-                    await DebugLogger.shared.error(
-                        "FileBrowser",
-                        "[ERROR] E-MAC-ADB-0005 미리보기 pull 실패 code=\(res.code) \(item.path) \(errorText ?? "")"
-                    )
+                let alive = await MainActor.run { self.progressToken == token }
+                if alive {
+                    if res.code == 0, FileManager.default.fileExists(atPath: target) {
+                        opened = true
+                    } else {
+                        errorText = Self.firstLine(res.err.isEmpty ? res.out : res.err)
+                        await DebugLogger.shared.error(
+                            "FileBrowser",
+                            "[ERROR] E-MAC-ADB-0005 미리보기 pull 실패 code=\(res.code) \(item.path) \(errorText ?? "")"
+                        )
+                    }
                 }
             } else {
                 errorText = ErrorCode.adbBinaryMissing.koMessage
             }
             await MainActor.run {
+                self.finishProgress(poller: poller)
                 self.busy = false
-                if opened {
+                self.currentProc = nil
+                if self.cancelRequested {
+                    self.cancelRequested = false
+                    self.statusMessage = L10n.string("files.transfer.cancelled")
+                } else if opened {
                     self.statusMessage = nil
                     NSWorkspace.shared.open(URL(fileURLWithPath: target))
                 } else if let errorText, !errorText.isEmpty {
@@ -511,6 +838,107 @@ final class FileBrowserController: ObservableObject {
                 }
             }
         }
+    }
+
+    // MARK: 삭제 (rm — 확인 + 화이트리스트 경로만)
+
+    /// 삭제 확인 요청 — 조건이 맞으면 확인 다이얼로그용으로 보관
+    func requestDelete(selection: Set<String>) {
+        guard !busy, !loading else { return }
+        let chosen = items.filter { selection.contains($0.id) }
+        guard !chosen.isEmpty else {
+            statusMessage = L10n.string("files.delete.noSelection")
+            return
+        }
+        // 허용 밖이 1개라도 있으면 전체 중단 — 부분 삭제는 혼란만 남긴다
+        if let bad = chosen.first(where: { !FileBrowserLogic.canDelete(path: $0.path) }) {
+            statusMessage = L10n.format("files.delete.forbidden", bad.path)
+            return
+        }
+        pendingDelete = chosen
+    }
+
+    func cancelDelete() {
+        pendingDelete = nil
+    }
+
+    func confirmDelete() {
+        guard !busy, !loading, let targets = pendingDelete else { return }
+        pendingDelete = nil
+        busy = true
+        statusMessage = nil
+        cancelRequested = false
+        currentProc = nil
+        let adb = DeviceMonitor.adbPathNow()
+        let serial = self.serial
+        let dir = path
+        Task.detached(priority: .utility) {
+            var okCount = 0
+            var errorText: String?
+            if let adb {
+                for item in targets {
+                    let res = Self.runCapture(
+                        adb: adb,
+                        args: ["-s", serial] + FileBrowserLogic.deleteArgs(path: item.path)
+                    )
+                    if res.code == 0 {
+                        okCount += 1
+                    } else {
+                        errorText = Self.firstLine(res.err.isEmpty ? res.out : res.err)
+                        await DebugLogger.shared.error(
+                            "FileBrowser",
+                            "[ERROR] E-MAC-ADB-0007 삭제 실패 code=\(res.code) \(item.path) \(errorText ?? "")"
+                        )
+                        break
+                    }
+                }
+            } else {
+                errorText = ErrorCode.adbBinaryMissing.koMessage
+                await DebugLogger.shared.error("FileBrowser", "[ERROR] E-MAC-ADB-0007 adb 바이너리 없음")
+            }
+            await MainActor.run {
+                self.busy = false
+                if let errorText, !errorText.isEmpty {
+                    self.statusMessage = errorText
+                } else if errorText != nil {
+                    self.statusMessage = L10n.string("files.error.delete")
+                } else {
+                    self.statusMessage = L10n.format("files.delete.done", okCount)
+                    self.invalidateTree()
+                    self.reloadQuietly(adb: adb, serial: serial, dir: dir)
+                }
+            }
+        }
+    }
+
+    // MARK: 원격 크기 조회 (push 진행률용)
+
+    /// 기기 측 바이트 수 — 파일은 `stat`, 디렉터리는 `du -sb`. 없으면 nil (indeterminate)
+    nonisolated static func remoteByteSize(adb: String, serial: String, path: String, isDir: Bool) -> Int64? {
+        let cmd = (isDir ? "du -sb " : "stat -c %s ") + FileBrowserLogic.shellQuote(path)
+        let res = runCapture(adb: adb, args: ["-s", serial, "shell", cmd])
+        guard res.code == 0 else { return nil }
+        return FileBrowserLogic.parseByteCount(res.out)
+    }
+
+    /// 로컬 트리 전체 바이트 수 (push 예상치) — 없으면 0
+    nonisolated static func localTreeSize(_ url: URL) -> Int64 {
+        let fm = FileManager.default
+        var isDir: ObjCBool = false
+        guard fm.fileExists(atPath: url.path, isDirectory: &isDir) else { return 0 }
+        if !isDir.boolValue {
+            return (try? fm.attributesOfItem(atPath: url.path)[.size] as? NSNumber)?.int64Value ?? 0
+        }
+        var total: Int64 = 0
+        if let e = fm.enumerator(at: url, includingPropertiesForKeys: [.fileSizeKey, .isDirectoryKey]) {
+            for case let f as URL in e {
+                let vs = try? f.resourceValues(forKeys: [.fileSizeKey, .isDirectoryKey])
+                if vs?.isDirectory != true {
+                    total += Int64(vs?.fileSize ?? 0)
+                }
+            }
+        }
+        return total
     }
 
     // MARK: 가져오기 폴더
