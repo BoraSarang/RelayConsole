@@ -54,8 +54,10 @@ enum CalendarBridge {
 
     /// 권한 요청 → 삽입까지 한 번에 — UI 는 이 하나만 부른다
     static func addToCalendar(detail: String, serialLabel: String?, now: Date = .now) async -> CalendarBridgeState {
+        await DebugLogger.shared.info("Calendar", "[INFO] 캘린더 버튼 클릭 — 권한 확인 시작")
         // 권한 확인과 삽입 사이에 상태가 바뀌지 않으므로 **한 번만** 확인한다
         let access = await requestWriteAccess()
+        await DebugLogger.shared.info("Calendar", "[INFO] 권한 확인 결과: \(access)")
         switch access {
         case .ready:
             return await insert(CalendarDraft.make(detail: detail, serialLabel: serialLabel, now: now))

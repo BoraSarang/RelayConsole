@@ -31,6 +31,8 @@ enum CalendarDraft {
         let who = serialLabel?.trimmingCharacters(in: .whitespaces) ?? ""
         let d = detail.trimmingCharacters(in: .whitespaces)
         if who.isEmpty { return d }
+        // 이미 들어 있으면 덧붙이지 않는다 — 실측 "크래시 감지 · IP · … · IP" 중복
+        if d.contains(who) { return d }
         return "\(d) · \(who)"
     }
 

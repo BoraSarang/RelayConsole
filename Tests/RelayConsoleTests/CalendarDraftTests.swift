@@ -34,6 +34,17 @@ final class CalendarDraftTests: XCTestCase {
         )
     }
 
+    /// 사유에 기기가 이미 있으면 덧붙이지 않는다 — 실측 "크래시 감지 · IP · … · IP" 중복
+    func testTitleSkipsDeviceWhenAlreadyPresent() {
+        XCTAssertEqual(
+            CalendarDraft.title(
+                detail: "크래시 감지 · 10.166.169.252:5555 · ProcessDeath",
+                serialLabel: "10.166.169.252:5555"
+            ),
+            "크래시 감지 · 10.166.169.252:5555 · ProcessDeath"
+        )
+    }
+
     // MARK: - 시각
 
     /// 시작은 **지금 + 15분** — 캘린더는 "언제 볼지" 를 물으면 그것이 답이다
