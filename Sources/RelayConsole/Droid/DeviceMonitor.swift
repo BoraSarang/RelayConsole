@@ -51,6 +51,8 @@ actor DeviceMonitor {
         var cacheSDK: Int?
         var cacheGovernor: String?
         var cacheIP: String?
+        /// 물리 기기 고유값 캐시 (`ro.boot.serialno`, TCP 1회 조회) — 선택 따라가기용
+        var cachePhysicalId: String?
         var cacheGpuRenderer: String?
         var cacheGpuEs: String?
         var prevDisk = AdbClient.DiskSample()
@@ -249,6 +251,19 @@ actor DeviceMonitor {
         snap.connectionKind = conn.kind
         snap.connectionLabel = conn.label
         snap.deviceName = state.deviceName
+
+        // 물리 ID — USB 는 시리얼 자체, TCP 는 `ro.boot.serialno` 1회 조회 후 캐시.
+        // USB 1회 → 재부팅 전까지 IP 로 붙는 동안, 선택이 같은 폰을 따라가게 한다.
+        if conn.kind == .usb {
+            snap.physicalId = serial
+        } else if let cached = state.cachePhysicalId {
+            snap.physicalId = cached
+        } else if let id = (try? shell(serial, "getprop", WifiAdbLogic.physicalIdProp))?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+            !id.isEmpty {
+            state.cachePhysicalId = id
+            snap.physicalId = id
+        }
 
         // ── 메타 1회 (model/device_name/android/sdk)
         if !state.metaPrimed {

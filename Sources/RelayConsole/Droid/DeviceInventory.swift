@@ -70,6 +70,9 @@ struct DeviceSnapshot: Sendable, Equatable {
     var connectionKind: ConnectionKind?
     /// 표시용 연결 라벨 — USB | 10.x.x.x:5555
     var connectionLabel: String?
+    /// 물리 기기 고유값 — USB 는 시리얼 자체, TCP 는 `ro.boot.serialno`.
+    /// nil = 모름 (선택 따라가기를 하지 않는다 — 추측으로 기기를 바꾸지 않는다)
+    var physicalId: String?
     /// 오프라인 전환 시각 — 일정 시간 지나면 목록에서 제거한다(`pruneOffline`)
     var offlineSince: Date?
     /// settings get global device_name (예: S22)
@@ -243,6 +246,7 @@ struct DeviceInventory: Equatable {
                 if merged.model.isEmpty { merged.model = prev.model }
                 merged.connectionKind = merged.connectionKind ?? prev.connectionKind
                 merged.connectionLabel = merged.connectionLabel ?? prev.connectionLabel
+                merged.physicalId = merged.physicalId ?? prev.physicalId
                 merged.deviceName = merged.deviceName ?? prev.deviceName
                 merged.coreFreqsMHz = merged.coreFreqsMHz ?? prev.coreFreqsMHz
                 merged.coreMaxMHz = merged.coreMaxMHz ?? prev.coreMaxMHz
@@ -319,5 +323,20 @@ struct DeviceInventory: Equatable {
             guard !d.isOnline, let since = d.offlineSince else { return false }
             return now.timeIntervalSince(since) >= interval
         }
+    }
+
+    /// 선택 따라가기 — 선택 endpoint 가 오프라인이면 같은 물리 기기의 온라인 endpoint
+    ///
+    /// USB 를 뽑으면 선택이 오프라인 USB 에 박히고, 같은 폰이 IP 로 온라인인데도
+    /// 화면은 "연결 끊김" 을 보여준다. 물리 ID 가 모르면(nil) 따라가지 않는다 —
+    /// 추측으로 선택을 바꾸는 편이 더 나쁘다. nil = 따라갈 곳 없음 (선택 유지).
+    static func followSerial(devices: [DeviceSnapshot], selected: String?) -> String? {
+        guard let selected,
+              let cur = devices.first(where: { $0.serial == selected }),
+              !cur.isOnline,
+              let pid = cur.physicalId else { return nil }
+        return devices.first {
+            $0.serial != selected && $0.isOnline && $0.physicalId == pid
+        }?.serial
     }
 }
