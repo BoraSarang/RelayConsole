@@ -89,4 +89,37 @@ final class WifiReconnectCandidateTests: XCTestCase {
         )
         XCTAssertEqual(ip, "192.168.0.55")
     }
+
+    /// 스윕 대상은 /24 전체 (.0·.255 제외, 254개) — 게이트웨이 본인도 포함
+    /// (핫스팟이면 폰이 게이트웨이다)
+    func testSweepTargetsFullSubnet() {
+        let t = WifiAdbLogic.sweepTargets(prefix: "10.166.169")
+        XCTAssertEqual(t.count, 254)
+        XCTAssertEqual(t.first, "10.166.169.1")
+        XCTAssertEqual(t.last, "10.166.169.254")
+        XCTAssertFalse(t.contains("10.166.169.0"))
+        XCTAssertFalse(t.contains("10.166.169.255"))
+    }
+
+    /// 접두사가 깨졌으면 빈 목록 — 이상한 값으로 nc 를 돌리지 않는다
+    func testSweepTargetsRejectsBadPrefix() {
+        XCTAssertTrue(WifiAdbLogic.sweepTargets(prefix: "").isEmpty)
+        XCTAssertTrue(WifiAdbLogic.sweepTargets(prefix: "10.166").isEmpty)
+        XCTAssertTrue(WifiAdbLogic.sweepTargets(prefix: "a.b.c").isEmpty)
+    }
+
+    /// 스윕 결과는 맨 뒤 (최후) — 앞에 알려진 후보가 있으면 거기서 끝나야 한다
+    func testSweptSubnetComesLast() {
+        let c = WifiAdbLogic.reconnectCandidateOrder(
+            lastEndpoint: "10.166.169.252:5555",
+            lostSerial: "10.166.169.252:5555",
+            deviceReported: [],
+            gateway: "10.166.169.1",
+            arpNeighbours: ["10.166.169.5"],
+            sweptSubnet: ["10.166.169.242", "10.166.169.252"]
+        )
+        XCTAssertEqual(c.last, "10.166.169.242", "스윕 신규 IP 는 맨 뒤")
+        XCTAssertEqual(c.first, "10.166.169.252", "알려진 IP 가 먼저")
+        XCTAssertEqual(c.filter { $0 == "10.166.169.252" }.count, 1, "중복 제거")
+    }
 }

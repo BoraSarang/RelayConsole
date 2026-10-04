@@ -126,6 +126,17 @@ enum WifiAdbLogic {
         return "\(parts[0]).\(parts[1]).\(parts[2])"
     }
 
+    /// 같은 대역 5555 스윕 대상 — `/24` 호스트 전체 (`.0`·`.255` 제외, 254개)
+    ///
+    /// DHCP 로 IP 가 바뀐 기기는 ARP 에 없다 (아직 통신한 적이 없으므로).
+    /// 포트 스윕은 `adb connect` 를 날리지 않고 찾는다 — 서버 오염 없음.
+    /// 게이트웨이 본인도 포함한다 — 핫스팟이면 폰이 게이트웨이다.
+    static func sweepTargets(prefix: String) -> [String] {
+        let parts = prefix.split(separator: ".")
+        guard parts.count == 3, parts.allSatisfy({ Int($0) != nil }) else { return [] }
+        return (1...254).map { "\(prefix).\($0)" }
+    }
+
     /// `host:port` 에서 IP 만 — 후보 정리에 쓴다
     static func host(ofEndpoint endpoint: String) -> String? {
         guard let h = endpoint.split(separator: ":").first.map(String.init), isIPv4(h) else { return nil }
@@ -144,8 +155,9 @@ enum WifiAdbLogic {
     /// ① **전에 붙었던 IP** — DHCP 가 IP 를 그대로 줬을 때 이것 하나로 복구된다 (가장 빠름)
     /// ② 방금 잃어버린 serial 의 IP — 위와 같을 수 있지만 **정리 후 연결**된 경우
     /// ③ **기기가 살아 있으면(USB) 직접 물어본 값** — 가장 정확
-    /// ④ 게이트웨이 — SoftAP 전용 가정이라 뒤쪽
+    /// ④ 게이트웨이 — SoftAP 전용 가정이라 뒤쪽 (단, 핫스팟이면 폰이 게이트웨이다)
     /// ⑤ ARP 이웃 — 라우터가 살아있을 때 넓이를 늘린다 (아래 한계)
+    /// ⑥ 같은 대역 5555 스윕 — DHCP 로 IP 가 바뀐 기기 (ARP 에 없음, 최후)
     ///
     /// ## ⑤ 의 한계 — 감수한다
     /// **새 IP 로 바뀐 기기는 ARP 에 없다** (아직 통신한 적이 없으므로).
@@ -156,7 +168,8 @@ enum WifiAdbLogic {
         lostSerial: String,
         deviceReported: [String],
         gateway: String?,
-        arpNeighbours: [String]
+        arpNeighbours: [String],
+        sweptSubnet: [String] = []
     ) -> [String] {
         var out: [String] = []
         func add(_ ip: String?) {
@@ -170,6 +183,7 @@ enum WifiAdbLogic {
         deviceReported.forEach { add($0) }
         add(gateway)
         arpNeighbours.forEach { add($0) }
+        sweptSubnet.forEach { add($0) }
         return out
     }
 
@@ -413,6 +427,10 @@ final class WifiAdbController: ObservableObject {
     @Published private(set) var autoFailed = false
     /// 자동 실행 중인 시리얼 — 중복 실행 방지 (같은 기기에 tcpip 2번 걸면 adbd 2번 재시작)
     private var autoInFlight: Set<String> = []
+    /// 아직 못 찾은 TCP 엔드포인트 — **1회성이면 Wi-Fi 복귀를 놓친다**
+    /// 유실 이벤트 때 1회만 시도하고 끝내면, 그 시도가 Wi-Fi 꺼진 구간에 소진된 뒤
+    /// Wi-Fi 가 돌아와도 재시도 트리거가 없다. 매 틱 쿨다운 걸고 재시도한다.
+    private var lostNetworkEndpoints: Set<String> = []
     /// 재연결 상태 — 쿨다운과 연속 실패 횟수
     private var reconnectLastAttemptAt: Date?
     private var reconnectFailures = 0
@@ -422,6 +440,23 @@ final class WifiAdbController: ObservableObject {
     private init() {}
 
     // MARK: - 재연결 (2026-09-27 · PLAN_wifi_reconnect)
+
+    /// 유실 기록 — tick 의 유실 이벤트에서 부른다 (TCP 만)
+    func noteLostNetworkEndpoint(_ serial: String) {
+        guard WifiAdbLogic.isNetworkEndpoint(serial) else { return }
+        lostNetworkEndpoints.insert(serial)
+    }
+
+    /// 매 틱 재시도 — 돌아온 기기는 빼고, 남은 건 쿨다운 걸고 `autoReconnect`
+    ///
+    /// `shouldReconnect` 가 쿨다운 전이면 IO 없이 지나간다 (매 틱 호출해도 부담 없음).
+    /// 성공한 기기는 `adoptEndpoint` 에서 목록에서 뺀다.
+    func retryLostNetworkEndpoints(found: Set<String>) async {
+        lostNetworkEndpoints.subtract(found)
+        for s in lostNetworkEndpoints {
+            await autoReconnect(lostSerial: s)
+        }
+    }
 
     /// TCP 엔드포인트가 사라졌을 때 자동 재연결을 시도한다.
     ///
@@ -462,7 +497,9 @@ final class WifiAdbController: ObservableObject {
         }
 
         var lastFailureDetail = ""
+        var tried: Set<String> = []
         for endpoint in candidates {
+            tried.insert(endpoint)
             guard let ip = WifiAdbLogic.host(ofEndpoint: endpoint) else { continue }
             // adbd 가 이미 TCP 모드다(TCP 로 붙어 있었으니) — **tcpip 은 건드리지 않는다**
             // tcpip 은 adbd 를 재시작해서 그 순간 연결을 **또** 끊는다
@@ -478,34 +515,94 @@ final class WifiAdbController: ObservableObject {
                 lastFailureDetail = L10n.format("wifi.reconnect.notReachable", endpoint)
                 continue
             }
-            do {
-                try? WifiAdbRunner.run(adb, WifiAdbLogic.disconnectArgs(endpoint: endpoint))
-                try WifiAdbRunner.run(adb, WifiAdbLogic.connectArgs(endpoint: endpoint))
-                // 붙었다는 근거는 connect 의 **성공**이 아니라, adb 가 그 기기를
-                // **실제로 device 로 인식했는지** 다 (router 로 붙으면 즉시 떨어진다)
-                guard await Self.isConnectedAsDevice(adb: adb, endpoint: endpoint) else {
-                    lastFailureDetail = L10n.format("wifi.reconnect.failed", endpoint)
-                    continue
-                }
-                reconnectFailures = 0
-                lastEndpoint = endpoint
-                statusIsError = false
-                statusMessage = L10n.format("wifi.reconnect.done", endpoint)
-                DebugLogger.shared.info("WifiAdb", "[INFO] 재연결 성공 \(lostSerial) → \(endpoint)")
-                await disconnectStaleEndpoints(adb: adb, keep: endpoint)
+            if await adoptEndpoint(endpoint, adb: adb, lostSerial: lostSerial, detail: &lastFailureDetail) {
                 return
-            } catch {
-                lastFailureDetail = cause(error)
+            }
+        }
+
+        // 2차: 같은 대역 5555 스윕 — DHCP 로 IP 가 바뀐 기기는 ARP 에 없다.
+        // 1차 후보가 전부 빗나갔을 때만 돈다 (254회 TCP connect, 쿨다운 구간 내).
+        // 포트가 열린 곳에만 `adb connect` 를 날리므로 서버 오염 없음.
+        if let gw = MacRoute.defaultGateway(),
+           let prefix = WifiAdbLogic.subnetPrefix(ip: gw) {
+            for ip in await Self.sweepSubnetForAdbd(prefix: prefix) {
+                let endpoint = WifiAdbLogic.defaultEndpoint(ip: ip)
+                guard !tried.contains(endpoint) else { continue }
+                tried.insert(endpoint)
+                if await adoptEndpoint(endpoint, adb: adb, lostSerial: lostSerial, detail: &lastFailureDetail) {
+                    return
+                }
             }
         }
 
         // 후보를 전부 시도해도 안 붙었다 — 사유를 그대로 남긴다 ([표시②])
+        // pending 에는 남겨둔다 — 다음 쿨다운에 다시 시도한다 (1회성이면 복귀를 놓친다)
         reconnectFailures += 1
         failAuto("wifi.reconnect.failed", detail: lastFailureDetail.isEmpty ? "-" : lastFailureDetail)
         DebugLogger.shared.info(
             "WifiAdb",
-            "[INFO] 재연결 실패 \(lostSerial) · 후보 \(candidates.count)개 모두 불명"
+            "[INFO] 재연결 실패 \(lostSerial) · 후보 \(tried.count)개 모두 불명"
         )
+    }
+
+    /// 후보에 실제로 붙는다 — connect 의 **성공**이 아니라 adb 가 그 기기를
+    /// **실제로 device 로 인식했는지** 가 기준이다 (router 로 붙으면 즉시 떨어진다)
+    /// - Returns: true 면 재연결 완료 (호출자는 종료), pending 에서 빠진다
+    private func adoptEndpoint(
+        _ endpoint: String,
+        adb: String,
+        lostSerial: String,
+        detail: inout String
+    ) async -> Bool {
+        do {
+            try? WifiAdbRunner.run(adb, WifiAdbLogic.disconnectArgs(endpoint: endpoint))
+            try WifiAdbRunner.run(adb, WifiAdbLogic.connectArgs(endpoint: endpoint))
+            guard await Self.isConnectedAsDevice(adb: adb, endpoint: endpoint) else {
+                detail = L10n.format("wifi.reconnect.failed", endpoint)
+                return false
+            }
+            reconnectFailures = 0
+            lastEndpoint = endpoint
+            lostNetworkEndpoints.remove(lostSerial)
+            statusIsError = false
+            statusMessage = L10n.format("wifi.reconnect.done", endpoint)
+            DebugLogger.shared.info("WifiAdb", "[INFO] 재연결 성공 \(lostSerial) → \(endpoint)")
+            await disconnectStaleEndpoints(adb: adb, keep: endpoint)
+            return true
+        } catch {
+            detail = cause(error)
+            return false
+        }
+    }
+
+    /// 같은 대역에서 5555 가 열린 호스트 — 찾으면 조기 종료 (5555 는 보통 1개)
+    ///
+    /// `nc -z` 는 데이터 없이 연결만 시도하고 바로 닫는다 (adb 를 건드리지 않는다).
+    /// 32개씩 묶어 병렬로 돈다 — closed/refused 는 즉시 떨어지고, 무응답만 1초 대기.
+    private static nonisolated func sweepSubnetForAdbd(prefix: String) async -> [String] {
+        let targets = WifiAdbLogic.sweepTargets(prefix: prefix)
+        var found: [String] = []
+        var index = targets.startIndex
+        while index < targets.endIndex {
+            let end = targets.index(index, offsetBy: 32, limitedBy: targets.endIndex) ?? targets.endIndex
+            let batch = targets[index..<end]
+            let hits = await withTaskGroup(of: String?.self, returning: [String].self) { group in
+                for ip in batch {
+                    group.addTask {
+                        adbdPortOpen(ip: ip, port: WifiAdbLogic.defaultPort, timeoutSeconds: 1) ? ip : nil
+                    }
+                }
+                var out: [String] = []
+                for await hit in group {
+                    if let hit { out.append(hit) }
+                }
+                return out
+            }
+            found.append(contentsOf: hits)
+            if !found.isEmpty { break }
+            index = end
+        }
+        return found.sorted()
     }
 
     /// 재연결 후보 IP — **순서대로 시도**한다 (2026-09-28)
@@ -558,7 +655,7 @@ final class WifiAdbController: ObservableObject {
     /// 실패한 connect 가 `devices` 에 남아 다음 판정을 흐리게 만든다.
     /// 계측: ARP 이웃 3개 중 5555 가 열린 것은 **1개뿐**이었다.
     /// → 포트로 먼저 걸러내면 **시도 횟수가 줄고** adb 가 깨끗하게 남는다.
-    static func adbdPortOpen(ip: String, port: Int, timeoutSeconds: Int = 2) -> Bool {
+    static nonisolated func adbdPortOpen(ip: String, port: Int, timeoutSeconds: Int = 2) -> Bool {
         // `nc -z` 는 데이터 없이 연결만 시도하고 바로 닫는다 (adb 를 건드리지 않는다)
         let proc = Process()
         proc.executableURL = URL(fileURLWithPath: "/usr/bin/nc")

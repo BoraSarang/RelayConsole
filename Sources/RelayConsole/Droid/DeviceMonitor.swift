@@ -51,6 +51,8 @@ actor DeviceMonitor {
         var cacheSDK: Int?
         var cacheGovernor: String?
         var cacheIP: String?
+        /// 물리 기기 고유값 캐시 (`ro.boot.serialno`, TCP 1회 조회) — 선택 따라가기용
+        var cachePhysicalId: String?
         var cacheGpuRenderer: String?
         var cacheGpuEs: String?
         var prevDisk = AdbClient.DiskSample()
@@ -249,6 +251,19 @@ actor DeviceMonitor {
         snap.connectionKind = conn.kind
         snap.connectionLabel = conn.label
         snap.deviceName = state.deviceName
+
+        // 물리 ID — USB 는 시리얼 자체, TCP 는 `ro.boot.serialno` 1회 조회 후 캐시.
+        // USB 1회 → 재부팅 전까지 IP 로 붙는 동안, 선택이 같은 폰을 따라가게 한다.
+        if conn.kind == .usb {
+            snap.physicalId = serial
+        } else if let cached = state.cachePhysicalId {
+            snap.physicalId = cached
+        } else if let id = (try? shell(serial, "getprop", WifiAdbLogic.physicalIdProp))?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+            !id.isEmpty {
+            state.cachePhysicalId = id
+            snap.physicalId = id
+        }
 
         // ── 메타 1회 (model/device_name/android/sdk)
         if !state.metaPrimed {
@@ -1103,8 +1118,11 @@ actor DeviceMonitor {
             // USB 를 다시 꽂지 않아도 앱이 스스로 새 IP 로 붙어야 하며,
             // 그래야 stale 정리(같은 폰의 옛 IP 제거)까지 따라온다.
             if AdbClient.parseConnection(s).kind == .network {
+                // 유실 기록만 남긴다 — 재시도는 아래 `retryLostNetworkEndpoints` 가
+                // 매 틱 쿨다운 걸고 돈다. 여기서 직접 붙이면 1회성이 되어
+                // 그 1회가 Wi-Fi 꺼진 구간에 소진된 뒤 복귀를 영원히 놓친다.
                 Task { @MainActor in
-                    await WifiAdbController.shared.autoReconnect(lostSerial: s)
+                    await WifiAdbController.shared.noteLostNetworkEndpoint(s)
                 }
             }
             // serial 키 자료구조 정리 — 네트워크 ADB 는 IP 가 바뀌면 새 키가 생겨
@@ -1128,6 +1146,13 @@ actor DeviceMonitor {
                 isClear: true
             )
             await emitWatch(disconnectEvent)
+        }
+
+        // 유실된 TCP 가 아직 안 돌아왔으면 쿨다운 걸고 재시도한다.
+        // USB 1회 → 재부팅 전까지는 IP 로 붙어야 한다: Wi-Fi 껐다 켜면 IP 가 바뀌고
+        // 그 사이 시도는 실패하지만, 다음 쿨다운에 새 IP(게이트웨이·ARP·스윕)로 다시 붙는다.
+        Task { @MainActor in
+            await WifiAdbController.shared.retryLostNetworkEndpoints(found: foundSet)
         }
 
         serials = found

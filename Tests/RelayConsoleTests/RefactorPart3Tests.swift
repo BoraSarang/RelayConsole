@@ -237,3 +237,60 @@ struct RefactorPart3Tests {
         #expect(noSets.counts.isEmpty)
     }
 }
+
+/// 선택 따라가기 — USB 를 뽑아도 선택이 오프라인 USB 에 박히면
+/// 같은 폰이 IP 로 온라인인데 화면은 "연결 끊김" 을 보여준다 (2026-10-04 실측)
+struct DeviceSelectionFollowTests {
+
+    private func dev(_ serial: String, online: Bool, pid: String?) -> DeviceSnapshot {
+        var d = DeviceSnapshot()
+        d.serial = serial
+        d.isOnline = online
+        d.physicalId = pid
+        return d
+    }
+
+    /// 선택 USB 오프라인 + 같은 물리 ID 의 온라인 IP → IP 로 따라간다
+    @Test func followsSamePhysicalDevice() {
+        let devices = [
+            dev("R5CT215F4QK", online: false, pid: "R5CT215F4QK"),
+            dev("10.166.169.252:5555", online: true, pid: "R5CT215F4QK"),
+        ]
+        #expect(DeviceInventory.followSerial(devices: devices, selected: "R5CT215F4QK")
+            == "10.166.169.252:5555")
+    }
+
+    /// 선택이 온라인이면 바꾸지 않는다
+    @Test func keepsOnlineSelection() {
+        let devices = [
+            dev("R5CT215F4QK", online: true, pid: "R5CT215F4QK"),
+            dev("10.166.169.252:5555", online: true, pid: "R5CT215F4QK"),
+        ]
+        #expect(DeviceInventory.followSerial(devices: devices, selected: "R5CT215F4QK") == nil)
+    }
+
+    /// 물리 ID 가 모르면 추측으로 바꾸지 않는다 — 다른 폰일 수 있다
+    @Test func doesNotFollowWhenPhysicalIdUnknown() {
+        let devices = [
+            dev("R5CT215F4QK", online: false, pid: nil),
+            dev("10.166.169.252:5555", online: true, pid: nil),
+        ]
+        #expect(DeviceInventory.followSerial(devices: devices, selected: "R5CT215F4QK") == nil)
+    }
+
+    /// 다른 물리 기기에는 따라가지 않는다 (2대 연결 시)
+    @Test func doesNotFollowDifferentPhone() {
+        let devices = [
+            dev("USB_A", online: false, pid: "PHYS_A"),
+            dev("10.0.0.9:5555", online: true, pid: "PHYS_B"),
+        ]
+        #expect(DeviceInventory.followSerial(devices: devices, selected: "USB_A") == nil)
+    }
+
+    /// 따라갈 온라인이 없으면 선택 유지
+    @Test func keepsSelectionWhenNothingOnline() {
+        let devices = [dev("R5CT215F4QK", online: false, pid: "R5CT215F4QK")]
+        #expect(DeviceInventory.followSerial(devices: devices, selected: "R5CT215F4QK") == nil)
+        #expect(DeviceInventory.followSerial(devices: devices, selected: nil) == nil)
+    }
+}

@@ -846,6 +846,12 @@ final class ConsoleStore: ObservableObject {
         // 종전엔 한번 연결된 기기가 영구히 남아(무선 ADB 는 IP 변경 시 새 항목 추가)
         // 메뉴바 아이콘이 기기 0대인데 Online로 표시되고 기기 수 비율이 무의미해졌다.
         inventory.pruneOffline(olderThan: Self.offlineRetention, now: .now)
+        // 선택 따라가기 — 선택 endpoint 가 오프라인이면 같은 물리 기기의 온라인 endpoint로.
+        // USB 를 뽑아도 선택이 오프라인 USB 에 박히면, 같은 폰이 IP 로 온라인인데 "연결 끊김" 이 보인다.
+        if let next = DeviceInventory.followSerial(devices: inventory.devices, selected: selectedSerial) {
+            selectedSerial = next
+            UserDefaults.standard.set(next, forKey: selectedKey)
+        }
         guard snapshot.isOnline else { return }
 
         // 선택 기기 없으면 첫 온라인 자동 선택
