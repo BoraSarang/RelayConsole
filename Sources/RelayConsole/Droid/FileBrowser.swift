@@ -627,7 +627,11 @@ final class FileBrowserController: ObservableObject {
                             await MainActor.run { self?.currentProc = proc }
                         }
                     )
-                    if await MainActor.run(body: { self.cancelRequested }) { break }
+                    if await MainActor.run(body: { self.cancelRequested }) {
+                        // 취소 — 부분 파일 삭제 (깨진 파일이 남으면 다음 가져오기가 꼬인다)
+                        try? fm.removeItem(atPath: target)
+                        break
+                    }
                     let alive = await MainActor.run { self.progressToken == token }
                     guard alive else { break }
                     if res.code == 0, fm.fileExists(atPath: target) {
@@ -708,7 +712,14 @@ final class FileBrowserController: ObservableObject {
                             await MainActor.run { self?.currentProc = proc }
                         }
                     )
-                    if await MainActor.run(body: { self.cancelRequested }) { break }
+                    if await MainActor.run(body: { self.cancelRequested }) {
+                        // 취소 — 기기 측 부분 전송 삭제 (깨진 파일 잔류 방지)
+                        _ = Self.runCapture(
+                            adb: adb,
+                            args: ["-s", serial] + FileBrowserLogic.deleteArgs(path: remotePath)
+                        )
+                        break
+                    }
                     let alive = await MainActor.run { self.progressToken == token }
                     guard alive else { break }
                     if res.code == 0 {
@@ -802,13 +813,19 @@ final class FileBrowserController: ObservableObject {
                         ? PollSlot(localPath: target, expected: item.size, remote: nil)
                         : nil
                 }
-                let res = Self.runCapture(
+                let res = await Self.runTransfer(
                     adb: adb,
-                    args: ["-s", serial] + FileBrowserLogic.pullArgs(remote: item.path, local: target)
+                    args: ["-s", serial] + FileBrowserLogic.pullArgs(remote: item.path, local: target),
+                    register: { [weak self] proc in
+                        await MainActor.run { self?.currentProc = proc }
+                    }
                 )
                 let alive = await MainActor.run { self.progressToken == token }
                 if alive {
-                    if res.code == 0, FileManager.default.fileExists(atPath: target) {
+                    if await MainActor.run(body: { self.cancelRequested }) {
+                        // 취소 — 부분 미리보기 삭제 후 열지 않는다
+                        try? FileManager.default.removeItem(atPath: target)
+                    } else if res.code == 0, FileManager.default.fileExists(atPath: target) {
                         opened = true
                     } else {
                         errorText = Self.firstLine(res.err.isEmpty ? res.out : res.err)
