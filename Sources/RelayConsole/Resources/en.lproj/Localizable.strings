@@ -526,6 +526,10 @@
 "settings.incident.auto" = "Auto-capture incident bundles";
 "settings.incident.auto.help" = "On ANR·crash·site down, save manifest·logcat·screenshot as a local bundle (5 min cooldown).";
 "settings.keyPrefix" = "Key prefix: relay.*";
+"settings.language" = "Language";
+"settings.language.en" = "English";
+"settings.language.ko" = "Korean";
+"settings.language.system" = "Follow system";
 "settings.launch.headless" = "Start headless (menu bar only, no windows)";
 "settings.launch.headless.help" = "When on, app starts without opening the console window and stays in the menu bar";
 "settings.login.error" = "Could not change login item";
