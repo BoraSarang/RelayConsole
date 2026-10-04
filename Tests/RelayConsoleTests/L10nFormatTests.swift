@@ -237,36 +237,25 @@ struct L10nFormatTests {
 }
 
 /// 앱 언어 결정 — 기본 시스템 추종, 지원 밖이면 영어, 수동 지정 우선
+/// 순수 함수만 본다 — UserDefaults 전역 경쟁(병렬 실행) 없음
 struct AppLanguageTests {
-    private func withOverride(_ v: String?, _ body: () -> String) -> String {
-        let key = L10n.languageKey
-        let prev = UserDefaults.standard.object(forKey: key)
-        if let v { UserDefaults.standard.set(v, forKey: key) }
-        else { UserDefaults.standard.removeObject(forKey: key) }
-        defer {
-            if let prev { UserDefaults.standard.set(prev, forKey: key) }
-            else { UserDefaults.standard.removeObject(forKey: key) }
-        }
-        return body()
-    }
-
     @Test func manualOverrideWins() {
-        #expect(withOverride("ko") { L10n.currentLanguage(system: ["en"]) } == "ko")
-        #expect(withOverride("en") { L10n.currentLanguage(system: ["ko"]) } == "en")
+        #expect(L10n.resolveLanguage(override: "ko", system: ["en"]) == "ko")
+        #expect(L10n.resolveLanguage(override: "en", system: ["ko"]) == "en")
     }
 
     @Test func systemLanguageFollowed() {
-        #expect(withOverride(nil) { L10n.currentLanguage(system: ["ko-KR"]) } == "ko")
-        #expect(withOverride(nil) { L10n.currentLanguage(system: ["en-GB"]) } == "en")
-        #expect(withOverride(nil) { L10n.currentLanguage(system: ["ja", "ko"]) } == "ko")
+        #expect(L10n.resolveLanguage(override: nil, system: ["ko-KR"]) == "ko")
+        #expect(L10n.resolveLanguage(override: nil, system: ["en-GB"]) == "en")
+        #expect(L10n.resolveLanguage(override: nil, system: ["ja", "ko"]) == "ko")
     }
 
     @Test func unsupportedSystemFallsBackToEnglish() {
-        #expect(withOverride(nil) { L10n.currentLanguage(system: ["fr-FR", "de"]) } == "en")
-        #expect(withOverride(nil) { L10n.currentLanguage(system: []) } == "en")
+        #expect(L10n.resolveLanguage(override: nil, system: ["fr-FR", "de"]) == "en")
+        #expect(L10n.resolveLanguage(override: nil, system: []) == "en")
     }
 
     @Test func invalidOverrideFallsThroughToSystem() {
-        #expect(withOverride("xx") { L10n.currentLanguage(system: ["ko"]) } == "ko")
+        #expect(L10n.resolveLanguage(override: "xx", system: ["ko"]) == "ko")
     }
 }

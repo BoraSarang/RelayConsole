@@ -620,12 +620,12 @@ struct DroidDashboardView: View {
     /// dayKey 자체는 저장 키라 바꾸지 않는다 — 표시만 바꾼다.
     /// 파싱 실패하면 원문 (모르는 값을 꾸미지 않는다).
     /// 앱 지원 언어(ko/en)만 다루므로 월 이름은 고정 표다.
-    static func displayDay(_ dayKey: String) -> String {
+    static func displayDay(_ dayKey: String, language: String? = nil) -> String {
         guard dayKey.count == 8,
               let m = Int(dayKey.dropFirst(4).prefix(2)),
               let d = Int(dayKey.dropFirst(6)),
               (1...12).contains(m), (1...31).contains(d) else { return dayKey }
-        if L10n.currentLanguage() == "ko" {
+        if language ?? L10n.currentLanguage() == "ko" {
             return "\(m)월 \(d)일"
         }
         let months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",

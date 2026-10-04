@@ -15,6 +15,11 @@ enum L10n {
         override: String? = UserDefaults.standard.string(forKey: languageKey),
         system: [String] = Locale.preferredLanguages
     ) -> String {
+        resolveLanguage(override: override, system: system)
+    }
+
+    /// 순수 판정 — 테스트는 이쪽만 본다 (UserDefaults 전역 경쟁 없음)
+    static func resolveLanguage(override: String?, system: [String]) -> String {
         if let o = override, supportedLanguages.contains(o) { return o }
         for id in system {
             let lang = String(id.prefix(2)).lowercased()
