@@ -325,9 +325,42 @@ enum DroidCards {
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
             batteryGrid(device)
+            if let banner = neglectBanner(device) {
+                Text(banner)
+                    .font(OPFont.number(11))
+                    .foregroundStyle(OPColor.thermalSoft)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 5)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(OPColor.thermal.opacity(0.15))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(OPColor.thermal.opacity(0.3), lineWidth: 1)
+                    )
+            }
             OPSparkline(points: metrics?.levelHistory ?? [], color: OPColor.ok, height: chartHeight)
                 .frame(height: chartHeight)
         }
+    }
+
+    /// 충전 방치 배너 — 온라인 + 방치 중일 때만 문구. 모르면 nil (0초는 모순)
+    static func neglectBanner(_ device: DeviceSnapshot?) -> String? {
+        guard let d = device, d.isOnline,
+              let secs = d.neglectSeconds, secs > 0 else { return nil }
+        return L10n.format("droid.card.battery.neglect", neglectDuration(secs))
+    }
+
+    /// 방치 지속 표기 — 0이 아닌 가장 큰 단위부터 (6시간 12분 · 45분 · 30초)
+    static func neglectDuration(_ seconds: Int) -> String {
+        let h = seconds / 3600, m = (seconds % 3600) / 60
+        if h > 0 { return L10n.format("droid.duration.hm", h, m) }
+        if m > 0 { return L10n.format("droid.duration.min", m) }
+        return L10n.format("droid.duration.sec", seconds)
     }
 
     static func batteryGrid(_ d: DeviceSnapshot?) -> some View {

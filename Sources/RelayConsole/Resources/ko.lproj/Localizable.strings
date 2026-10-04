@@ -121,6 +121,7 @@
 "droid.battery.type" = "유형";
 "droid.battery.voltage" = "전압";
 "droid.card.battery.charging" = "충전 중";
+"droid.card.battery.neglect" = "충전 방치 %@";
 "droid.card.battery.protection" = "보호모드";
 "droid.card.battery.title" = "BATTERY";
 "droid.card.cpu.title" = "CPU";
@@ -145,6 +146,9 @@
 "droid.detect.logs" = "로그";
 "droid.detect.settings" = "설정 변경";
 "droid.detect.title" = "탐지";
+"droid.duration.hm" = "%d시간 %d분";
+"droid.duration.min" = "%d분";
+"droid.duration.sec" = "%d초";
 "droid.empty.noDevice" = "연결된 기기 없음";
 "droid.empty.noDeviceBody" = "USB로 Android 기기를 연결하면 여기에 표시됩니다.";
 "droid.empty.noDeviceHint" = "네트워크 기기: adb connect IP:PORT";

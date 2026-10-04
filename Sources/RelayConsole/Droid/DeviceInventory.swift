@@ -96,6 +96,8 @@ struct DeviceSnapshot: Sendable, Equatable {
     /// settings global low_power (0/1)
     var isLowPowerMode: Bool?
     var cycleEstimate: Int?
+    /// 충전 방치 지속 초 — nil = 방치 중 아님 (충전 중·임계 초과·오프라인이면 nil, 0초는 모순)
+    var neglectSeconds: Int?
     var load1: Double?
     var load5: Double?
     var load15: Double?

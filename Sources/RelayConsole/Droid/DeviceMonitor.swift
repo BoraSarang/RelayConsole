@@ -308,12 +308,14 @@ actor DeviceMonitor {
             snap.cycleEstimate = batt.cycleEstimate
 
             // 충전 방치 — **시간 축이므로 이벤트가 아니라 상태**. 여기서 누적한다
-            BatteryNeglectTracker.shared.observe(
+            let neglectSecs = BatteryNeglectTracker.shared.observe(
                 serial: serial,
                 level: batt.batteryLevel,
                 isCharging: batt.isCharging,
                 now: .now
             )
+            // 0초는 "방치 중이지만 0초"라는 모순 — /metrics 행 없음과 같은 기준
+            snap.neglectSeconds = (snap.isOnline && neglectSecs > 0) ? neglectSecs : nil
 
             // ── 감시 이벤트 (PLAN_v0.5 Phase1): 충전·보호모드·배터리 임계 전이
             if let charging = batt.isCharging {
