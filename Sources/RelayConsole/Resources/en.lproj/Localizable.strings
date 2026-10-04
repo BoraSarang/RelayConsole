@@ -436,10 +436,10 @@
 "remediation.crash" = "Crash response";
 "remediation.crash.1" = "Check app/stack in FATAL EXCEPTION log";
 "remediation.crash.2" = "Force-stop the app and relaunch";
-"remediation.crash.3" = "If repeated, verify build/permission changes";
+"remediation.crash.3" = "If repeated, check for recent app updates or permission changes";
 "remediation.load" = "Lower system load";
 "remediation.load.1" = "Check top CPU processes — pause heavy apps";
-"remediation.load.2" = "Wait for builds/encodes to finish";
+"remediation.load.2" = "Wait for downloads/backups/updates to finish";
 "remediation.lowPower" = "Low power mode";
 "remediation.lowPower.1" = "Performance cap may reduce throttling";
 "remediation.lowPower.2" = "Turn off in Settings if not needed";
@@ -453,7 +453,7 @@
 "remediation.psi.1" = "Close top-RSS apps from the process list";
 "remediation.psi.2" = "Pause background sync/backup briefly";
 "remediation.signal" = "Improve signal";
-"remediation.signal.1" = "Check location/indoor weak coverage";
+"remediation.signal.1" = "Check for weak indoor/basement coverage";
 "remediation.signal.2" = "Prefer Wi-Fi or move and recheck";
 "remediation.throttle.1" = "Check top CPU processes — pause heavy apps";
 "remediation.throttle.2" = "Open console → THERMAL card for temp/status";
