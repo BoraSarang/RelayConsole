@@ -100,6 +100,8 @@ final class ConsoleStore: ObservableObject {
     @AppStorage("relay.cards.health") var cardHealth = true
     /// 아침 브리핑 한 줄 (PLAN_briefing · S1)
     @AppStorage("relay.briefing.enabled") var briefingEnabled = true
+    /// 앱 언어 — "system"(기기 추종, 기본) | "ko" | "en". 바꾸면 전 화면이 다시 그려진다
+    @AppStorage(L10n.languageKey) var appLanguage = "system"
     /// S4 Incident Bundle 자동 캡처
     @AppStorage("relay.incident.auto") var incidentAuto = true
     /// 인사이트·보관 (Phase1) — 30/60/90/0(무제한), 기본 30

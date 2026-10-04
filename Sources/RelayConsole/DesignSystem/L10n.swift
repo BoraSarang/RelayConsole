@@ -6,8 +6,34 @@ import Foundation
 /// - 구 `Resources/Localizable.xcstrings`(612키로 낙오) 는 읽는 코드가 없었고 2026-09-28 에 삭제했다.
 ///   여기를 고쳐도 아무 일도 일어나지 않는 함정이었기 때문이다 — 키는 위 `.lproj` 에서 고칠 것.
 enum L10n {
+    /// 언어 설정 키 — "system" | "ko" | "en". 기본 system (기기 언어 추종)
+    static let languageKey = "relay.language"
+    static let supportedLanguages = ["ko", "en"]
+
+    /// 현재 언어 — 수동 지정이 있으면 그것, 없으면 시스템 언어 중 지원분, 없으면 영어
+    static func currentLanguage(
+        override: String? = UserDefaults.standard.string(forKey: languageKey),
+        system: [String] = Locale.preferredLanguages
+    ) -> String {
+        if let o = override, supportedLanguages.contains(o) { return o }
+        for id in system {
+            let lang = String(id.prefix(2)).lowercased()
+            if supportedLanguages.contains(lang) { return lang }
+        }
+        return "en"
+    }
+
+    private static let koLproj: Bundle? = lproj("ko")
+    private static let enLproj: Bundle? = lproj("en")
+
+    private static func lproj(_ lang: String) -> Bundle? {
+        Bundle.module.path(forResource: lang, ofType: "lproj").flatMap(Bundle.init(path:))
+    }
+
     static func string(_ key: String) -> String {
-        Bundle.module.localizedString(forKey: key, value: key, table: nil)
+        let lang = currentLanguage()
+        let b: Bundle? = lang == "en" ? enLproj : koLproj
+        return (b ?? .module).localizedString(forKey: key, value: key, table: nil)
     }
 
     /// 포맷 문자열의 변환자를 **실제 인자 타입에 맞춰 교정**한 뒤 `String(format:)` 을 부른다.

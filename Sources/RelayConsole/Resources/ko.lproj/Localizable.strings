@@ -526,6 +526,10 @@
 "settings.incident.auto" = "Incident 번들 자동 캡처";
 "settings.incident.auto.help" = "ANR·크래시·사이트 down 시 manifest·logcat·스크린샷을 로컬 번들로 저장합니다 (5분 쿨다운).";
 "settings.keyPrefix" = "설정키 접두어: relay.*";
+"settings.language" = "언어";
+"settings.language.en" = "English";
+"settings.language.ko" = "한국어";
+"settings.language.system" = "시스템 설정 따름";
 "settings.launch.headless" = "헤드리스로 시작 (창 없이 메뉴바만)";
 "settings.launch.headless.help" = "켜져 있으면 시작 시 콘솔 창을 열지 않고 메뉴바에서만 상주합니다";
 "settings.login.error" = "로그인 항목 변경에 실패했습니다";

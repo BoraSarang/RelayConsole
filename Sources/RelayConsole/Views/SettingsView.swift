@@ -111,6 +111,11 @@ struct SettingsView: View {
             }
             Toggle(L10n.string("settings.menubarMetrics"), isOn: $menubarMetrics)
             Toggle(L10n.string("settings.briefing"), isOn: $store.briefingEnabled)
+            Picker(L10n.string("settings.language"), selection: $store.appLanguage) {
+                Text(L10n.string("settings.language.system")).tag("system")
+                Text(L10n.string("settings.language.ko")).tag("ko")
+                Text(L10n.string("settings.language.en")).tag("en")
+            }
             autoWifiSection
             rulesPathSection
             floatSection
