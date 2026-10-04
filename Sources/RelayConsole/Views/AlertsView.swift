@@ -41,28 +41,27 @@ struct AlertsView: View {
                 period = AlertsPeriod(raw: defaultPeriodRaw) ?? .h24
             }
         }
-        // 캘린더 결과 — **성공도 실패도** 같은 자리에서 말한다 (숨기지 않는다)
+        // 캘린더 결과 — **성공도 실패도** 같은 자리에서 말한다 (숨기지 않는다).
+        // ★ `.alert` 은 뷰당 1개만 — 2개를 나란히 붙이면 하나가 조용히 안 뜬다.
         .alert(
-            calendarAlertTitle,
+            resultAlertTitle,
             isPresented: Binding(
-                get: { calendarState != nil },
-                set: { if !$0 { calendarState = nil } }
+                get: { calendarState != nil || exportMessage != nil },
+                set: {
+                    if !$0 {
+                        calendarState = nil
+                        exportMessage = nil
+                    }
+                }
             )
         ) {
             Button(L10n.string("alerts.ok"), role: .cancel) {}
         } message: {
-            Text(calendarAlertMessage)
-        }
-        .alert(
-            L10n.string(exportFailed ? "alerts.export.failed" : "alerts.export.done"),
-            isPresented: Binding(
-                get: { exportMessage != nil },
-                set: { if !$0 { exportMessage = nil } }
-            )
-        ) {
-            Button(L10n.string("alerts.ok"), role: .cancel) {}
-        } message: {
-            Text(exportMessage ?? "")
+            if calendarState != nil {
+                Text(calendarAlertMessage)
+            } else {
+                Text(exportMessage ?? "")
+            }
         }
     }
 
@@ -419,6 +418,11 @@ struct AlertsView: View {
     }
 
     // MARK: - 캘린더 결과 문구 — **상태가 스스로 말한다** (여기서 분기하지 않는다)
+
+    private var resultAlertTitle: String {
+        if calendarState != nil { return calendarAlertTitle }
+        return L10n.string(exportFailed ? "alerts.export.failed" : "alerts.export.done")
+    }
 
     private var calendarAlertTitle: String {
         L10n.string(calendarState?.titleKey ?? "calendar.add")
