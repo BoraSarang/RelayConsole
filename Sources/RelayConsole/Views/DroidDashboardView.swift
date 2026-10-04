@@ -567,7 +567,7 @@ struct DroidDashboardView: View {
                             .font(OPFont.body(12))
                             .foregroundStyle(OPColor.ink)
                         Spacer()
-                        Text(dayKey)
+                        Text(Self.displayDay(dayKey))
                             .font(OPFont.number(10))
                             .foregroundStyle(OPColor.inkDim)
                     }
@@ -614,6 +614,23 @@ struct DroidDashboardView: View {
                 .font(OPFont.number(13))
                 .foregroundStyle(color)
         }
+    }
+
+    /// dayKey("20261004") → 표시용 ("10월 4일" / "Oct 4").
+    /// dayKey 자체는 저장 키라 바꾸지 않는다 — 표시만 바꾼다.
+    /// 파싱 실패하면 원문 (모르는 값을 꾸미지 않는다).
+    /// 앱 지원 언어(ko/en)만 다루므로 월 이름은 고정 표다.
+    static func displayDay(_ dayKey: String) -> String {
+        guard dayKey.count == 8,
+              let m = Int(dayKey.dropFirst(4).prefix(2)),
+              let d = Int(dayKey.dropFirst(6)),
+              (1...12).contains(m), (1...31).contains(d) else { return dayKey }
+        if L10n.currentLanguage() == "ko" {
+            return "\(m)월 \(d)일"
+        }
+        let months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                      "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+        return "\(months[m - 1]) \(d)"
     }
 
     // MARK: - Detect (settings · logcat)

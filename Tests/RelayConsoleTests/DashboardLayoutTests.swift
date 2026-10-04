@@ -149,3 +149,34 @@ struct DashboardLayoutTests {
         #expect(breakdown.first?.keyword == "accelerometer_rotation")
     }
 }
+
+/// 오늘 요약 날짜 표시 — dayKey("20261004") 날것 노출 회귀 (2026-10-05)
+struct TodaySummaryDateTests {
+    private func withLang(_ v: String?, _ body: () -> String) -> String {
+        let key = L10n.languageKey
+        let prev = UserDefaults.standard.object(forKey: key)
+        if let v { UserDefaults.standard.set(v, forKey: key) }
+        else { UserDefaults.standard.removeObject(forKey: key) }
+        defer {
+            if let prev { UserDefaults.standard.set(prev, forKey: key) }
+            else { UserDefaults.standard.removeObject(forKey: key) }
+        }
+        return body()
+    }
+
+    @Test func koreanMonthDay() {
+        #expect(withLang("ko") { DroidDashboardView.displayDay("20261004") } == "10월 4일")
+        #expect(withLang("ko") { DroidDashboardView.displayDay("20260101") } == "1월 1일")
+    }
+
+    @Test func englishMonthDay() {
+        #expect(withLang("en") { DroidDashboardView.displayDay("20261004") } == "Oct 4")
+        #expect(withLang("en") { DroidDashboardView.displayDay("20261225") } == "Dec 25")
+    }
+
+    @Test func brokenKeyShowsRaw() {
+        #expect(withLang("ko") { DroidDashboardView.displayDay("nope") } == "nope")
+        #expect(withLang("ko") { DroidDashboardView.displayDay("20261340") } == "20261340")
+        #expect(withLang("ko") { DroidDashboardView.displayDay("") } == "")
+    }
+}
