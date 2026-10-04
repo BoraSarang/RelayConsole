@@ -141,7 +141,7 @@ actor DeviceMonitor {
         let list = serials
         guard !list.isEmpty else { return }
 
-        let cmds = isSlowTick ? PollBatch.slow : PollBatch.fast
+        let cmds = PollBatch.cmds(tickCount: tickCount)
         var collected: [String: [PollBatch.Cmd: String]] = [:]
         await withTaskGroup(of: (String, [PollBatch.Cmd: String]).self) { group in
             for serial in list {
@@ -825,16 +825,22 @@ actor DeviceMonitor {
     /// 메뉴바 앱은 macOS 절전 중 폴링이 멈춘다. 깨어나면 cursor가 수 시간 전이라
     /// `logcat -d -T <cursor>` 가 그 사이 **전체 버퍼**를 한 String으로 읽어 들인다.
     /// 실기기 실측: 상한 없이는 **429,643줄**, 적용하면 **1,729줄** (248배 감소).
-    private static let logcatMaxBytes = 200_000
+    /// 200KB → 50KB (2026-10-05): 키워드 감지용이라 50KB면 충분.
+    /// 활성 시간대 SemAp 스팸 1.3만 줄/초가 매 틱 상한을 채우면 하루 수 GB 가 된다.
+    private static let logcatMaxBytes = 50_000
 
     private func pollLogcatWatch(serial: String, state: inout DeviceState) async {
         let cap = Self.logcatMaxBytes
+        // 소음 태그는 기기 측에서 제외 — 스트리머와 같은 기본 집합.
+        // 무필터로 끌면 활성 시간대에 틱마다 상한을 채운다.
+        let specs = LogcatFilter.filterSpecs(minLevel: "*:V", excludedTags: LogcatFilter.defaultExcludedTags)
+            .joined(separator: " ")
         let output: String?
         if let cursor = state.logcatCursor {
             // 단일 셸 문자열로 파이프 전달 (adb shell 은 argv 를 공백으로 이어 붙인다)
-            output = try? shell(serial, "logcat -d -T '\(cursor)' 2>/dev/null | tail -c \(cap)")
+            output = try? shell(serial, "logcat -d -T '\(cursor)' \(specs) 2>/dev/null | tail -c \(cap)")
         } else {
-            output = try? shell(serial, "logcat -d -t 30 2>/dev/null | tail -c \(cap)")
+            output = try? shell(serial, "logcat -d -t 30 \(specs) 2>/dev/null | tail -c \(cap)")
         }
         guard let output, !output.isEmpty else { return }
 

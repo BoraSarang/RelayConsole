@@ -158,11 +158,30 @@ struct PollBatchTests {
         #expect(Array(PollBatch.slow.prefix(PollBatch.fast.count)) == PollBatch.fast)
     }
 
-    /// slow 배치의 기대 효과 — 종전 25회 → 1회
+    /// slow 배치의 기대 효과 — 종전 24회 → 1회 (activity 는 60초 항목으로 이동)
     @Test func slowBatchCollapsesManyCallsIntoOne() {
-        #expect(PollBatch.slow.count == 25)
+        #expect(PollBatch.slow.count == 24)
+        #expect(!PollBatch.slow.contains(.activity))
         // 실제 adb 호출은 fast/slow 무관하게 1회
         #expect(PollBatch.build(PollBatch.slow).contains("; ") == true)
+    }
+
+    /// 60초 항목 — activity 89KB 덤프를 15초마다 끌면 하루 500MB 다
+    @Test func sixtyHoldsOnlyHeavyDumps() {
+        #expect(PollBatch.sixty == [.activity])
+    }
+
+    /// 틱 구성 — 5초 간격: fast 매틱, slow 15초, sixty 60초. sixty 는 slow 틱과 겹친다
+    @Test func cmdsForTickCadence() {
+        #expect(PollBatch.cmds(tickCount: 1) == PollBatch.slow + PollBatch.sixty)
+        #expect(PollBatch.cmds(tickCount: 2) == PollBatch.fast)
+        #expect(PollBatch.cmds(tickCount: 4) == PollBatch.slow)
+        #expect(PollBatch.cmds(tickCount: 13) == PollBatch.slow + PollBatch.sixty)
+        // sixty 가 붙어도 slow 접두·마커 순서는 그대로 (build/parse 동일 배열)
+        let c = PollBatch.cmds(tickCount: 1)
+        #expect(Array(c.prefix(PollBatch.fast.count)) == PollBatch.fast)
+        #expect(c.contains(.activity))
+        #expect(!PollBatch.cmds(tickCount: 2).contains(.activity))
     }
 
     /// 모든 명령 문자열이 비어있지 않고, 위험한 셸 제어문자가 섞이지 않았는지

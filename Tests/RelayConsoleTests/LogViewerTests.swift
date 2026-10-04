@@ -259,8 +259,8 @@ struct LogcatNoiseFilterTests {
 
     // MARK: - 제외가 무엇을 건드리지 않는가
 
-    /// 제외는 **로그 창의 실시간 스트림에만** 적용된다.
-    /// incident 덤프(`logcat -d`)와 키워드 스캔까지 얇아지면
+    /// 제외는 **탐지 경로**(로그 창 스트림 + 감시 폴링)에만 적용된다.
+    /// incident 덤프(`logcat -d`)까지 얇아지면
     /// "증거를 뽑아 보면 저게 보인다" 가 거짓말이 된다
     @Test func incidentCaptureIsNotFiltered() {
         let text = (try? String(contentsOf: Self.incidentURL, encoding: .utf8)) ?? ""
@@ -279,6 +279,15 @@ struct LogcatNoiseFilterTests {
             .deletingLastPathComponent()   // Tests
             .deletingLastPathComponent()   // 저장소 루트
             .appendingPathComponent("Sources/RelayConsole/Incident/IncidentBundle.swift")
+    }
+
+    /// 감시 폴링도 같은 집합으로 건다 — 무필터로 끌면 활성 시간대에 틱마다 상한을 채운다.
+    /// 레벨은 *:V (감시는 전 레벨 키워드 스캔). 크래시·FATAL 은 제외 태그에 없으므로 살아남는다
+    @Test func watchUsesVerboseLevelWithDefaultExclusions() {
+        let specs = LogcatFilter.filterSpecs(minLevel: "*:V", excludedTags: LogcatFilter.defaultExcludedTags)
+        #expect(specs.first == "*:V")
+        #expect(specs.count == 1 + LogcatFilter.defaultExcludedTags.count)
+        #expect(!specs.joined(separator: " ").contains("AndroidRuntime:S"))
     }
 }
 

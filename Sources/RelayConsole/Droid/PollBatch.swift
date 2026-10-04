@@ -97,11 +97,22 @@ enum PollBatch {
     static let fast: [Cmd] = [.battery, .thermal, .loadavg, .procStat, .accelRotation, .userRotation]
 
     /// slow 틱 — 15초마다 (fast + 15초 항목)
+    /// activity 는 제외 — 89KB 덤프를 15초마다 끌면 하루 500MB 다 (60초 항목으로 이동)
     static let slow: [Cmd] = fast + [
         .lowPower, .scalingCur, .scalingMax, .meminfo, .psi, .ps, .cpuinfo, .netdev,
-        .netstats, .connectivity, .signal, .activity, .ipWlan, .df,
+        .netstats, .connectivity, .signal, .ipWlan, .df,
         .gpuBusy, .gpuGpubusy, .gpuClk, .sensors, .diskstats,
     ]
+
+    /// 60초 틱 — 무거운 덤프만. slow 틱과 겹치는 순간에만 붙는다 (마커 순서 유지)
+    static let sixty: [Cmd] = [.activity]
+
+    /// 틱 카운터 → 이번 틱 명령. 5초 간격 틱 기준 slow=15초, sixty=60초
+    static func cmds(tickCount: Int) -> [Cmd] {
+        var out = tickCount % 3 == 1 ? slow : fast
+        if tickCount % 12 == 1 { out += sixty }
+        return out
+    }
 
     // MARK: - 마커
 
