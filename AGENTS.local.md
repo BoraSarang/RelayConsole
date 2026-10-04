@@ -57,6 +57,8 @@ swift test
   - 상태는 반드시 구분: 성공 · 실패(+원인) · 미측정/미수집 · 권한 없음 · 기기 미연결 — 같은 "—" 또는 `0`으로 뭉뚱그리지 않음
   - 오프라인·이전 수치를 병치하면 "마지막 스냅샷"임을 명시 (`apple.offline.banner`와 동일 패턴)
   - 새 상태/에러 문구는 en·ko L10n 키를 **같은 키명으로 동시 추가** (키 개수 1:1 유지)
+  - L10n 원천: `Sources/RelayConsole/Resources/{en,ko}.lproj/Localizable.strings`만. `Resources/Localizable.xcstrings`는 삭제됨 — 재생성·편집 금지. 리소스 번들(`Bundle.module`) 누락은 런타임 fatal
+  - 하트비트 서버는 **127.0.0.1 전용 바인드** — 외부 노출 금지. 토큰·웹훅 URL 하드코딩 금지, 로그에는 마스킹 기록
 - **팝오버·Droid 대시보드 표시: 다크 전용** (밝은 테마/웹풍 버튼/print 금지)
 - **[HARD] 빌드 스크립트는 최상단 참조 — 매 수정 직후 `./scripts/build-macos.sh debug` 필수** (`swift build`/`swift test`만으로 종료 금지)
 - **위젯 구조 (1.15.0)**: `Sources/RelayWidget`는 **SPM 미등록** — `WidgetXcode/project.yml`(xcodegen)+`xcodebuild`로만 빌드 (SPM appex는 WidgetKit bootstrap 크래시, 가이드 §2.3). `Sources/RelayWidgetCore`만 SPM 타깃(공유·public). 앱·위젯 **서명은 Apple Development(6GPJQ7BQC9) 통일 유지** — ad-hoc/팀 불일치면 위젯 갤러리 미표시. 앱은 **비샌드박스 유지**(adb/scrcpy), 위젯 appex만 sandbox. 공유 데이터는 App Group `6GPJQ7BQC9.com.borasarang.relayconsole`의 `widget-snapshot.json` (`WidgetSnapshotStore`)
@@ -66,3 +68,7 @@ swift test
 - v2 카드: bg #1c1f2a, radius 16, 숫자 SF Mono, 발열 오렌지 배너
 - 아이콘: BrandKit/AppIcons + MenuBarIcons (Black Template = Xcode template)
 - 상세: docs/plans/PLAN_v0.1_relayconsole.md §4
+
+## 6. 커밋 훅 · UI 프로브
+- 훅: `scripts/git-hooks/pre-commit` (한자 혼입·U+FFFD·충돌 마커, 스테이징 파일만). `core.hooksPath`는 로컬 git 설정이라 fresh clone에서 사라짐
+- UI 계측: `swift scripts/ax-dump.swift "Relay Console" --window=<이름> --buttons/--click`. `MenuBarExtra` 상태 항목은 AX 미노출 — 물리 클릭+육안만 가능 (`docs/MANUAL_VERIFY.md` §11)

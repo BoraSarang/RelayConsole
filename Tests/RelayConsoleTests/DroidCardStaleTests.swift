@@ -59,3 +59,47 @@ final class DroidCardStaleTests: XCTestCase {
         XCTAssertEqual(info?.at, at)
     }
 }
+
+/// 충전 방치 카드 — 트래커는 끝났고 카드 표시만 없었다 (PR #62 잔여)
+///
+/// 방치 중이 아니면(충전 중·임계 초과·오프라인·0초) **배너가 없다**.
+/// "0초 방치" 는 /metrics 행 없음과 같은 모순이다.
+final class DroidCardNeglectTests: XCTestCase {
+
+    private func device(online: Bool, neglectSeconds: Int?) -> DeviceSnapshot {
+        var d = DeviceSnapshot()
+        d.serial = "S1"
+        d.isOnline = online
+        d.neglectSeconds = neglectSeconds
+        return d
+    }
+
+    func testNoBannerWhenNotNeglected() {
+        XCTAssertNil(DroidCards.neglectBanner(device(online: true, neglectSeconds: nil)))
+        XCTAssertNil(DroidCards.neglectBanner(device(online: true, neglectSeconds: 0)))
+        XCTAssertNil(DroidCards.neglectBanner(nil))
+    }
+
+    /// 오프라인 기기의 묵은 방치값은 말하지 않는다 — "지금" 이 아닌 것을 지금처럼 보이면 안 된다
+    func testNoBannerWhenOffline() {
+        XCTAssertNil(DroidCards.neglectBanner(device(online: false, neglectSeconds: 3600)))
+    }
+
+    func testBannerShowsDuration() {
+        let banner = DroidCards.neglectBanner(device(online: true, neglectSeconds: 3720))
+        XCTAssertNotNil(banner)
+        XCTAssertTrue(banner?.contains("1") == true, "지속 시간이 보여야 한다: \(banner ?? "")")
+    }
+
+    func testDurationUnits() {
+        // %d 자리 — %@ 로 되돌리면 L10nFormatTests 전수 스캔이 잡는다
+        XCTAssertTrue(DroidCards.neglectDuration(3720).contains("1"))
+        XCTAssertTrue(DroidCards.neglectDuration(2700).contains("45"))
+        XCTAssertFalse(DroidCards.neglectDuration(30).contains("0분"), "30초를 0분이라 하면 거짓말: \(DroidCards.neglectDuration(30))")
+    }
+
+    /// 스냅샷 기본값은 방치 아님 — 폴링이 값을 못 채우면 배너가 나면 안 된다
+    func testSnapshotDefaultsToNotNeglected() {
+        XCTAssertNil(DeviceSnapshot().neglectSeconds)
+    }
+}

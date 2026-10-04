@@ -121,6 +121,7 @@
 "droid.battery.type" = "Type";
 "droid.battery.voltage" = "Voltage";
 "droid.card.battery.charging" = "Charging";
+"droid.card.battery.neglect" = "Neglected %@";
 "droid.card.battery.protection" = "Battery Protection";
 "droid.card.battery.title" = "BATTERY";
 "droid.card.cpu.title" = "CPU";
@@ -145,6 +146,9 @@
 "droid.detect.logs" = "Logs";
 "droid.detect.settings" = "Settings changed";
 "droid.detect.title" = "Detect";
+"droid.duration.hm" = "%d h %d min";
+"droid.duration.min" = "%d min";
+"droid.duration.sec" = "%d sec";
 "droid.empty.noDevice" = "No Device Connected";
 "droid.empty.noDeviceBody" = "Connect an Android device over USB to see it here.";
 "droid.empty.noDeviceHint" = "Network device: adb connect IP:PORT";
