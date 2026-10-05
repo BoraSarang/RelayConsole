@@ -104,9 +104,13 @@
 "briefing.line" = "%d/%d 폰 · critical %d";
 "cards.empty" = "표시할 카드가 없습니다 — 설정에서 카드 켜기";
 "common.na" = "—";
+"diagnose.charging" = "충전 중";
 "diagnose.dropbox" = "dropbox 기록 %@";
 "diagnose.frequency" = "7일 %d회";
+"diagnose.hotspot" = "핫스팟 켜짐";
 "diagnose.section" = "자동 진단";
+"diagnose.suspect" = "주범 후보 %@ · CPU %@";
+"diagnose.zones" = "최고온 %@";
 "droid.appnet.col.app" = "앱";
 "droid.appnet.col.cumulative" = "누적";
 "droid.appnet.col.down" = "다운로드";
@@ -326,6 +330,11 @@
 "insights.calendar.today" = "오늘";
 "insights.day.empty" = "이 날짜의 데이터가 없습니다";
 "insights.day.title" = "일자 상세";
+"insights.env.cells" = "셀 변경 %d회 · %d셀";
+"insights.env.drain" = "시간당 %@ 감소";
+"insights.env.drops" = "신호 급락 %d회";
+"insights.env.empty" = "아직 자료 없음";
+"insights.env.title" = "환경 패턴";
 "insights.export.json" = "리포트 JSON";
 "insights.export.patterns" = "패턴 CSV";
 "insights.metric.anr" = "ANR";

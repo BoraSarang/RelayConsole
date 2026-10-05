@@ -606,6 +606,9 @@ actor DeviceMonitor {
                 snap.signalRat = sig.rat
                 snap.signalCA = sig.ca
                 snap.signalBands = AdbClient.bandSummary(lte: sig.lteBands, nr: sig.nrBands)
+                snap.cellCi = sig.cellCi
+                snap.cellPci = sig.cellPci
+                CellHistory.record(serial: serial, ci: sig.cellCi, pci: sig.cellPci, rsrp: sig.rsrp, at: Date())
                 // ── 감시: RSRP 급락
                 if let rsrp = sig.rsrp {
                     await emitWatch(
