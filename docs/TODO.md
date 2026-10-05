@@ -3,6 +3,20 @@
 > **육안 검증 대기는 `docs/MANUAL_VERIFY.md` 한 곳에 모았다** (2026-09-28) —
 > 여러 세션에 흩어져 있어 "남은 게 뭐였지" 를 한 번에 볼 수 없었다.
 
+## 완료 (2026-10-05)
+
+- [x] **T-2026-10-05-1 Sites·Jobs 제거 — 기기 관제로 집중** (`docs/DECISIONS.md` D1)
+  - **결정**: 쓰는 사람도 만나는 데이터도 없어 덜어냈다. 앱은 "기기 관제탑" 한 문장.
+    **다시 보지 않는다** — 부활 논의는 D1을 먼저 읽는다. 재료는 git 히스토리.
+  - 삭제: `Sites/`·`Jobs/`(하트비트 8787 포함)·`SitesJobs.swift`·`SitesJobsStore`·Sites/Jobs Views·
+    WatchKind 5종(siteDown/siteUp/jobOverdue/jobRecovered/sslExpiring)·MCP 도구 2종·
+    E-MAC-NET/JOB 7종·L10n 111키·위젯/브리핑/Alerts/`/metrics`의 사이트·작업 파트·`docs/api/HEARTBEAT.md`
+  - 위젯 스냅샷 스키마 v1 → v2 (구파일은 여분 키 무시로 계속 읽힘) ·
+    위젯 medium 좌측 = 기기 / 우측 = 최근 이벤트로 재배치
+  - 브리핑 한 줄: `%d/%d 폰 · critical %d` · MCP: 기기+이벤트 3도구만
+  - **검증 [HARD]**: `swift test` **580 / 0 failed** · `./scripts/build-macos.sh debug` **EXIT=0** ·
+    L10n **721키 en/ko 1:1** · U+FFFD 0건
+
 ## 진행 중 (bd ready)
 - **PR #57** `chore/macos-cjk-hook` — 한자 커밋 훅 + 육안 목록 문서화 (검토 대기)
 - **착수 준비** S3 Rules as Code — `docs/plans/PLAN_rules_yaml.md` (조사 완료 · 구현 착수 지점 명시)

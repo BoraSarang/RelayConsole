@@ -12,11 +12,19 @@
 
 ## 왜 Relay Console인가
 
-- **서버 없음** — 맥 메뉴바에 상주하는 개인 관제탑: 폰(USB·Wi-Fi)·URL·크론 하트비트를 한 배지와 한 알림 폭으로 감시
+- **서버 없음** — 맥 메뉴바에 상주하는 개인 기기 관제탑: 폰(USB·Wi-Fi)·태블릿을 한 배지와 한 알림 폭으로 감시
 - **로컬 전용** — 데이터는 이 기기에서만, 외부 전송은 사용자가 연결한 알림 채널(ntfy/Slack)에만
 - **설치·운영 부담 낮음** — 빌드 한 번으로 메뉴바 상주, 별도 서버 불필요
 
-**한 줄**: *메뉴바에서 끝나는 관제 — 폰·사이트·작업을 한 배지로.*
+**한 줄**: *메뉴바에서 끝나는 기기 관제.*
+
+---
+
+## 삭제된 기능 (다시 보지 않는다)
+
+- **Sites·Jobs 제거 (2026-10-05)** — 사이트 업타임·하트비트 작업 감시를 앱에서 덜어냈다.
+  기기 관제탑으로 sharp하게 가기 위한 결정. 사유·경위는 `docs/DECISIONS.md` D1.
+  부활은 git 히스토리에서 (`git log -- Sources/RelayConsole/Sites`).
 
 ---
 
@@ -24,12 +32,12 @@
 
 ### 메뉴바 · 팝오버
 - 기기 수·배터리·critical 주황 배지
-- 팝오버: **아침 브리핑 한 줄**(사이트·지연 작업·폰·critical), 사이트 요약, Jobs overdue, 발열 배너, 권장 후속 조치 체크리스트
+- 팝오버: **아침 브리핑 한 줄**(폰·critical), 발열 배너, 권장 후속 조치 체크리스트
 - 종료 버튼 + 확인 알림
 - 설정 → 일반에서 브리핑 표시 on/off
 
 ### 위젯 (macOS WidgetKit · 1.15.0)
-- 데스크톱/알림센터용 **Relay 상태** 위젯 3종: small(선택 기기 배터리·발열) / medium(브리핑+사이트+작업) / large(기기·사이트·최근 이벤트 전체)
+- 데스크톱/알림센터용 **Relay 상태** 위젯 3종: small(선택 기기 배터리·발열) / medium(기기+최근 이벤트) / large(기기·최근 이벤트 전체)
 - 메뉴바 앱이 **60초 간격**으로 스냅샷을 App Group에 기록 — 위젯은 "마지막 업데이트" 시각을 항상 표시
 - 위젯 탭 → 콘솔/Alerts 등 해당 화면으로 바로 이동 (`relayconsole://` 딥링크)
 - 추가: *데스크톱 우클릭 → "위젯 편집" → 검색 **Relay***
@@ -40,14 +48,6 @@
 - 감시 18종: 스로틀링·배터리·PSI·load·메모리·Bsoh·RSRP·ANR·크래시 등  
   hysteresis + 쿨다운 · 시스템 알림 · 화면 상단 배너 · Alerts ack/mute/note
 - Apple: `libimobiledevice` Trust-only 연결·배터리/스토리지 카드 (Phase1)
-
-### 사이트 (Sites)
-- HTTP / TCP / ping 체크 · 7d·30d 상태 바 · 가동률% · 스파크라인
-- 실패 임계(failThreshold) · down → Alerts 편입
-
-### 작업 (Jobs)
-- `127.0.0.1` 하트비트 수서버 · overdue/grace · curl 토큰 등록
-- overdue → Alerts
 
 ### 알림 · 연동 (1.3.0)
 - Alerts 3탭(활성/무음/해소) · 필터 · JSON/CSV export
@@ -119,16 +119,14 @@ Sources/RelayConsole/
   App/          ConsoleStore · CoalescingWriter · EventStore · AlertBanner · AppDelegate
   Droid/        ADB(PollBatch 배치) · 감시 엔진 · ProcessRunner · scrcpy
   Apple/        libimobiledevice Phase1
-  Sites/        HTTP·TCP·ping 체커
-  Jobs/         하트비트 서버
-  Incident/     ANR·크래시·siteDown 번들 캡처
-  Models/       WatchEvent · SitesJobs · InsightLogic
+  Incident/     ANR·크래시 번들 캡처
+  Models/       WatchEvent · InsightLogic · Briefing · MetricsText
   Views/        메뉴바 팝오버 · 콘솔 · 설정 · Alerts · 인사이트
   DesignSystem/ 토큰 · 공통 컴포넌트
   Utils/        파서 · ThresholdGate · NotifyChannel · IssueLog · DebugLogger
-Sources/RelayMcpCore/   로컬 MCP 프로토콜·데이터 (읽기 전용)
+Sources/RelayMcpCore/   로컬 MCP 프로토콜·데이터 (읽기 전용 · 기기+이벤트만)
 Sources/RelayWidgetCore/ 위젯 공유 스냅샷 모델 · App Group 저장소
-docs/         PLAN · RESEARCH · DESIGN · TODO
+docs/         PLAN · RESEARCH · DESIGN · TODO · DECISIONS
 ```
 
 ---
@@ -139,9 +137,9 @@ docs/         PLAN · RESEARCH · DESIGN · TODO
 |------|------|
 | `docs/DESIGN.md` | 관제탑 토큰·다크 전용 규칙 |
 | `docs/TODO.md` | 진행·보류·완료 |
-| `docs/plans/` | PLAN_v0.x · alerts · sites · notify |
+| `docs/DECISIONS.md` | 제품 결정 기록 (Sites·Jobs 제거 등 · 다시 보지 않는다) |
+| `docs/plans/` | PLAN_v0.x · alerts · notify |
 | `docs/research/` | 경쟁 리서치·감시 이벤트·Apple 조사 |
-| `docs/api/HEARTBEAT.md` | 하트비트 엔드포인트 |
 | `AGENTS.local.md` | 프로젝트 AI 규칙 |
 
 ---
@@ -156,8 +154,7 @@ docs/         PLAN · RESEARCH · DESIGN · TODO
 
 ## 주의
 
-- 하트비트 서버는 **127.0.0.1**에만 바인드됩니다 (외부 노출 금지).
 - 기기 식별자는 **화면·알림·내보내기에서 원문 그대로** 표시합니다 — 무선 기기는 `IP:PORT`,
   USB 는 `기기명 · 시리얼`. `…5555` 로 축약하면 무선 기기 구분이 불가능해집니다.
   마스킹(뒤 4자리)은 **DebugLogger · 로그 파일 출력에만** 적용됩니다.
-- 하트비트 토큰·웹훅 URL은 하드코딩하지 않으며, 로그에는 **마스킹**해 기록합니다.
+- 웹훅 URL·토큰은 하드코딩하지 않으며, 로그에는 **마스킹**해 기록합니다.

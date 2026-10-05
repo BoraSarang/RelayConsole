@@ -19,27 +19,9 @@ struct MetricsSnapshot: Equatable, Sendable {
         var neglectSeconds: Int?
     }
 
-    struct Site: Equatable, Sendable {
-        var name: String
-        var target: String
-        /// nil = **판정 유보** (한 번도 확인하지 않았거나 flapping 보호 구간).
-        /// 0 을 넣으면 "확인했고 죽었다" 는 주장이 된다 → 행을 내지 않는다
-        var isUp: Bool?
-        var sslExpiresInSeconds: Double?
-    }
-
-    struct Job: Equatable, Sendable {
-        var name: String
-        /// 미수신이면 nil — 이때는 overdue 를 **계산하지 않는다** (시간이 없으므로)
-        var overdueSeconds: Double?
-        var lastBeatOk: Bool?
-    }
-
     var version: String
     var build: String
     var devices: [Device] = []
-    var sites: [Site] = []
-    var jobs: [Job] = []
     var activeCriticalAlerts: Int = 0
 }
 
@@ -52,8 +34,6 @@ struct MetricsSnapshot: Equatable, Sendable {
 enum MetricsSnapshotBuilder {
     static func make(
         devices: [DeviceSnapshot],
-        sites: [Site],
-        jobs: [Job],
         events: [WatchEvent],
         now: Date = .now,
         version: String = AppVersion.display,
@@ -72,37 +52,8 @@ enum MetricsSnapshotBuilder {
                 neglectSeconds: d.isOnline ? neglect[d.serial] : nil
             )
         }
-        // 비활성 사이트/잡은 **행을 내지 않는다** — 끈 것을 죽은 것으로 세지 않는다
-        snap.sites = sites.filter(\.enabled).map { s in
-            MetricsSnapshot.Site(
-                name: s.name,
-                target: s.target,
-                // 판정 유보(nil) — 한 번도 확인하지 않았거나 flapping 보호 구간.
-                // 이때 0 을 넣으면 "확인했고 죽었다" 는 주장이 된다
-                isUp: s.effectiveUp(),
-                sslExpiresInSeconds: s.sslExpiresAt.map { $0.timeIntervalSince(now) }
-            )
-        }
-        snap.jobs = jobs.filter(\.enabled).map { j in
-            MetricsSnapshot.Job(
-                name: j.name,
-                overdueSeconds: overdueSeconds(j, now: now),
-                lastBeatOk: j.lastBeatOk
-            )
-        }
         snap.activeCriticalAlerts = BriefingLogic.activeCriticalCount(events)
         return snap
-    }
-
-    /// 기한을 **얼마나 넘겼는지** 초 — `isOverdue(now:)` 가 true 일 때만 값을 갖는다
-    ///
-    /// 기한은 "마지막 수신 + 기대 주기" 다. 미수신이면 "생성 + 기대 주기" 가 기한이다
-    /// (`isOverdue` 의 grace 규칙과 같은 기준을 쓴다).
-    static func overdueSeconds(_ job: Job, now: Date) -> Double? {
-        guard job.isOverdue(now: now) == true else { return nil }
-        let deadline = (job.lastBeatAt ?? job.createdAt)
-            .addingTimeInterval(TimeInterval(job.expectEverySec))
-        return max(0, now.timeIntervalSince(deadline))
     }
 }
 
@@ -151,9 +102,6 @@ enum MetricsTextBuilder {
         out += "# HELP relay_build_info 앱 버전 (항상 1 — 값은 라벨로)\n"
         out += "# TYPE relay_build_info gauge\n"
         out += line("relay_build_info", ["version": snap.version, "build": snap.build], "1") + "\n"
-        out += "# HELP relay_heartbeat_up 이 응답을 낸 하트비트 서버가 살아 있는가\n"
-        out += "# TYPE relay_heartbeat_up gauge\n"
-        out += line("relay_heartbeat_up", [:], "1") + "\n"
 
         out += "# HELP relay_device_online 기기가 지금 연결돼 있는가 (오프라인도 0 으로 낸다)\n"
         out += "# TYPE relay_device_online gauge\n"
@@ -177,34 +125,6 @@ enum MetricsTextBuilder {
             // 방치 **중인** 기기만 행을 낸다 — 0 초는 "방치 중이지만 0 초" 라는 모순이다
             guard let neg = d.neglectSeconds else { continue }
             out += line("relay_device_battery_neglect_seconds", ["serial": d.serial], String(neg)) + "\n"
-        }
-
-        out += "# HELP relay_site_up 사이트가 올라와 있는가 (비활성·판정 유보는 행이 없다)\n"
-        out += "# TYPE relay_site_up gauge\n"
-        for s in snap.sites {
-            guard let up = s.isUp else { continue }
-            out += line("relay_site_up", ["name": s.name, "target": s.target], up ? "1" : "0") + "\n"
-        }
-
-        out += "# HELP relay_site_ssl_expires_in_seconds SSL 만료까지 남은 초 (모르면 행이 없다)\n"
-        out += "# TYPE relay_site_ssl_expires_in_seconds gauge\n"
-        for s in snap.sites {
-            guard let remain = s.sslExpiresInSeconds else { continue }
-            out += line("relay_site_ssl_expires_in_seconds", ["name": s.name], number(remain)) + "\n"
-        }
-
-        out += "# HELP relay_job_overdue_seconds 하트비트 기대 주기 초과 초 (미수신은 행이 없다)\n"
-        out += "# TYPE relay_job_overdue_seconds gauge\n"
-        for j in snap.jobs {
-            guard let over = j.overdueSeconds else { continue }
-            out += line("relay_job_overdue_seconds", ["name": j.name], number(over)) + "\n"
-        }
-
-        out += "# HELP relay_job_beat_ok 마지막 하트비트가 정상 수신됐는가\n"
-        out += "# TYPE relay_job_beat_ok gauge\n"
-        for j in snap.jobs {
-            guard let ok = j.lastBeatOk else { continue }
-            out += line("relay_job_beat_ok", ["name": j.name], ok ? "1" : "0") + "\n"
         }
 
         out += "# HELP relay_alert_active_critical 지금 활성화된 critical 알림 수\n"

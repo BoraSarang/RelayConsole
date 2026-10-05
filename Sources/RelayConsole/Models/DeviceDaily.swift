@@ -219,8 +219,7 @@ enum DeviceDailyLogic {
 private extension WatchSeverity {
     static func severity(for kind: WatchKind) -> WatchSeverity {
         switch kind {
-        case .anr, .crash, .siteDown: return .critical
-        case .sslExpiring: return .warning
+        case .anr, .crash: return .critical
         // 탐지(설정 변경·logcat) — 관제 임계 아님, 일일 경고 집계 제외
         case .settingsChanged, .logcatHits: return .info
         default: return .warning

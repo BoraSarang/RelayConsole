@@ -27,14 +27,6 @@ enum WidgetTheme {
         default: return inkDim
         }
     }
-
-    static func siteColor(_ state: WidgetSiteState) -> Color {
-        switch state {
-        case .up: return ok
-        case .down: return bad
-        case .unknown: return inkDim
-        }
-    }
 }
 
 struct RelayWidgetView: View {
@@ -108,8 +100,6 @@ private struct SmallView: View {
 
             if let device = snapshot.devices.first {
                 deviceBlock(device)
-            } else if let site = snapshot.sites.first {
-                siteBlock(site)
             }
 
             Spacer(minLength: 0)
@@ -159,27 +149,6 @@ private struct SmallView: View {
         }
     }
 
-    @ViewBuilder
-    private func siteBlock(_ site: WidgetSite) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(verbatim: site.name)
-                .font(.system(size: 11, design: .monospaced))
-                .foregroundStyle(WidgetTheme.ink)
-                .lineLimit(1)
-                .truncationMode(.middle)
-            HStack(spacing: 5) {
-                Circle()
-                    .fill(WidgetTheme.siteColor(site.state))
-                    .frame(width: 7, height: 7)
-                if let pct = site.uptime7dPct {
-                    Text(verbatim: String(format: "%.1f%%", pct))
-                        .font(.system(size: 12, weight: .semibold, design: .monospaced))
-                        .foregroundStyle(WidgetTheme.ink)
-                }
-            }
-        }
-    }
-
     private func batteryColor(pct: Int, charging: Bool) -> Color {
         if charging { return WidgetTheme.ok }
         if pct <= 20 { return WidgetTheme.bad }
@@ -198,9 +167,9 @@ private struct MediumView: View {
             header
             Divider().overlay(WidgetTheme.border)
             HStack(alignment: .top, spacing: 10) {
-                sitesColumn
+                devicesColumn
                 Divider().overlay(WidgetTheme.border)
-                rightColumn
+                eventsColumn
             }
             Spacer(minLength: 0)
             UpdatedFooter(updatedAt: snapshot.updatedAt)
@@ -228,37 +197,31 @@ private struct MediumView: View {
 
     private var headerText: String {
         if let briefing = snapshot.briefing { return briefing }
+        let online = snapshot.devices.filter(\.online).count
         return WidgetStrings.format(
             "widget.summary",
-            "\(snapshot.siteUp)",
-            "\(snapshot.siteTotal)",
-            "\(snapshot.jobsOverdue)"
+            "\(online)",
+            "\(snapshot.devices.count)"
         )
     }
 
-    private var sitesColumn: some View {
+    private var eventsColumn: some View {
         VStack(alignment: .leading, spacing: 4) {
-            if snapshot.sites.isEmpty {
-                Text(verbatim: WidgetStrings.string("widget.sites.none"))
+            if snapshot.events.isEmpty {
+                Text(verbatim: WidgetStrings.string("widget.events.none"))
                     .font(.system(size: 10))
                     .foregroundStyle(WidgetTheme.inkDim)
             } else {
-                ForEach(Array(snapshot.sites.prefix(4).enumerated()), id: \.offset) { _, site in
+                ForEach(Array(snapshot.events.prefix(4).enumerated()), id: \.offset) { _, event in
                     HStack(spacing: 6) {
                         Circle()
-                            .fill(WidgetTheme.siteColor(site.state))
+                            .fill(WidgetTheme.severityColor(event.severity))
                             .frame(width: 6, height: 6)
-                        Text(verbatim: site.name)
-                            .font(.system(size: 11, design: .monospaced))
+                        Text(verbatim: event.title)
+                            .font(.system(size: 11))
                             .foregroundStyle(WidgetTheme.ink)
                             .lineLimit(1)
-                            .truncationMode(.middle)
-                        Spacer(minLength: 4)
-                        if let pct = site.uptime7dPct {
-                            Text(verbatim: String(format: "%.1f%%", pct))
-                                .font(.system(size: 10, design: .monospaced))
-                                .foregroundStyle(WidgetTheme.inkDim)
-                        }
+                            .truncationMode(.tail)
                     }
                 }
             }
@@ -266,7 +229,7 @@ private struct MediumView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private var rightColumn: some View {
+    private var devicesColumn: some View {
         VStack(alignment: .leading, spacing: 5) {
             if snapshot.devices.isEmpty {
                 Text(verbatim: WidgetStrings.string("widget.devices.none"))
@@ -306,22 +269,8 @@ private struct MediumView: View {
                     }
                 }
             }
-            jobsLine
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    @ViewBuilder
-    private var jobsLine: some View {
-        if snapshot.jobsOverdue > 0 {
-            Text(verbatim: WidgetStrings.format("widget.overdue", "\(snapshot.jobsOverdue)"))
-                .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                .foregroundStyle(WidgetTheme.warn)
-        } else if snapshot.jobsTotal > 0 {
-            Text(verbatim: WidgetStrings.string("widget.jobs.ok"))
-                .font(.system(size: 10, design: .monospaced))
-                .foregroundStyle(WidgetTheme.ok)
-        }
     }
 }
 
@@ -340,16 +289,6 @@ private struct LargeView: View {
                 } else {
                     ForEach(Array(snapshot.devices.prefix(3).enumerated()), id: \.offset) { _, device in
                         deviceRow(device)
-                    }
-                }
-            }
-            Divider().overlay(WidgetTheme.border)
-            section(title: WidgetStrings.string("widget.section.sites")) {
-                if snapshot.sites.isEmpty {
-                    emptyLine("widget.sites.none")
-                } else {
-                    ForEach(Array(snapshot.sites.enumerated()), id: \.offset) { _, site in
-                        siteRow(site)
                     }
                 }
             }
@@ -419,25 +358,6 @@ private struct LargeView: View {
         }
     }
 
-    private func siteRow(_ site: WidgetSite) -> some View {
-        HStack(spacing: 6) {
-            Circle()
-                .fill(WidgetTheme.siteColor(site.state))
-                .frame(width: 6, height: 6)
-            Text(verbatim: site.name)
-                .font(.system(size: 11, design: .monospaced))
-                .foregroundStyle(WidgetTheme.ink)
-                .lineLimit(1)
-                .truncationMode(.middle)
-            Spacer(minLength: 4)
-            Text(verbatim: site.state == .down
-                ? WidgetStrings.string("widget.sites.down")
-                : (site.uptime7dPct.map { String(format: "%.1f%%", $0) } ?? "—"))
-                .font(.system(size: 10, design: .monospaced))
-                .foregroundStyle(site.state == .down ? WidgetTheme.bad : WidgetTheme.inkDim)
-        }
-    }
-
     private func eventRow(_ event: WidgetEvent) -> some View {
         HStack(spacing: 6) {
             Text(verbatim: WidgetStrings.clock(event.at))
@@ -486,21 +406,17 @@ private struct MediumHeader: View {
             Spacer(minLength: 0)
             if snapshot.critical > 0 {
                 CriticalChip(count: snapshot.critical)
-            } else if snapshot.jobsOverdue > 0 {
-                Text(verbatim: WidgetStrings.format("widget.overdue", "\(snapshot.jobsOverdue)"))
-                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                    .foregroundStyle(WidgetTheme.warn)
             }
         }
     }
 
     private var headerText: String {
         if let briefing = snapshot.briefing { return briefing }
+        let online = snapshot.devices.filter(\.online).count
         return WidgetStrings.format(
             "widget.summary",
-            "\(snapshot.siteUp)",
-            "\(snapshot.siteTotal)",
-            "\(snapshot.jobsOverdue)"
+            "\(online)",
+            "\(snapshot.devices.count)"
         )
     }
 }

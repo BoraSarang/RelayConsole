@@ -346,12 +346,11 @@ enum PatternLogic {
         return .once
     }
 
-    /// 패턴 리포트 대상 kind — 상태 전이·fatal·사이트 등
+    /// 패턴 리포트 대상 kind — 상태 전이·fatal 등
     static func isPatternKind(_ kind: WatchKind) -> Bool {
         switch kind {
         case .crash, .anr, .throttling, .psiPressure, .loadSpike,
              .memoryLow, .signalDrop, .bsohDrop, .batteryThreshold,
-             .siteDown, .jobOverdue, .sslExpiring,
              .androidConnected, .androidDisconnected,
              .appleConnected, .appleDisconnected:
             return true

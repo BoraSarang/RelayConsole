@@ -70,10 +70,10 @@ enum IncidentBundleLogic {
             + "(상한 \(maxBytes / 1_048_576)MB) — 끝쪽( 이벤트 시각 이후 최신)만 보존됨 ====="
     }
 
-    /// 자동/수동 캡처 대상 — ANR·크래시·사이트 down (clear 제외)
+    /// 자동/수동 캡처 대상 — ANR·크래시 (clear 제외)
     static func captures(kind: WatchKind) -> Bool {
         switch kind {
-        case .anr, .crash, .siteDown: return true
+        case .anr, .crash: return true
         default: return false
         }
     }

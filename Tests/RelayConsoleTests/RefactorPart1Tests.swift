@@ -139,40 +139,6 @@ struct RefactorPart1Tests {
         #expect(inv.onlineDevices.count == 1)
     }
 
-    // MARK: - 1-4 사이트 결과가 다른 사이트에 섞이지 않는다
-
-    /// await 동안 배열이 변형돼도 check는 **id가 일치하는** 사이트에만 기록된다
-    @Test func siteCheckResultTargetsMatchingSiteOnly() {
-        let a = Site(name: "A-site", target: "https://a.example", probe: .http, intervalSec: 60)
-        let b = Site(name: "B-site", target: "https://b.example", probe: .http, intervalSec: 60)
-        var list = [a, b]
-
-        let captured = list[0]                 // 체크를 시작한 사이트
-        // await 동안 C가 앞에 삽입돼 인덱스가 밀린다
-        list.insert(Site(name: "C-site", target: "https://c.example", probe: .http), at: 0)
-
-        // 수정된 코드와 같은 방식: 저장 후 id로 다시 찾는다
-        let idx = list.firstIndex(where: { $0.id == captured.id })!
-        #expect(idx == 1)
-        list[idx].appendCheck(SiteCheck(ok: true, latencyMs: 42))
-
-        #expect(list[idx].history.count == 1)
-        #expect(list[idx].history[0].latencyMs == 42)
-        // 다른 사이트(A/B)에는 기록되면 안 된다
-        #expect(list[0].history.isEmpty)
-        #expect(list[2].history.isEmpty)
-    }
-
-    /// 대상(target)까지 바뀌었으면 이전 체크 결과는 버려야 한다
-    @Test func siteCheckIsDiscardedWhenTargetChanged() {
-        let a = Site(name: "A", target: "https://old.example", probe: .http)
-        var list = [a]
-        let before = a.target
-        list[0].target = "https://new.example"
-        // target 재확인이 없으면 옛 대상의 결과가 새 대상에 붙는다
-        #expect(list[0].target != before)
-    }
-
     // MARK: - 1-9 버전 단일 진실원처
 
     /// **출시 정본** `Resources/Info.plist`의 버전 형식

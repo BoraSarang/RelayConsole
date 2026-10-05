@@ -97,32 +97,17 @@ struct McpProtocolTests {
 
     // MARK: - DataStore (temp fixtures)
 
-    @Test func toolsCallSitesJobsEventsSummary() throws {
+    @Test func toolsCallDevicesEventsSummary() throws {
         let dir = FileManager.default.temporaryDirectory
             .appendingPathComponent("relay-mcp-test-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: dir) }
 
-        let sites: [[String: Any]] = [
-            [
-                "id": "s1",
-                "name": "API",
-                "target": "https://example.com",
-                "probe": "http",
-                "enabled": true,
-                "history": [["ok": false, "at": "2026-09-24T00:00:00Z"]],
-            ],
-        ]
-        let jobs: [[String: Any]] = [
-            ["id": "j1", "name": "backup", "enabled": true, "lastBeat": "", "intervalSec": 60],
-        ]
         let events: [[String: Any]] = [
-            ["id": "e1", "kind": "siteDown", "severity": "critical", "title": "down", "at": "2026-09-24T01:00:00Z", "acknowledged": false],
-            ["id": "e2", "kind": "throttling", "severity": "warning", "title": "hot", "at": "2026-09-24T02:00:00Z", "acknowledged": false],
+            ["id": "e1", "kind": "throttling", "severity": "critical", "title": "hot", "at": "2026-09-24T01:00:00Z", "acknowledged": false],
+            ["id": "e2", "kind": "memoryLow", "severity": "warning", "title": "mem", "at": "2026-09-24T02:00:00Z", "acknowledged": false],
             ["id": "e3", "kind": "anr", "severity": "info", "title": "anr", "at": "2026-09-24T03:00:00Z", "acknowledged": false],
         ]
-        try JSONSerialization.data(withJSONObject: sites).write(to: dir.appendingPathComponent("sites.json"))
-        try JSONSerialization.data(withJSONObject: jobs).write(to: dir.appendingPathComponent("jobs.json"))
         try JSONSerialization.data(withJSONObject: events).write(to: dir.appendingPathComponent("watch-events.json"))
 
         let adbOut = "List of devices attached\nSERIAL1 device product:p model:Test_Phone\n"
@@ -136,13 +121,6 @@ struct McpProtocolTests {
         #expect(devicesJSON.contains("SERIAL1"))
         #expect(devicesJSON.contains("Test Phone"))
 
-        let sitesJSON = try store.call(tool: .listSites, arguments: .object([:]))
-        #expect(sitesJSON.contains("API"))
-        #expect(sitesJSON.contains("\"lastOk\":false"))
-
-        let jobsJSON = try store.call(tool: .listJobs, arguments: .object([:]))
-        #expect(jobsJSON.contains("backup"))
-
         let eventsJSON = try store.call(
             tool: .listEvents,
             arguments: .object(["limit": .int(2)])
@@ -153,12 +131,12 @@ struct McpProtocolTests {
             tool: .listEvents,
             arguments: .object(["severity": .string("critical")])
         )
-        #expect(sevJSON.contains("siteDown"))
+        #expect(sevJSON.contains("throttling"))
 
         let sumJSON = try store.call(tool: .getSummary, arguments: .object([:]))
-        #expect(sumJSON.contains("\"siteDown\":1"))
         #expect(sumJSON.contains("\"activeCriticalEvents\":1"))
         #expect(sumJSON.contains("\"deviceOnline\":1"))
+        #expect(!sumJSON.contains("siteDown"), "사이트 집계는 제거됐다")
     }
 
     @Test func toolsCallViaRouter() throws {
@@ -166,8 +144,6 @@ struct McpProtocolTests {
             .appendingPathComponent("relay-mcp-router-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: dir) }
-        try JSONSerialization.data(withJSONObject: [[String: Any]]()).write(to: dir.appendingPathComponent("sites.json"))
-        try JSONSerialization.data(withJSONObject: [[String: Any]]()).write(to: dir.appendingPathComponent("jobs.json"))
         try JSONSerialization.data(withJSONObject: [[String: Any]]()).write(to: dir.appendingPathComponent("watch-events.json"))
 
         let store = McpDataStore(applicationSupportDir: dir, adbPath: nil, shellRunner: { _, _ in nil })

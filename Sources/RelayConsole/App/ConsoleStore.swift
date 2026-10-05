@@ -26,13 +26,6 @@ final class ConsoleStore: ObservableObject {
     @Published var selectedAppleUdid: String?
     /// Apple 오류 배너 — E-MAC-APL 문구 (오프라인 육안용)
     @Published var appleLastError: String?
-    /// Sites·Jobs (PLAN_sites_jobs)
-    @Published private(set) var sites: [Site] = []
-    @Published private(set) var jobs: [Job] = []
-    /// 하트비트 서버 오류 (E-MAC-JOB-0001) + 실제 원인 (AGENTS.local §4 [표시②])
-    @Published var heartbeatLastError: String?
-    @Published var heartbeatErrorDetail: String?
-    @Published private(set) var heartbeatPort: UInt16 = 8787
 
     private let selectedKey = "relay.selectedSerial"
     private let selectedAppleKey = "relay.selectedAppleUdid"
@@ -44,14 +37,7 @@ final class ConsoleStore: ObservableObject {
     private var incidentBundleLastAt: [String: Date] = [:]
     private let notifyCooldown: TimeInterval = 300
     private var notificationsRequested = false
-    /// Sites 체크 루프 / Job overdue 추적
-    private var sitesCheckTask: Task<Void, Never>?
-    private var jobsSweepTask: Task<Void, Never>?
     private var storeHealthTask: Task<Void, Never>?
-    private var lastSiteUp: [UUID: Bool] = [:]
-    private var lastJobOverdue: [UUID: Bool] = [:]
-    /// SSL 만료 경고 전이 (A5) — true면 경고 중
-    private var lastSslWarn: [UUID: Bool] = [:]
     /// 감시 알림 토글 (relay.watch.*)
     @AppStorage("relay.watch.throttling") var watchThrottling = true
     @AppStorage("relay.watch.charge") var watchCharge = true
@@ -67,8 +53,6 @@ final class ConsoleStore: ObservableObject {
     @AppStorage("relay.watch.rsrp") var watchRsrp = true
     @AppStorage("relay.watch.recovery") var watchRecovery = true
     @AppStorage("relay.watch.notifications") var watchNotifications = true
-    /// Sites SSL 경고 D-day (A5)
-    @AppStorage("relay.sites.sslWarnDays") var sslWarnDays = 14
     /// Phase v0.8 — ANR / 크래시 logcat
     @AppStorage("relay.watch.anr") var watchAnr = true
     @AppStorage("relay.watch.crash") var watchCrash = true
@@ -149,11 +133,6 @@ final class ConsoleStore: ObservableObject {
         recentWatchEvents = EventStore.shared.load()
         if EventStore.shared.loadFailed {
             recordStoreProblem(.readFailed(ErrorCode.storeReadFailed))
-        }
-        sites = SitesJobsStore.shared.loadSites()
-        jobs = SitesJobsStore.shared.loadJobs()
-        if let reason = SitesJobsStore.shared.loadFailed {
-            recordStoreProblem(.readFailed(reason))
         }
         // Phase1 스토어 로드
         _ = ConnectionSessionStore.shared
@@ -322,46 +301,13 @@ final class ConsoleStore: ObservableObject {
             await AppleDeviceMonitor.shared.attachEvent(appleEventHandler)
             await AppleDeviceMonitor.shared.start()
         }
-        startSitesJobs()
-    }
-
-    // MARK: - Sites · Jobs (PLAN_sites_jobs)
-
-    /// 체크 루프 + 하트비트 서버 시작
-    private func startSitesJobs() {
-        startSiteChecks()
-        startJobSweep()
         startStoreHealthCheck()
-        let port = UserDefaults.standard.object(forKey: "relay.hb.port") as? UInt16 ?? 8787
-        heartbeatPort = port
-        HeartbeatServer.shared.start(
-            port: port,
-            onBeat: { [weak self] token in
-                Task { @MainActor in
-                    self?.handleHeartbeat(token: token)
-                }
-            },
-            onBindError: { [weak self] code, detail in
-                Task { @MainActor in
-                    self?.heartbeatLastError = code
-                    self?.heartbeatErrorDetail = detail
-                    DebugLogger.shared.error("HB", "[ERROR] \(code) 하트비트 서버 시작 실패: \(detail)")
-                }
-            },
-            onReady: { [weak self] in
-                Task { @MainActor in
-                    self?.heartbeatLastError = nil
-                    self?.heartbeatErrorDetail = nil
-                }
-            },
-            onMetrics: { [weak self] in await self?.renderMetrics() ?? "" }
-        )
     }
 
     /// `/metrics` 본문 — **MainActor 밖에서 호출되므로** 한 번 옮겨 타야 한다
     ///
     /// 서버는 store 를 모른다. 스냅숿을 만들고 텍스트로 굽는 것까지만 여기서 하고,
-    /// 판정은 전부 기존 로직(`effectiveUp`·`isOverdue`·`activeCriticalCount`)에 맡긴다 —
+    /// 판정은 전부 기존 로직(`activeCriticalCount`)에 맡긴다 —
     /// 같은 값을 두 군데서 계산하면 **어느 쪽이 맞는지 알 수 없다.**
     func renderMetrics() -> String {
         MetricsTextBuilder.render(makeMetricsSnapshot())
@@ -370,35 +316,11 @@ final class ConsoleStore: ObservableObject {
     func makeMetricsSnapshot(now: Date = .now) -> MetricsSnapshot {
         MetricsSnapshotBuilder.make(
             devices: inventory.devices,
-            sites: sites,
-            jobs: jobs,
             events: recentWatchEvents,
             now: now,
             // 방치 시간은 트래커가 들고 있다 (폴링이 먹고, 여기서 읽는다)
             neglect: BatteryNeglectTracker.shared.snapshot(now: now)
         )
-    }
-
-    /// 사이트 주기 체크 — enabled만, interval 과거 지났으면 1건씩
-    private func startSiteChecks() {
-        sitesCheckTask?.cancel()
-        sitesCheckTask = Task { [weak self] in
-            while !Task.isCancelled {
-                guard let self else { return }
-                let now = Date()
-                var due: [Site] = []
-                for site in self.sites where site.enabled {
-                    let last = site.history.last?.at ?? .distantPast
-                    if now.timeIntervalSince(last) >= Double(site.intervalSec) {
-                        due.append(site)
-                    }
-                }
-                for site in due.prefix(SiteChecker.maxConcurrent) {
-                    await self.runSiteCheck(site)
-                }
-                try? await Task.sleep(nanoseconds: 5_000_000_000)
-            }
-        }
     }
 
     /// 저장 실패 감시 (2분 주기) — 조용한 저장 실패를 사용자에게 노출한다.
@@ -413,7 +335,6 @@ final class ConsoleStore: ObservableObject {
                 guard !Task.isCancelled, let self else { return }
                 let writers = [
                     EventStore.shared.lastSaveError,
-                    SitesJobsStore.shared.lastSaveError,
                     DeviceDailyStore.shared.lastSaveError,
                 ]
                 let failed = writers.contains { $0 != nil }
@@ -430,365 +351,15 @@ final class ConsoleStore: ObservableObject {
         }
     }
 
-    /// Job overdue 주기 스윕 (30초)
-    private func startJobSweep() {
-        jobsSweepTask?.cancel()
-        jobsSweepTask = Task { [weak self] in
-            while !Task.isCancelled {
-                guard let self else { return }
-                self.sweepJobOverdue(now: .now)
-                try? await Task.sleep(nanoseconds: 30_000_000_000)
-            }
-        }
-    }
-
-    /// 단건 체크 (DEBUG/수동 즉시 실행용)
-    func runSiteCheck(_ site: Site) async {
-        guard let idx = sites.firstIndex(where: { $0.id == site.id }) else { return }
-        let target = sites[idx].target
-        let check = await SiteChecker.shared.check(sites[idx])
-        // await 동안 removeSite·updateSite·addSite·clearSitesJobsDebug가 sites를 재배열할 수 있다.
-        // 이전 인덱스로 기록하면 A 사이트의 결과가 B 사이트 이력에 섞이므로, id와 대상을 재확인한다.
-        guard let idx = sites.firstIndex(where: { $0.id == site.id }),
-              sites[idx].target == target else {
-            DebugLogger.shared.warn("Sites", "[WARN] 체크 결과 폐기 — 대기 중 대상 변경/삭제됨 id=\(site.id)")
-            return
-        }
-        sites[idx].appendCheck(check)
-        if let exp = check.sslExpiresAt {
-            sites[idx].sslExpiresAt = exp
-        }
-        SitesJobsStore.shared.saveSites(sites)
-        emitSiteTransition(site: sites[idx], check: check)
-        emitSslTransition(site: sites[idx])
-    }
-
-    /// down/up 전이 → WatchEvent — effectiveUp (연속 failThreshold) 기준
-    private func emitSiteTransition(site: Site, check: SiteCheck) {
-        let after = site.effectiveUp()
-        let before = lastSiteUp[site.id]
-        lastSiteUp[site.id] = after
-        guard let tr = SitesJobsLogic.siteTransition(before: before, after: after) else { return }
-        let event: WatchEvent
-        switch tr {
-        case .down:
-            event = WatchEvent(
-                kind: .siteDown,
-                severity: .critical,
-                serial: site.serialKey,
-                title: site.name,
-                detail: SitesJobsLogic.statusText(detail: check.detail) ?? L10n.string("event.site.down"),
-                source: nil
-            )
-        case .up:
-            event = WatchEvent(
-                kind: .siteUp,
-                severity: .info,
-                serial: site.serialKey,
-                title: site.name,
-                detail: L10n.string("event.site.up"),
-                isClear: true,
-                source: nil
-            )
-        }
-        ingestWatch(event, forceNotify: tr == .down)
-    }
-
-    /// SSL 만료 임박 전이 → WatchEvent.sslExpiring (A5)
-    private func emitSslTransition(site: Site) {
-        guard site.enabled, site.probe == .http, site.target.lowercased().hasPrefix("https") else {
-            lastSslWarn[site.id] = false
-            return
-        }
-        let should = SslAssertLogic.sslShouldWarn(
-            expiresAt: site.sslExpiresAt,
-            warnDays: sslWarnDays
-        )
-        let before = lastSslWarn[site.id]
-        lastSslWarn[site.id] = should
-        if let before {
-            guard before != should else { return }
-            emitSslEvent(site: site, entering: should)
-        } else if should {
-            emitSslEvent(site: site, entering: true)
-        }
-    }
-
-    private func emitSslEvent(site: Site, entering: Bool) {
-        if entering {
-            let days = SslAssertLogic.daysRemaining(expiresAt: site.sslExpiresAt) ?? sslWarnDays
-            let detail = days < 0
-                ? L10n.string("event.site.sslExpired")
-                : L10n.format("event.site.sslExpiring", max(0, days))
-            let event = WatchEvent(
-                kind: .sslExpiring,
-                severity: days < 0 ? .critical : .warning,
-                serial: site.serialKey,
-                title: site.name,
-                detail: detail,
-                source: nil
-            )
-            ingestWatch(event, forceNotify: true)
-        } else {
-            let event = WatchEvent(
-                kind: .sslExpiring,
-                severity: .info,
-                serial: site.serialKey,
-                title: site.name,
-                detail: L10n.string("event.site.sslClear"),
-                isClear: true,
-                source: nil
-            )
-            ingestWatch(event, forceNotify: false)
-        }
-    }
-
-    /// overdue 전이 → WatchEvent
-    private func sweepJobOverdue(now: Date) {
-        for i in jobs.indices {
-            guard jobs[i].enabled else { continue }
-            let after = jobs[i].isOverdue(now: now)
-            let before = lastJobOverdue[jobs[i].id]
-            if let after { lastJobOverdue[jobs[i].id] = after }
-            guard let tr = SitesJobsLogic.jobTransition(before: before, after: after) else { continue }
-            let job = jobs[i]
-            let event: WatchEvent
-            switch tr {
-            case .overdue:
-                event = WatchEvent(
-                    kind: .jobOverdue,
-                    severity: .warning,
-                    serial: job.serialKey,
-                    title: job.name,
-                    detail: L10n.string("event.job.overdue"),
-                    at: now,
-                    source: nil
-                )
-            case .recovered:
-                event = WatchEvent(
-                    kind: .jobRecovered,
-                    severity: .info,
-                    serial: job.serialKey,
-                    title: job.name,
-                    detail: L10n.string("event.job.recovered"),
-                    at: now,
-                    isClear: true,
-                    source: nil
-                )
-            }
-            ingestWatch(event, forceNotify: tr == .overdue)
-        }
-    }
-
-    /// 하트비트 토큰 매칭 → beat + overdue 해제
-    func handleHeartbeat(token: String, at: Date = .now) {
-        guard let idx = jobs.firstIndex(where: { $0.token.lowercased() == token.lowercased() }) else {
-            DebugLogger.shared.warn("HB", "[WARN] E-MAC-JOB-0002 알 수 없는 토큰")
-            return
-        }
-        guard jobs[idx].enabled else { return }
-        jobs[idx].beat(at: at, ok: true)
-        lastJobOverdue[jobs[idx].id] = false
-        SitesJobsStore.shared.saveJobs(jobs)
-        // overdue였다면 복구 clear
-        if let i = recentWatchEvents.first(where: { $0.serial == jobs[idx].serialKey && $0.kind == .jobOverdue && !$0.isClear }) {
-            _ = i
-            ingestWatch(
-                WatchEvent(
-                    kind: .jobRecovered,
-                    severity: .info,
-                    serial: jobs[idx].serialKey,
-                    title: jobs[idx].name,
-                    detail: L10n.string("event.job.recovered"),
-                    at: at,
-                    isClear: true,
-                    source: nil
-                ),
-                forceNotify: false
-            )
-        }
-        pushEvent("HB \(jobs[idx].name) @ \(at.formatted(date: .omitted, time: .shortened))")
-    }
-
-    // MARK: - Sites CRUD
-
-    func addSite(
-        name: String,
-        target: String,
-        probe: SiteProbe,
-        intervalSec: Int,
-        failThreshold: Int = 2,
-        assertBody: String? = nil,
-        tags: [String] = []
-    ) {
-        let site = Site(
-            name: name,
-            target: SitesJobsLogic.sanitizeTarget(target, probe: probe),
-            probe: probe,
-            intervalSec: intervalSec,
-            failThreshold: failThreshold,
-            assertBody: assertBody?.isEmpty == true ? nil : assertBody,
-            tags: tags
-        )
-        sites.append(site)
-        SitesJobsStore.shared.saveSites(sites)
-        DebugLogger.shared.info("Sites", "[INFO] [FEATURE] 사이트 추가 \(site.name)")
-        Task { await runSiteCheck(site) }
-    }
-
-    func removeSite(id: UUID) {
-        sites.removeAll { $0.id == id }
-        lastSiteUp[id] = nil
-        SitesJobsStore.shared.saveSites(sites)
-    }
-
-    func toggleSite(id: UUID, enabled: Bool) {
-        guard let i = sites.firstIndex(where: { $0.id == id }) else { return }
-        sites[i].enabled = enabled
-        SitesJobsStore.shared.saveSites(sites)
-    }
-
-    /// 사이트 수정 (이름·대상·probe·주기·임계값·assertion) — 대상 변경 시 즉시 재체크
-    func updateSite(
-        id: UUID,
-        name: String,
-        target: String,
-        probe: SiteProbe,
-        intervalSec: Int,
-        failThreshold: Int,
-        assertBody: String?,
-        tags: [String]? = nil
-    ) {
-        guard let i = sites.firstIndex(where: { $0.id == id }) else { return }
-        let clean = SitesJobsLogic.sanitizeTarget(target, probe: probe)
-        let targetChanged = sites[i].target != clean || sites[i].probe != probe
-        sites[i].name = name
-        sites[i].target = clean
-        sites[i].probe = probe
-        sites[i].intervalSec = max(10, intervalSec)
-        sites[i].failThreshold = min(5, max(1, failThreshold))
-        sites[i].assertBody = assertBody?.isEmpty == true ? nil : assertBody
-        if let tags {
-            sites[i].tags = tags
-        }
-        SitesJobsStore.shared.saveSites(sites)
-        DebugLogger.shared.info("Sites", "[INFO] [FEATURE] 사이트 수정 \(name)")
-        if targetChanged {
-            Task { await runSiteCheck(sites[i]) }
-        }
-    }
-
-    func clearSiteHistory(id: UUID) {
-        guard let i = sites.firstIndex(where: { $0.id == id }) else { return }
-        sites[i].history.removeAll()
-        lastSiteUp[id] = nil
-        SitesJobsStore.shared.saveSites(sites)
-    }
-
-    // MARK: - Jobs CRUD
-
-    @discardableResult
-    func addJob(name: String, expectEverySec: Int, token: String? = nil) -> Job {
-        let job: Job
-        if let token, !token.isEmpty {
-            job = Job(name: name, token: token.lowercased(), expectEverySec: expectEverySec)
-        } else {
-            job = Job(name: name, expectEverySec: expectEverySec)
-        }
-        jobs.append(job)
-        SitesJobsStore.shared.saveJobs(jobs)
-        // [HARD] 로그 마스킹 — 토큰은 원격 curl 호출이 가능한 비밀값이라 평문 금지
-        DebugLogger.shared.info("Jobs", "[INFO] [FEATURE] 작업 추가 \(job.name) token=\(NotifyChannel.maskSecret(job.token))")
-        return job
-    }
-
-    func removeJob(id: UUID) {
-        jobs.removeAll { $0.id == id }
-        lastJobOverdue[id] = nil
-        SitesJobsStore.shared.saveJobs(jobs)
-    }
-
-    func toggleJob(id: UUID, enabled: Bool) {
-        guard let i = jobs.firstIndex(where: { $0.id == id }) else { return }
-        jobs[i].enabled = enabled
-        SitesJobsStore.shared.saveJobs(jobs)
-    }
-
-    /// 하트비트 포트 재설정 (설정에서)
-    func restartHeartbeat(port: UInt16) {
-        heartbeatPort = port
-        UserDefaults.standard.set(port, forKey: "relay.hb.port")
-        heartbeatLastError = nil
-        heartbeatErrorDetail = nil
-        HeartbeatServer.shared.start(
-            port: port,
-            onBeat: { [weak self] token in
-                Task { @MainActor in
-                    self?.handleHeartbeat(token: token)
-                }
-            },
-            onBindError: { [weak self] code, detail in
-                Task { @MainActor in
-                    self?.heartbeatLastError = code
-                    self?.heartbeatErrorDetail = detail
-                }
-            },
-            onReady: { [weak self] in
-                Task { @MainActor in
-                    self?.heartbeatLastError = nil
-                    self?.heartbeatErrorDetail = nil
-                }
-            }
-        )
-    }
-
-    /// DEBUG: 사이트 체크 결과 주입 (실제 네트워크 없이)
-    /// down 주입은 failThreshold만큼 연속 실패를 넣어 전이를 보장
-    func debugInjectSiteCheck(id: UUID, ok: Bool, detail: String? = nil) {
-        guard let i = sites.firstIndex(where: { $0.id == id }) else { return }
-        let rounds = ok ? 1 : max(1, sites[i].failThreshold)
-        for _ in 0..<rounds {
-            let check = SiteCheck(ok: ok, latencyMs: ok ? Int.random(in: 12...180) : nil, detail: detail)
-            sites[i].appendCheck(check)
-            emitSiteTransition(site: sites[i], check: check)
-        }
-        SitesJobsStore.shared.saveSites(sites)
-    }
-
-    /// DEBUG: 하트비트 주입
-    func debugInjectBeat(id: UUID) {
-        guard let i = jobs.firstIndex(where: { $0.id == id }) else { return }
-        handleHeartbeat(token: jobs[i].token)
-    }
-
-    /// DEBUG: Sites·Jobs 비우기
-    func clearSitesJobsDebug() {
-        sites = []
-        jobs = []
-        lastSiteUp = [:]
-        lastJobOverdue = [:]
-        SitesJobsStore.shared.saveSites(sites)
-        SitesJobsStore.shared.saveJobs(jobs)
-    }
-
-    /// stop 스레드 (앱 종료 시)
-    func stopSitesJobs() {
-        sitesCheckTask?.cancel()
-        jobsSweepTask?.cancel()
-        storeHealthTask?.cancel()
-        HeartbeatServer.shared.stop()
-    }
-
     /// 앱 종료 정리 — applicationWillTerminate에서 호출
     func shutdown() {
-        stopSitesJobs()
+        storeHealthTask?.cancel()
         ScrcpyController.shared.stop()
         DeviceDailyStore.shared.flushPending(force: true)
         ConnectionSessionStore.shared.flush()
         // CoalescingWriter 는 대기 중인 쓰기를 **대체**하므로, 종료 전에 진행 중 쓰기를
         // 반드시 동기 로 끝내야 마지막 상태가 기록된다. (기다리는 쓰기는 의도적으로 버린다)
         EventStore.shared.flushSync()
-        SitesJobsStore.shared.flushSync()
         DeviceDailyStore.shared.flushSync()
         let group = DispatchGroup()
         group.enter()
@@ -1083,7 +654,7 @@ final class ConsoleStore: ObservableObject {
         }
     }
 
-    /// S4 — ANR/crash/siteDown 자동 번들 (fingerprint 5분 쿨다운)
+    /// S4 — ANR/crash 자동 번들 (fingerprint 5분 쿨다운)
     private func maybeCaptureIncident(_ event: WatchEvent) {
         guard incidentAuto, !event.isClear else { return }
         guard IncidentBundleLogic.captures(kind: event.kind) else { return }
@@ -1174,7 +745,7 @@ final class ConsoleStore: ObservableObject {
     func sendNotifyTest() {
         let config = notifyConfig()
         let event = WatchEvent(
-            kind: .siteDown,
+            kind: .throttling,
             severity: .critical,
             serial: "TEST",
             title: L10n.string("notify.test.title"),
@@ -1235,8 +806,6 @@ final class ConsoleStore: ObservableObject {
         case .crash: return watchCrash
         case .appleConnected, .appleDisconnected: return watchNotifications
         case .androidConnected, .androidDisconnected: return watchNotifications
-        case .siteDown, .siteUp, .jobOverdue, .jobRecovered: return watchNotifications
-        case .sslExpiring: return watchNotifications
         // 탐지(설정 변경·logcat) — severity .info라 시스템 알림은 자동 차단, 이력·표시만 유지
         case .settingsChanged, .logcatHits: return watchNotifications
         }
@@ -1373,19 +942,16 @@ final class ConsoleStore: ObservableObject {
         BriefingLogic.activeCriticalCount(recentWatchEvents) > 0
     }
 
-    /// 아침 브리핑 스냅숏 — 팝오버 헤더 한 줄 (PLAN_briefing)
+    /// 아침 브리핑 스냅숏 — 팝오버 헤더 한 줄 (기기 전용)
     func makeBriefing(now: Date = .now) -> BriefingSnapshot {
         let android = inventory.devices
         let apples = appleDevices
         return BriefingLogic.snapshot(
-            sites: sites,
-            jobs: jobs,
             androidOnline: android.filter(\.isOnline).count,
             androidTotal: android.count,
             appleOnline: apples.filter(\.isOnline).count,
             appleTotal: apples.count,
-            events: recentWatchEvents,
-            now: now
+            events: recentWatchEvents
         )
     }
 

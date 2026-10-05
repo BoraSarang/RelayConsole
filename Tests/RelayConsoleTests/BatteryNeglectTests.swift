@@ -164,7 +164,7 @@ final class BatteryNeglectTests: XCTestCase {
         devB.batteryLevel = 10
 
         let snap = MetricsSnapshotBuilder.make(
-            devices: [devA, devB], sites: [], jobs: [], events: [],
+            devices: [devA, devB], events: [],
             now: at(30), version: "1", neglect: t.snapshot(now: at(30))
         )
         XCTAssertEqual(snap.devices.first { $0.serial == "a" }?.neglectSeconds, 1_800)
@@ -181,7 +181,7 @@ final class BatteryNeglectTests: XCTestCase {
         dev.serial = "a"
         dev.isOnline = false
         let snap = MetricsSnapshotBuilder.make(
-            devices: [dev], sites: [], jobs: [], events: [], now: t0, version: "1",
+            devices: [dev], events: [], now: t0, version: "1",
             neglect: ["a": 3_600]
         )
         XCTAssertNil(snap.devices[0].neglectSeconds)

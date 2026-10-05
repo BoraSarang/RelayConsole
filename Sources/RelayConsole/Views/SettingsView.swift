@@ -80,8 +80,6 @@ struct SettingsView: View {
             case .alertsJobs:
                 alertsSection
                 insightsSection
-                sitesSection
-                jobsSection
             case .integrations:
                 notifySection
                 appleSection
@@ -376,52 +374,6 @@ struct SettingsView: View {
                 }
                 .labelsHidden()
                 .fixedSize()
-            }
-        }
-    }
-
-    /// Sites SSL 경고 D-day (A5)
-    @ViewBuilder
-    private var sitesSection: some View {
-        Section(L10n.string("settings.section.sites")) {
-            stepperRow(
-                L10n.string("settings.sites.sslWarnDays"),
-                value: $store.sslWarnDays,
-                range: 1...90
-            )
-            Text(L10n.string("settings.sites.sslWarnDays.help"))
-                .font(OPFont.body(10))
-                .foregroundStyle(.secondary)
-                .lineLimit(2)
-        }
-    }
-
-    @ViewBuilder
-    private var jobsSection: some View {
-        Section(L10n.string("settings.section.jobs")) {
-            HStack {
-                Text(L10n.string("settings.hb.port"))
-                    .font(OPFont.body(12))
-                    .foregroundStyle(OPColor.ink)
-                Spacer()
-                TextField("", value: Binding(
-                    get: { Int(store.heartbeatPort) },
-                    set: { v in
-                        let p = UInt16(clamping: max(1, min(65535, v)))
-                        store.restartHeartbeat(port: p)
-                    }
-                ), format: .number)
-                .textFieldStyle(.plain)
-                .font(OPFont.number(12))
-                .foregroundStyle(OPColor.ink)
-                .frame(width: 70)
-                .multilineTextAlignment(.trailing)
-                Button(L10n.string("settings.hb.restart")) {
-                    store.restartHeartbeat(port: store.heartbeatPort)
-                }
-                .buttonStyle(.plain)
-                .font(OPFont.body(11))
-                .foregroundStyle(OPColor.jobs)
             }
         }
     }

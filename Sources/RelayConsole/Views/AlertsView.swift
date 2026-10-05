@@ -611,7 +611,7 @@ struct AlertsView: View {
 
     /// 주요 kind (메뉴 상단에 노출) — 크래시/ANR 우선
     private var primaryKinds: [WatchKind] {
-        [.crash, .anr, .siteDown, .jobOverdue, .throttling, .batteryThreshold]
+        [.crash, .anr, .throttling, .batteryThreshold]
     }
 
     /// kind 필터 chip 값 텍스트
@@ -641,11 +641,6 @@ struct AlertsView: View {
         case .appleDisconnected: return L10n.string("kind.appleDisconnected")
         case .androidConnected: return L10n.string("kind.androidConnected")
         case .androidDisconnected: return L10n.string("kind.androidDisconnected")
-        case .siteDown: return L10n.string("kind.siteDown")
-        case .siteUp: return L10n.string("kind.siteUp")
-        case .jobOverdue: return L10n.string("kind.jobOverdue")
-        case .jobRecovered: return L10n.string("kind.jobRecovered")
-        case .sslExpiring: return L10n.string("kind.sslExpiring")
         case .settingsChanged: return L10n.string("kind.settingsChanged")
         case .logcatHits: return L10n.string("kind.logcatHits")
         }

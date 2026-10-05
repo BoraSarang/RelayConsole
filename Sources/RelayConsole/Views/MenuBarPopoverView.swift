@@ -65,10 +65,6 @@ struct MenuBarPopoverView: View {
                         if !store.activeRemediationEvents.isEmpty {
                             remediationGuide(store.activeRemediationEvents)
                         }
-                        // Sites 요약 (PLAN_sites_v1_1) — 기기 없어도 노출
-                        if !store.sites.isEmpty {
-                            sitesSection
-                        }
                         if device == nil {
                             emptyState
                                 .frame(maxWidth: .infinity)
@@ -200,7 +196,7 @@ struct MenuBarPopoverView: View {
         .fixedSize(horizontal: false, vertical: true)
     }
 
-    /// 아침 브리핑 한 줄 — sites·jobs·폰·critical (PLAN_briefing · S1)
+    /// 아침 브리핑 한 줄 — 폰·critical
     private var briefingLine: some View {
         let snap = store.makeBriefing(now: now)
         let color: Color = {
@@ -216,9 +212,6 @@ struct MenuBarPopoverView: View {
                 .frame(width: 5, height: 5)
             Text(L10n.format(
                 "briefing.line",
-                snap.upSites,
-                snap.totalSites,
-                snap.overdueJobs,
                 snap.onlinePhones,
                 snap.totalPhones,
                 snap.activeCriticals
@@ -761,97 +754,6 @@ struct MenuBarPopoverView: View {
                 .foregroundStyle(OPColor.ink)
                 .lineLimit(1)
                 .truncationMode(.tail)
-        }
-    }
-
-    // MARK: - Sites (PLAN_sites_v1_1 — UptimeRobot식 요약 · 7일 바)
-
-    private var sitesSection: some View {
-        let sites = store.sites.filter(\.enabled)
-        let upCount = sites.filter { $0.effectiveUp() == true }.count
-        let downCount = sites.filter { $0.effectiveUp() == false }.count
-        let summaryColor: Color = downCount > 0 ? OPColor.bad : (upCount > 0 ? OPColor.ok : OPColor.inkDim)
-        return VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 6) {
-                Text(L10n.string("sidebar.sites"))
-                    .font(OPFont.body(11))
-                    .foregroundStyle(OPColor.ink)
-                Spacer()
-                Text(L10n.format("sites.menubar.summary", upCount, downCount))
-                    .font(OPFont.number(10))
-                    .foregroundStyle(summaryColor)
-            }
-            ForEach(sites.prefix(5)) { site in
-                siteMiniRow(site)
-            }
-            if sites.count > 5 {
-                Text(L10n.format("sites.menubar.more", sites.count - 5))
-                    .font(OPFont.body(9))
-                    .foregroundStyle(OPColor.inkDim)
-            }
-            // Jobs overdue 한 줄 (모델 유지 · 폭오버에서만 합쳐 표시)
-            let overdueJobs = store.jobs.filter { $0.enabled && $0.isOverdue() == true }
-            if !overdueJobs.isEmpty {
-                HStack(spacing: 6) {
-                    StatusDot(state: .bad)
-                    Text(L10n.format("jobs.menubar.overdue", overdueJobs.count))
-                        .font(OPFont.body(10))
-                        .foregroundStyle(OPColor.bad)
-                    Spacer()
-                }
-            }
-        }
-        .padding(OPSpace.sm)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(OPColor.card.opacity(0.6), in: RoundedRectangle(cornerRadius: 8))
-        .overlay(RoundedRectangle(cornerRadius: 8).stroke(OPColor.border, lineWidth: 1))
-    }
-
-    private func siteMiniRow(_ site: Site) -> some View {
-        let up = site.effectiveUp()
-        let state: StatusState = {
-            switch up {
-            case .some(true): return .ok
-            case .some(false): return .bad
-            case nil: return .idle
-            }
-        }()
-        return HStack(spacing: 6) {
-            StatusDot(state: state)
-            Text(site.name)
-                .font(OPFont.body(11))
-                .foregroundStyle(OPColor.ink)
-                .lineLimit(1)
-            Spacer(minLength: 4)
-            if let up, let since = site.stateSince() {
-                let dur = SitesView.relativeDuration(now.timeIntervalSince(since))
-                Text(up
-                    ? L10n.format("sites.state.up.for", dur)
-                    : L10n.format("sites.state.down.for", dur))
-                    .font(OPFont.number(9))
-                    .foregroundStyle(up ? OPColor.inkDim : OPColor.bad)
-            } else if let ms = site.history.last?.latencyMs, site.history.last?.ok == true {
-                Text("\(ms)ms")
-                    .font(OPFont.number(9))
-                    .foregroundStyle(OPColor.inkDim)
-            }
-            // 7일 미니 바
-            HStack(spacing: 1) {
-                ForEach(Array(site.dayBars(days: 7, now: now).enumerated()), id: \.offset) { _, b in
-                    Rectangle()
-                        .fill(miniBarColor(b.status))
-                        .frame(width: 4, height: 8)
-                }
-            }
-        }
-    }
-
-    private func miniBarColor(_ status: DayBarStatus) -> Color {
-        switch status {
-        case .up: return OPColor.ok.opacity(0.85)
-        case .partial: return OPColor.warn.opacity(0.9)
-        case .down: return OPColor.bad
-        case .unknown: return OPColor.inkDim.opacity(0.18)
         }
     }
 

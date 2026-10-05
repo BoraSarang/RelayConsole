@@ -46,8 +46,8 @@ struct L10nFormatTests {
     // MARK: - ② 안전망 (호출부가 또 실수해도 죽지 않는다)
 
     @Test func stringOnNumericPlaceholderPrintsText() {
-        // "HTTP %d" 에 문자열 → 화면에 주소값이 찍힌다 (크래시는 아니다)
-        #expect(L10n.format("sites.fail.http", "timeout") == "HTTP timeout")
+        // "약 %d분 후" 에 문자열 → 화면에 주소값이 찍힌다 (크래시는 아니다)
+        #expect(L10n.format("wifi.reconnect.nextRetry", "timeout").contains("timeout"))
     }
 
     @Test func alignedConvertsPerArgumentType() {

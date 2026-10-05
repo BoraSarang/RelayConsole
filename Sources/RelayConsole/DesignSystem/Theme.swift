@@ -86,10 +86,6 @@ enum OPColor {
     static let droid = dynamic(dark: 0x33D973, light: 0x1B9E4C)
     /// DESIGN.md apple 실버 — Phase1 Apple 카드 accent
     static let apple = dynamic(dark: 0xD9E0F2, light: 0x3E4A68)
-    /// DESIGN.md sites 블루
-    static let sites = dynamic(dark: 0x4D99FF, light: 0x1A6FD4)
-    /// DESIGN.md jobs 앰버
-    static let jobs = dynamic(dark: 0xFFB333, light: 0xB87A00)
 
     static func statusColor(_ state: StatusState) -> Color {
         switch state {

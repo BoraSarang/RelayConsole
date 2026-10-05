@@ -22,16 +22,6 @@ enum WatchKind: String, Sendable, Equatable, CaseIterable, Codable {
     case androidConnected
     /// Android 연결 해제
     case androidDisconnected
-    /// 사이트 다운 (PLAN_sites_jobs)
-    case siteDown
-    /// 사이트 복구
-    case siteUp
-    /// 작업 하트비트 overdue
-    case jobOverdue
-    /// 작업 하트비트 복구
-    case jobRecovered
-    /// HTTPS 인증서 만료 임박 (A5)
-    case sslExpiring
     /// 설정 값 변경 감지 (SettingWatch — `settings get` 값 전이)
     case settingsChanged
     /// logcat 키워드 적중 (LogcatWatch — 회전/설정/온도 로그 라인)
