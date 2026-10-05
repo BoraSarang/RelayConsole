@@ -105,8 +105,6 @@ public enum McpValue: Decodable, Sendable {
 
 public enum McpToolName: String, CaseIterable, Sendable {
     case listDevices = "list_devices"
-    case listSites = "list_sites"
-    case listJobs = "list_jobs"
     case listEvents = "list_events"
     case getSummary = "get_summary"
 }
@@ -134,13 +132,11 @@ public enum McpRouter {
         }
         return [
             tool(.listDevices, "List Android devices visible to adb (serial, state, model when present)."),
-            tool(.listSites, "List configured uptime sites with last check status, SSL expiry, and recent history size."),
-            tool(.listJobs, "List heartbeat jobs with overdue flag and last beat time."),
             tool(.listEvents, "List recent watch/alert events (newest first). Optional limit and severity filter.", props: [
                 "limit": ["type": "integer", "description": "Max events (1-100), default 20"],
                 "severity": ["type": "string", "enum": ["info", "warning", "critical"], "description": "Filter by severity"],
             ]),
-            tool(.getSummary, "Aggregate summary: device count, down sites, overdue jobs, active critical events."),
+            tool(.getSummary, "Aggregate summary: device count and active critical events."),
         ]
     }
 

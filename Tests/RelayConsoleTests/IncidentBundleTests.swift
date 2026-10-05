@@ -65,14 +65,10 @@ struct IncidentBundleTests {
 
     // MARK: - captures
 
-    @Test func capturesOnlyAnrCrashSiteDown() {
+    @Test func capturesOnlyAnrCrash() {
         #expect(IncidentBundleLogic.captures(kind: .anr))
         #expect(IncidentBundleLogic.captures(kind: .crash))
-        #expect(IncidentBundleLogic.captures(kind: .siteDown))
-        #expect(!IncidentBundleLogic.captures(kind: .siteUp))
         #expect(!IncidentBundleLogic.captures(kind: .throttling))
-        #expect(!IncidentBundleLogic.captures(kind: .sslExpiring))
-        #expect(!IncidentBundleLogic.captures(kind: .jobOverdue))
         #expect(!IncidentBundleLogic.captures(kind: .chargeChanged))
     }
 
@@ -96,19 +92,19 @@ struct IncidentBundleTests {
         #expect(!name.contains(":"))
     }
 
-    @Test func directoryNameSanitizesSiteSerial() {
+    @Test func directoryNameSanitizesSerial() {
         let e = WatchEvent(
-            kind: .siteDown,
+            kind: .crash,
             severity: .critical,
-            serial: "site:ABC-DEF",
-            title: "API",
+            serial: "ABC-DEF",
+            title: "APP",
             detail: ""
         )
         let name = IncidentBundleLogic.directoryName(
             event: e,
             at: Date(timeIntervalSince1970: 0)
         )
-        #expect(name.contains("siteDown"))
+        #expect(name.contains("crash"))
         #expect(name.allSatisfy { $0.isLetter || $0.isNumber || "-_.".contains($0) } || name.contains("…") == false)
         #expect(!name.contains("/"))
     }
@@ -187,7 +183,7 @@ struct IncidentBundleTests {
     }
 
     @Test func manifestDataNeverNilForValidEvent() {
-        let e = WatchEvent(kind: .siteDown, severity: .critical, serial: "site:1", title: "t", detail: "d")
+        let e = WatchEvent(kind: .crash, severity: .critical, serial: "S1", title: "t", detail: "d")
         #expect(IncidentBundleLogic.manifestData(event: e, appVersion: "1.7.0") != nil)
     }
 

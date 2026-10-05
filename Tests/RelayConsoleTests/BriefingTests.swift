@@ -2,35 +2,6 @@ import XCTest
 @testable import RelayConsole
 
 final class BriefingTests: XCTestCase {
-    private func site(
-        name: String = "api",
-        enabled: Bool = true,
-        failThreshold: Int = 1,
-        history: [SiteCheck] = [SiteCheck(ok: true)]
-    ) -> Site {
-        var s = Site(name: name, target: "https://example.com", probe: .http, failThreshold: failThreshold)
-        s.enabled = enabled
-        s.history = history
-        return s
-    }
-
-    private func job(
-        name: String = "backup",
-        enabled: Bool = true,
-        lastBeatAt: Date? = nil,
-        expectEverySec: Int = 60,
-        createdAt: Date = Date().addingTimeInterval(-600)
-    ) -> Job {
-        Job(
-            name: name,
-            expectEverySec: expectEverySec,
-            lastBeatAt: lastBeatAt,
-            lastBeatOk: lastBeatAt != nil,
-            enabled: enabled,
-            createdAt: createdAt
-        )
-    }
-
     private func crit(
         serial: String = "S1",
         kind: WatchKind = .throttling,
@@ -48,50 +19,21 @@ final class BriefingTests: XCTestCase {
         )
     }
 
-    func testSnapshotCountsUpAndDownSites() {
-        let up = site(name: "a", history: [SiteCheck(ok: true)])
-        var down = site(name: "b", history: [SiteCheck(ok: false)])
-        down.failThreshold = 1
-        let disabled = site(name: "c", enabled: false, history: [SiteCheck(ok: false)])
-
+    func testSnapshotOfflinePhoneIsWarn() {
         let snap = BriefingLogic.snapshot(
-            sites: [up, down, disabled],
-            jobs: [],
             androidOnline: 0,
-            androidTotal: 0,
-            appleOnline: 0,
-            appleTotal: 0,
-            events: []
-        )
-        XCTAssertEqual(snap.upSites, 1)
-        XCTAssertEqual(snap.downSites, 1)
-        XCTAssertEqual(snap.totalSites, 2)
-        XCTAssertEqual(snap.tone, .warn)
-    }
-
-    func testSnapshotOverdueJobCounts() {
-        let overdue = job(name: "late", lastBeatAt: Date().addingTimeInterval(-300), expectEverySec: 60)
-        let ok = job(name: "ok", lastBeatAt: Date(), expectEverySec: 60)
-
-        let snap = BriefingLogic.snapshot(
-            sites: [],
-            jobs: [overdue, ok],
-            androidOnline: 1,
             androidTotal: 1,
             appleOnline: 0,
             appleTotal: 0,
             events: []
         )
-        XCTAssertEqual(snap.overdueJobs, 1)
-        XCTAssertEqual(snap.onlinePhones, 1)
+        XCTAssertEqual(snap.onlinePhones, 0)
         XCTAssertEqual(snap.totalPhones, 1)
         XCTAssertEqual(snap.tone, .warn)
     }
 
     func testSnapshotAllHealthyIsOk() {
         let snap = BriefingLogic.snapshot(
-            sites: [site()],
-            jobs: [job(lastBeatAt: Date())],
             androidOnline: 2,
             androidTotal: 2,
             appleOnline: 1,
@@ -100,7 +42,7 @@ final class BriefingTests: XCTestCase {
         )
         XCTAssertEqual(snap.tone, .ok)
         XCTAssertEqual(snap.activeCriticals, 0)
-        XCTAssertEqual(snap.formatArgs as? [Int], [1, 1, 0, 3, 3, 0])
+        XCTAssertEqual(snap.formatArgs as? [Int], [3, 3, 0])
     }
 
     /// ★ 이 테스트는 **의도적으로 정정**했다 (2026-09-28)
@@ -137,8 +79,6 @@ final class BriefingTests: XCTestCase {
 
     func testCriticalToneBeatsWarn() {
         let snap = BriefingLogic.snapshot(
-            sites: [],
-            jobs: [],
             androidOnline: 0,
             androidTotal: 1,
             appleOnline: 0,
@@ -147,19 +87,5 @@ final class BriefingTests: XCTestCase {
         )
         XCTAssertEqual(snap.tone, .bad)
         XCTAssertEqual(snap.activeCriticals, 1)
-    }
-
-    func testDisabledJobNotOverdue() {
-        let disabled = job(name: "off", enabled: false, lastBeatAt: Date().addingTimeInterval(-9999))
-        let snap = BriefingLogic.snapshot(
-            sites: [],
-            jobs: [disabled],
-            androidOnline: 0,
-            androidTotal: 0,
-            appleOnline: 0,
-            appleTotal: 0,
-            events: []
-        )
-        XCTAssertEqual(snap.overdueJobs, 0)
     }
 }

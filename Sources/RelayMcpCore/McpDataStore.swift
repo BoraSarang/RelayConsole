@@ -43,14 +43,6 @@ public struct McpDataStore: Sendable {
 
     // MARK: - Store load
 
-    public func loadSites() -> [[String: Any]] {
-        decodeArray("sites.json")
-    }
-
-    public func loadJobs() -> [[String: Any]] {
-        decodeArray("jobs.json")
-    }
-
     public func loadEvents() -> [[String: Any]] {
         decodeArray("watch-events.json")
     }
@@ -72,10 +64,6 @@ public struct McpDataStore: Sendable {
             enc.outputFormatting = [.sortedKeys]
             let data = try enc.encode(devices())
             return String(decoding: data, as: UTF8.self)
-        case .listSites:
-            return try jsonString(sitesSummary())
-        case .listJobs:
-            return try jsonString(jobsSummary())
         case .listEvents:
             let limit = arguments["limit"]?.intValue ?? 20
             let severity = arguments["severity"]?.stringValue
@@ -89,39 +77,6 @@ public struct McpDataStore: Sendable {
         guard let adb = adbPath else { return [] }
         let out = shellRunner(adb, ["devices", "-l"]) ?? ""
         return AdbDevicesParser.parse(out)
-    }
-
-    func sitesSummary() -> [[String: Any]] {
-        loadSites().map { s in
-            let history = (s["history"] as? [Any])?.count ?? 0
-            let last = (s["history"] as? [[String: Any]])?.last
-            return [
-                "id": s["id"] as? String ?? "",
-                "name": s["name"] as? String ?? "",
-                "target": s["target"] as? String ?? "",
-                "probe": s["probe"] as? String ?? "",
-                "enabled": s["enabled"] as? Bool ?? true,
-                "sslExpiresAt": s["sslExpiresAt"] as? String ?? "",
-                "historyCount": history,
-                "lastOk": last?["ok"] as? Bool ?? false,
-                "lastAt": last?["at"] as? String ?? "",
-                "lastLatencyMs": last?["latencyMs"] as? Int as Any? ?? NSNull(),
-            ]
-        }
-    }
-
-    func jobsSummary() -> [[String: Any]] {
-        loadJobs().map { j in
-            [
-                "id": j["id"] as? String ?? "",
-                "name": j["name"] as? String ?? "",
-                "token": j["token"] as? String ?? "",
-                "enabled": j["enabled"] as? Bool ?? true,
-                "intervalSec": j["intervalSec"] as? Int ?? 0,
-                "lastBeat": j["lastBeat"] as? String ?? "",
-                "graceSec": j["graceSec"] as? Int ?? 0,
-            ]
-        }
     }
 
     func eventsSummary(limit: Int, severity: String?) -> [[String: Any]] {
@@ -152,30 +107,12 @@ public struct McpDataStore: Sendable {
 
     func summary() -> [String: Any] {
         let devs = (try? devices()) ?? []
-        let sites = loadSites()
-        var down = 0
-        for s in sites {
-            let last = (s["history"] as? [[String: Any]])?.last
-            if s["enabled"] as? Bool == true, last?["ok"] as? Bool == false {
-                down += 1
-            }
-        }
-        let jobs = loadJobs()
-        let overdue = jobs.filter { j in
-            guard j["enabled"] as? Bool == true else { return false }
-            let lastBeat = j["lastBeat"] as? String ?? ""
-            return lastBeat.isEmpty
-        }.count
         let events = loadEvents()
         let critical = events.filter { ($0["severity"] as? String) == "critical" && ($0["acknowledged"] as? Bool) != true }.count
         let warning = events.filter { ($0["severity"] as? String) == "warning" && ($0["acknowledged"] as? Bool) != true }.count
         return [
             "deviceCount": devs.count,
             "deviceOnline": devs.filter { $0.state == "device" }.count,
-            "siteCount": sites.count,
-            "siteDown": down,
-            "jobCount": jobs.count,
-            "jobMissingBeat": overdue,
             "activeCriticalEvents": critical,
             "activeWarningEvents": warning,
             "server": McpRouter.serverName,

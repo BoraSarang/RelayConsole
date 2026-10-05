@@ -39,9 +39,6 @@ final class WidgetSnapshotSync {
             let b = store.makeBriefing(now: now)
             briefing = L10n.format(
                 "briefing.line",
-                b.upSites,
-                b.totalSites,
-                b.overdueJobs,
                 b.onlinePhones,
                 b.totalPhones,
                 b.activeCriticals
@@ -55,8 +52,6 @@ final class WidgetSnapshotSync {
             apple: store.appleDevices,
             selectedSerial: store.selectedSerial,
             selectedAppleUdid: store.selectedAppleUdid,
-            sites: store.sites,
-            jobs: store.jobs,
             events: store.recentWatchEvents,
             ident: { store.identLabel(for: $0) },
             now: now
@@ -71,7 +66,7 @@ final class WidgetSnapshotSync {
             DebugLogger.shared.info(
                 "Widget",
                 "[INFO] 위젯 스냅샷 기록",
-                meta: "devices=\(snapshot.devices.count) sites=\(snapshot.siteTotal) critical=\(snapshot.critical)"
+                meta: "devices=\(snapshot.devices.count) critical=\(snapshot.critical)"
             )
         } else {
             DebugLogger.shared.error(
@@ -86,7 +81,6 @@ final class WidgetSnapshotSync {
 /// 순수 스냅샷 빌더 — 도메인 모델 → 위젯 DTO (테스트 대상 · [표시①] ident는 identLabel 원문 사용)
 enum WidgetSnapshotBuilder {
     static let maxDevices = 4
-    static let maxSites = 6
     static let maxEvents = 3
 
     static func build(
@@ -95,8 +89,6 @@ enum WidgetSnapshotBuilder {
         apple: [AppleSnapshot],
         selectedSerial: String?,
         selectedAppleUdid: String?,
-        sites: [Site],
-        jobs: [Job],
         events: [WatchEvent],
         ident: (String) -> String,
         now: Date = .now
@@ -127,24 +119,6 @@ enum WidgetSnapshotBuilder {
         }
         devices = Array(devices.prefix(maxDevices))
 
-        let enabledSites = sites.filter(\.enabled)
-        let siteRows: [WidgetSite] = enabledSites.prefix(maxSites).map { s in
-            let state: WidgetSiteState
-            switch s.effectiveUp() {
-            case .some(true): state = .up
-            case .some(false): state = .down
-            case nil: state = .unknown
-            }
-            return WidgetSite(
-                name: s.name,
-                state: state,
-                uptime7dPct: s.uptimePercent(since: now.addingTimeInterval(-7 * 24 * 3600))
-            )
-        }
-
-        let enabledJobs = jobs.filter(\.enabled)
-        let overdue = enabledJobs.filter { $0.isOverdue(now: now) == true }.count
-
         let eventRows: [WidgetEvent] = events.prefix(maxEvents).map { e in
             WidgetEvent(at: e.at, severity: e.severity.rawValue, title: e.title, ident: ident(e.serial))
         }
@@ -154,12 +128,6 @@ enum WidgetSnapshotBuilder {
             briefing: briefing,
             critical: BriefingLogic.activeCriticalCount(events),
             devices: devices,
-            sites: siteRows,
-            siteUp: enabledSites.filter { $0.effectiveUp() == true }.count,
-            siteDown: enabledSites.filter { $0.effectiveUp() == false }.count,
-            siteTotal: enabledSites.count,
-            jobsTotal: enabledJobs.count,
-            jobsOverdue: overdue,
             events: eventRows
         )
     }

@@ -33,7 +33,8 @@ final class WidgetDeepLink {
     }
 
     private func route(_ target: String) {
-        // 사이드바 섹션 대상(alerts/sites/jobs/insights/devices) → 콘솔 열고 해당 탭으로
+        // 사이드바 섹션 대상(alerts/insights/devices) → 콘솔 열고 해당 탭으로
+        // 구 sites/jobs URL은 매칭 실패 → 기본 콘솔로 (삭제된 기능의 옛 딥링크 무시)
         if let section = ConsoleSection(rawValue: target) {
             ConsoleStore.shared.pendingConsoleSection = section
         }

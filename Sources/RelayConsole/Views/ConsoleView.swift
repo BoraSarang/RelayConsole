@@ -61,10 +61,6 @@ struct ConsoleView: View {
             switch selection {
             case .devices, .none:
                 devicesDetail
-            case .sites:
-                SitesView(store: store)
-            case .jobs:
-                JobsView(store: store)
             case .alerts:
                 AlertsView(store: store)
             case .insights:

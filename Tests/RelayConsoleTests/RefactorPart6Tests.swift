@@ -78,23 +78,23 @@ struct RefactorPart6Tests {
     // MARK: - ⑤ 손상 파일 보존
 
     /// 로드 실패(파일은 있으나 내용이 깨짐)를 실제로 재현해 확인
-    @Test func corruptSitesFileIsDetectedAndPreserved() throws {
+    @Test func corruptEventFileIsDetectedAndPreserved() throws {
         let dir = FileManager.default.temporaryDirectory
             .appendingPathComponent("store-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: dir) }
-        let sitesFile = dir.appendingPathComponent("sites.json")
+        let eventsFile = dir.appendingPathComponent("watch-events.json")
         // 유효하지 않은 JSON — 사건(.json)이라 파일이 "있지만" 읽을 수 없는 상태
-        try "{ this is not valid json".write(to: sitesFile, atomically: true, encoding: .utf8)
+        try "{ this is not valid json".write(to: eventsFile, atomically: true, encoding: .utf8)
 
         // EventStore 와 동일한 판정 규약: 파일 존재 + 디코딩 실패 = loadFailed
-        let exists = FileManager.default.fileExists(atPath: sitesFile.path)
+        let exists = FileManager.default.fileExists(atPath: eventsFile.path)
         #expect(exists)
         let dec = JSONDecoder()
         dec.dateDecodingStrategy = .iso8601
-        let data = try Data(contentsOf: sitesFile)
+        let data = try Data(contentsOf: eventsFile)
         #expect(throws: (any Error).self) {
-            _ = try dec.decode([Site].self, from: data)
+            _ = try dec.decode([WatchEvent].self, from: data)
         }
     }
 
