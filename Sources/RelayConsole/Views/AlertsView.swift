@@ -369,6 +369,9 @@ struct AlertsView: View {
                     if let d = store.diagnosis(for: e) {
                         diagnoseSection(d)
                     }
+                    if let t = store.thermalDiagnosis(for: e) {
+                        thermalDiagnoseSection(t)
+                    }
                     HStack(spacing: 8) {
                         Text(e.at.formatted(date: .abbreviated, time: .shortened))
                             .font(OPFont.body(10))
@@ -625,6 +628,44 @@ struct AlertsView: View {
             }
         }
         .padding(.top, 2)
+    }
+
+    /// 자동 진단 섹션 — 발열 주범 후보 (PLAN_auto_diagnose Phase 2)
+    private func thermalDiagnoseSection(_ t: ThermalDiagnose) -> some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text(L10n.string("diagnose.section"))
+                .font(OPFont.body(10))
+                .foregroundStyle(OPColor.warn)
+            if let name = t.suspectName, let cpu = t.suspectCpu {
+                Text(L10n.format("diagnose.suspect", name, String(format: "%.1f%%", cpu)))
+                    .font(OPFont.number(10))
+                    .foregroundStyle(OPColor.ink)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
+            if let power = Self.powerLine(t), !power.isEmpty {
+                Text(power)
+                    .font(OPFont.body(10))
+                    .foregroundStyle(OPColor.inkDim)
+            }
+            if !t.hotZones.isEmpty {
+                Text(L10n.format("diagnose.zones", t.hotZones.map {
+                    "\($0.name) \(String(format: "%.1f", $0.celsius))℃"
+                }.joined(separator: ", ")))
+                    .font(OPFont.number(10))
+                    .foregroundStyle(OPColor.inkDim)
+                    .lineLimit(2)
+            }
+        }
+        .padding(.top, 2)
+    }
+
+    /// 충전·핫스팟 조합 한 줄 — 둘 다 아니면 nil (줄 생략)
+    private static func powerLine(_ t: ThermalDiagnose) -> String? {
+        var parts: [String] = []
+        if t.charging == true { parts.append(L10n.string("diagnose.charging")) }
+        if t.hotspot == true { parts.append(L10n.string("diagnose.hotspot")) }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
     /// kind 필터 바인딩

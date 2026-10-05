@@ -5,6 +5,17 @@
 
 ## 완료 (2026-10-05)
 
+- [x] **T-2026-10-05-3 자동 진단 Phase 2+3 — 발열·환경** (`docs/plans/PLAN_auto_diagnose.md`)
+  - **발열**: throttling enter 시점 메모리 스냅샷으로 주범 후보 (CPU 최상위·충전·핫스팟·최고온 3종).
+    새 adb 명령 0. Alerts "자동 진단" 섹션에 표시, DiagnoseStore 봉투형 이관 (구형 crash 파일 유지)
+  - **환경**: 서빙셀(mCi/mPci) 파싱 + 스냅샷 필드 + CellHistory(변경 시만 기록·200 cap·cells.json) +
+    방전 속도(%/h)·7일 셀 변경/급락 요약 → Insights "환경 패턴" 카드 (캐시 revision 포함)
+  - **실측**: `dumpsys telephony.registry` 서빙셀+이웃셀+핸드오버(345↔93) ·
+    batterystats --checkin 1858줄 0.24초 · thermal zone 30종 · ANR 내용은 권한 거부(목록만)
+  - **검증 [HARD]**: `swift test` **597 / 0 failed** (신규 12건) ·
+    `./scripts/build-macos.sh debug` **EXIT=0** · L10n **733키 en/ko 1:1** · U+FFFD 0건
+  - **실기기**: cells.json 첫 기록 확인 · 발열 진단은 다음 throttling enter 때 발동
+
 - [x] **T-2026-10-05-2 자동 진단 Phase 1 — 크래시** (`docs/plans/PLAN_auto_diagnose.md`)
   - **트리거**: crash ingest 시 지문당 1회 백그라운드 (package·exception 없으면 진단 안 함).
     adb는 detached + 20초 데드라인 (MainActor 붙잡지 않음).

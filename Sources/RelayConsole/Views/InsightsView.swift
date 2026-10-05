@@ -42,12 +42,14 @@ struct InsightsView: View {
         let thresholds: PatternThresholds
         let dailyRevision: Int
         let sessionRevision: Int
+        let cellRevision: Int
     }
 
     private struct InsightCacheValue {
         let insight: DeviceInsight
         let report: DayOverDayReport
         let patterns: [IssuePattern]
+        let environment: (serial: String, summary: EnvSummary)?
     }
 
     /// 캐시 홀더 — `@State` 에 **클래스**를 담아 body 재평가 사이에도 동일 인스턴스가 유지되게 한다.
@@ -72,8 +74,25 @@ struct InsightsView: View {
             serialFilter: serialFilter,
             thresholds: store.patternThresholds(),
             dailyRevision: DeviceDailyStore.shared.revision,
-            sessionRevision: ConnectionSessionStore.shared.revision
+            sessionRevision: ConnectionSessionStore.shared.revision,
+            cellRevision: CellHistory.shared.revision
         )
+    }
+
+    /// 환경 패턴 — 선택 기기의 셀 변경·신호 급락·방전 속도 (PLAN_auto_diagnose Phase 3)
+    /// serial 미선택이면 nil → 카드 숨김.
+    private var environment: (serial: String, summary: EnvSummary)? {
+        guard let serial = serialFilter ?? store.selectedSerial else { return nil }
+        let cells = CellHistory.shared.history(serial: serial)
+        let metrics = store.metricsHistory[serial]
+        let summary = EnvPatterns.summarize(
+            cells: cells,
+            dropEvents: store.recentWatchEvents,
+            levels: metrics?.levelHistory ?? [],
+            windowSeconds: metrics?.windowSeconds,
+            serial: serial
+        )
+        return (serial, summary)
     }
 
     /// 캐시 적중 시 0ms, 실패 시 약 3.2ms.
@@ -83,7 +102,7 @@ struct InsightsView: View {
         if let k = cacheBox.key, k == key, let v = cacheBox.value {
             return v
         }
-        let value = InsightCacheValue(insight: insight, report: report, patterns: patterns)
+        let value = InsightCacheValue(insight: insight, report: report, patterns: patterns, environment: environment)
         cacheBox.key = key
         cacheBox.value = value
         cacheBox.computeCount += 1
@@ -158,6 +177,7 @@ struct InsightsView: View {
         let insightValue = cached.insight
         let reportValue = cached.report
         let patternsValue = cached.patterns
+        let environmentValue = cached.environment
 
         return ZStack {
             OPColor.popBG.ignoresSafeArea()
@@ -169,6 +189,9 @@ struct InsightsView: View {
                     daySummaryCard(insight: insightValue)
                     reportCard(report: reportValue)
                     patternsCard(patterns: patternsValue)
+                    if let env = environmentValue {
+                        environmentCard(serial: env.serial, summary: env.summary)
+                    }
                 }
                 .padding(OPSpace.xl)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -513,6 +536,48 @@ struct InsightsView: View {
                     if p.id != lastId {
                         Divider().overlay(OPColor.border)
                     }
+                }
+            }
+        }
+        .padding(OPSpace.lg)
+        .background(OPColor.card, in: RoundedRectangle(cornerRadius: OPSpace.radiusCard))
+        .overlay(RoundedRectangle(cornerRadius: OPSpace.radiusCard).stroke(OPColor.border, lineWidth: 1))
+    }
+
+    /// 환경 패턴 카드 — 셀 변경·신호 급락·방전 속도 (PLAN_auto_diagnose Phase 3)
+    /// 자료가 하나도 없으면 빈 힌트만 (숨기지 않는다 — "없음"도 정보다).
+    private func environmentCard(serial: String, summary: EnvSummary) -> some View {
+        VStack(alignment: .leading, spacing: OPSpace.md) {
+            HStack {
+                Text(L10n.string("insights.env.title"))
+                    .font(OPFont.body(13))
+                    .foregroundStyle(OPColor.ink)
+                Spacer()
+                Text(store.identLabel(for: serial))
+                    .font(OPFont.number(11))
+                    .foregroundStyle(OPColor.inkDim)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+            if summary.isEmpty {
+                Text(L10n.string("insights.env.empty"))
+                    .font(OPFont.body(12))
+                    .foregroundStyle(OPColor.inkDim)
+            } else {
+                if summary.distinctCells7d > 0 || summary.cellChanges7d > 0 {
+                    Text(L10n.format("insights.env.cells", summary.cellChanges7d, summary.distinctCells7d))
+                        .font(OPFont.body(12))
+                        .foregroundStyle(OPColor.ink)
+                }
+                if summary.drops7d > 0 {
+                    Text(L10n.format("insights.env.drops", summary.drops7d))
+                        .font(OPFont.body(12))
+                        .foregroundStyle(OPColor.warn)
+                }
+                if let drain = summary.drainPctPerHour {
+                    Text(L10n.format("insights.env.drain", String(format: "%.1f%%", drain)))
+                        .font(OPFont.body(12))
+                        .foregroundStyle(OPColor.inkDim)
                 }
             }
         }

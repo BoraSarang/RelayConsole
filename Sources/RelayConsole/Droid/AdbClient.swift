@@ -1194,6 +1194,9 @@ enum AdbClient {
         /// NR 밴드 번호 (예: ["78"])
         var nrBands: [String] = []
         var ca: Bool?
+        /// 서빙셀 mCi/mPci — Int32.max(2147483647) 센티넬은 nil
+        var cellCi: Int?
+        var cellPci: Int?
     }
 
     /// `dumpsys telephony.registry` grep 결과 — mServiceState + mSignalStrength 한 덩어리
@@ -1236,6 +1239,9 @@ enum AdbClient {
 
         sample.lteBands = cellBands(in: text, block: "CellIdentityLte:{")
         sample.nrBands = cellBands(in: text, block: "CellIdentityNr:{")
+        let cell = servingCell(in: text)
+        sample.cellCi = cell?.ci
+        sample.cellPci = cell?.pci
 
         if let range = text.range(of: "isUsingCarrierAggregation=") {
             let after = text[range.upperBound...]
@@ -1245,6 +1251,34 @@ enum AdbClient {
         return sample
     }
 
+    /// 서빙셀 (mCi/mPci) — `mRegistered=YES` 뒤 첫 `CellIdentityLte:{`를 우선한다.
+    /// 실측(2026-10-05): 등록셀이 바뀌면 mCi 끝자리·​mPci가 함께 바뀐다 (345↔93 핸드오버).
+    /// Int32.max(2147483647) 센티넬·이웃셀(mRegistered=NO)은 버린다.
+    static func servingCell(in text: String) -> (ci: Int, pci: Int)? {
+        var searchFrom = text.startIndex
+        if let reg = text.range(of: "mRegistered=YES") {
+            searchFrom = reg.upperBound
+        }
+        let blocks = ["CellIdentityLte:{", "CellIdentityNr:{"]
+        for block in blocks {
+            guard let start = text[searchFrom...].range(of: block) else { continue }
+            guard let end = text[start.upperBound...].firstIndex(of: "}") else { continue }
+            let body = text[start.upperBound..<end]
+            guard let ci = cellInt(in: body, key: "mCi="),
+                  let pci = cellInt(in: body, key: "mPci=") else { continue }
+            return (ci, pci)
+        }
+        return nil
+    }
+
+    /// `mCi=12345` 정수 추출 — 2147483647 센티넬은 nil
+    static func cellInt(in body: Substring, key: String) -> Int? {
+        guard let r = body.range(of: key) else { return nil }
+        let after = body[r.upperBound...]
+        let digits = after.prefix { $0.isNumber || $0 == "-" }
+        guard let v = Int(digits), v != 2147483647 else { return nil }
+        return v
+    }
     /// 표시용 밴드 요약 — "B3" / "B3+B8" / "B3+n78"
     static func bandSummary(lte: [String], nr: [String]) -> String? {
         var parts: [String] = []

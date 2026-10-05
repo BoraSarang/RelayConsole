@@ -104,9 +104,13 @@
 "briefing.line" = "%d/%d phones · %d critical";
 "cards.empty" = "No cards visible — enable cards in Settings";
 "common.na" = "—";
+"diagnose.charging" = "Charging";
 "diagnose.dropbox" = "dropbox %@";
 "diagnose.frequency" = "%d times in 7 days";
+"diagnose.hotspot" = "Hotspot on";
 "diagnose.section" = "Auto diagnosis";
+"diagnose.suspect" = "Suspect %@ · CPU %@";
+"diagnose.zones" = "Hottest %@";
 "droid.appnet.col.app" = "App";
 "droid.appnet.col.cumulative" = "Total (cum.)";
 "droid.appnet.col.down" = "Down";
@@ -326,6 +330,11 @@
 "insights.calendar.today" = "Today";
 "insights.day.empty" = "No data for this day";
 "insights.day.title" = "Day detail";
+"insights.env.cells" = "%d handovers · %d cells";
+"insights.env.drain" = "%@ per hour";
+"insights.env.drops" = "%d signal drops";
+"insights.env.empty" = "Not enough data yet";
+"insights.env.title" = "Environment";
 "insights.export.json" = "Report JSON";
 "insights.export.patterns" = "Patterns CSV";
 "insights.metric.anr" = "ANR";

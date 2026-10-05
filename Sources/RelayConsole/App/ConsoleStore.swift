@@ -135,6 +135,7 @@ final class ConsoleStore: ObservableObject {
             recordStoreProblem(.readFailed(ErrorCode.storeReadFailed))
         }
         diagnoses = DiagnoseStore.shared.diagnoses
+        thermalDiagnoses = DiagnoseStore.shared.thermal
         // Phase1 스토어 로드
         _ = ConnectionSessionStore.shared
         _ = DeviceDailyStore.shared
@@ -577,6 +578,7 @@ final class ConsoleStore: ObservableObject {
         EventStore.shared.save(recentWatchEvents)
         maybeCaptureIncident(event)
         maybeDiagnoseCrash(event)
+        maybeDiagnoseThrottling(event)
         // Phase1 — 일자 이벤트 카운트 (crash/anr/warn)
         DeviceDailyStore.shared.countEvent(
             serial: event.serial,
@@ -675,10 +677,16 @@ final class ConsoleStore: ObservableObject {
 
     /// 크래시 진단 결과 — Alerts "진단" 섹션이 읽는다 (DiagnoseStore 영속 + 메모리 미러)
     @Published private(set) var diagnoses: [String: CrashDiagnose] = [:]
+    /// 발열 진단 결과 — Alerts "진단" 섹션이 읽는다 (DiagnoseStore 영속 + 메모리 미러)
+    @Published private(set) var thermalDiagnoses: [String: ThermalDiagnose] = [:]
 
     func diagnosis(for event: WatchEvent) -> CrashDiagnose? {
         if let fp = event.errorFingerprint, let d = diagnoses[fp] { return d }
         return diagnoses[event.fingerprint]
+    }
+
+    func thermalDiagnosis(for event: WatchEvent) -> ThermalDiagnose? {
+        thermalDiagnoses[event.fingerprint]
     }
 
     private func setDiagnosis(_ result: CrashDiagnose) {
@@ -686,6 +694,42 @@ final class ConsoleStore: ObservableObject {
         next[result.fingerprint] = result
         diagnoses = next
         DiagnoseStore.shared.put(result)
+    }
+
+    private func setThermalDiagnosis(_ result: ThermalDiagnose) {
+        var next = thermalDiagnoses
+        next[result.fingerprint] = result
+        thermalDiagnoses = next
+        DiagnoseStore.shared.putThermal(result)
+    }
+
+    /// 발열 자동 진단 — enter 시점 스냅샷으로 주범 후보를 고른다 (PLAN_auto_diagnose Phase 2)
+    /// 새 adb 명령 0 — 폴링이 이미 먹는 프로세스·충전·thermal zone만 쓴다.
+    /// 게이트웨이 조회(route 실행) 때문에 detached에서 조립한다.
+    private func maybeDiagnoseThrottling(_ event: WatchEvent) {
+        guard event.kind == .throttling, !event.isClear else { return }
+        let fp = event.fingerprint
+        guard thermalDiagnoses[fp] == nil else { return }
+        guard let snap = inventory.devices.first(where: { $0.serial == event.serial }) else { return }
+        Task.detached { [fp, snap, serial = event.serial] in
+            let suspect = ThermalSuspect.pick(from: snap.processList)
+            let zones = ThermalSuspect.topZones(snap.thermalZones)
+            let gateway = MacRoute.defaultGateway()
+            let deviceIP = WifiAdbLogic.host(ofEndpoint: serial)
+            let result = ThermalDiagnose(
+                fingerprint: fp,
+                suspectName: suspect?.name,
+                suspectCpu: suspect?.cpu,
+                charging: snap.isCharging,
+                hotspot: ThermalSuspect.isHotspot(gateway: gateway, deviceIP: deviceIP),
+                hotZones: zones,
+                diagnosedAt: .now
+            )
+            await MainActor.run {
+                ConsoleStore.shared.setThermalDiagnosis(result)
+                DebugLogger.shared.info("Diagnose", "[INFO] 발열 진단 완료 \(serial)")
+            }
+        }
     }
 
     /// 크래시 자동 진단 — 지문당 1회, 백그라운드 (PLAN_auto_diagnose)

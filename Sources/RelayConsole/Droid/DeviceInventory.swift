@@ -135,6 +135,9 @@ struct DeviceSnapshot: Sendable, Equatable {
     var signalBands: String?
     /// CA 사용 여부 — isUsingCarrierAggregation=
     var signalCA: Bool?
+    /// 서빙셀 mCi/mPci — 셀 변경(핸드오버) 추적용 (센티넬이면 nil)
+    var cellCi: Int?
+    var cellPci: Int?
     /// uid별 앱 네트워크 누적량 (15s, `dumpsys netstats detail`)
     var appNetStats: [AppNetStat]?
     /// uid별 앱 네트워크 속도 (MB/s) — 15s delta
@@ -267,6 +270,8 @@ struct DeviceInventory: Equatable {
                 merged.signalRat = merged.signalRat ?? prev.signalRat
                 merged.signalBands = merged.signalBands ?? prev.signalBands
                 merged.signalCA = merged.signalCA ?? prev.signalCA
+                merged.cellCi = merged.cellCi ?? prev.cellCi
+                merged.cellPci = merged.cellPci ?? prev.cellPci
                 merged.appNetStats = merged.appNetStats ?? prev.appNetStats
                 merged.appNetRates = merged.appNetRates ?? prev.appNetRates
                 merged.wifiSsid = merged.wifiSsid ?? prev.wifiSsid
