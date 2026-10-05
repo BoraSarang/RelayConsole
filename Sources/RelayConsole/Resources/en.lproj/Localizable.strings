@@ -104,6 +104,9 @@
 "briefing.line" = "%d/%d phones · %d critical";
 "cards.empty" = "No cards visible — enable cards in Settings";
 "common.na" = "—";
+"diagnose.dropbox" = "dropbox %@";
+"diagnose.frequency" = "%d times in 7 days";
+"diagnose.section" = "Auto diagnosis";
 "droid.appnet.col.app" = "App";
 "droid.appnet.col.cumulative" = "Total (cum.)";
 "droid.appnet.col.down" = "Down";

@@ -104,6 +104,9 @@
 "briefing.line" = "%d/%d 폰 · critical %d";
 "cards.empty" = "표시할 카드가 없습니다 — 설정에서 카드 켜기";
 "common.na" = "—";
+"diagnose.dropbox" = "dropbox 기록 %@";
+"diagnose.frequency" = "7일 %d회";
+"diagnose.section" = "자동 진단";
 "droid.appnet.col.app" = "앱";
 "droid.appnet.col.cumulative" = "누적";
 "droid.appnet.col.down" = "다운로드";
