@@ -37,6 +37,8 @@ enum IssueLog {
         static let notifySlack = "notify.slack"
         static let androidConnected = "device.connected"
         static let androidDisconnected = "device.disconnected"
+        static let wifiReconnectFailed = "wifi.reconnect.failed"
+        static let wifiServerRestart = "wifi.server.restart"
     }
 
     private static let dirName = "logs"
