@@ -27,7 +27,8 @@ swift test
 ## 1. 프로젝트 정보
 - **프로젝트명**: RelayConsole / 앱 이름 **Relay Console** (구 Outpost → 브랜드 이관, 코드 신규)
 - **플랫폼**: macos (확정 예정 — 이관 시점 가정: SwiftUI MenuBarExtra)
-- **기술 스택**: SwiftPM + SwiftUI MenuBarExtra + AppKit + 시스템 ADB 외부 호출 (GRDB는 범위 밖 · **외부 scrcpy 호출은 허용**, 내장 미러링은 범위 밖)
+- **기술 스택**: SwiftPM + SwiftUI MenuBarExtra + AppKit + 시스템 ADB 외부 호출 (GRDB는 범위 밖 · **외부 scrcpy 호출은 허용**, 내장 미러링은 범위 밖) · `RelayMcpCore`(읽기 전용 로컬 MCP 프로토콜·데이터) + `relay-mcp` 바이너리 — 감시 경로에서 쓰기 금지
+- **테스트**: `swift test` 전체, 단일 포커스는 `swift test --filter <TestClass>`
 - **최소 OS**: macOS 26.0 Tahoe (BrandKit/AppStore_Metadata)
 - **선정 이유**: 맥 메뉴바 상주 — 외부 안드로이드 기기 관제
 - **design_profile**: custom — "관제탑" (docs/DESIGN.md + 팝오버/대시보드 v2 토큰)

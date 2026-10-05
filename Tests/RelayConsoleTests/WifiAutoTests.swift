@@ -383,4 +383,66 @@ struct WifiReconnectTests {
             ), "실패 \(failures)회여도 15분 지나면 재시도해야 한다")
         }
     }
+
+    @Test func connectOutputDecidesSuccess() {
+        #expect(WifiAdbLogic.isConnectSuccess(output: "connected to 10.112.134.138:5555"))
+        #expect(WifiAdbLogic.isConnectSuccess(output: "already connected to 10.112.134.138:5555"))
+    }
+
+    @Test func connectOutputFailureDespiteExitZero() {
+        // ★ exit 0이어도 실패 — 이걸 놓쳐서 스크립트만 되고 앱은 안 됐다
+        #expect(!WifiAdbLogic.isConnectSuccess(
+            output: "failed to connect to '10.112.134.138:5555': No route to host"))
+        #expect(!WifiAdbLogic.isConnectSuccess(output: ""))
+        #expect(!WifiAdbLogic.isConnectSuccess(
+            output: "cannot connect to 10.0.0.1:5555: Connection refused"))
+        #expect(!WifiAdbLogic.isConnectSuccess(
+            output: "failed to connect to '10.0.0.1:5555': Connection timed out"))
+    }
+
+    /// adb 서버 stuck 판정 — "No route to host"에서만 서버 재시작 (2026-10-05 실측)
+    /// 앱은 "끊김"으로만 보였지만 실제론 서버가 로컬망에 못 나가는 상태였고,
+    /// 스크립트의 kill-server가 공유 서버를 치료하자 tick이 기기를 다시 봤다.
+    @Test func noRouteToHostTriggersServerRestart() {
+        #expect(WifiAdbLogic.shouldRestartAdbServer(
+            cause: "error: No route to host"
+        ))
+        #expect(WifiAdbLogic.shouldRestartAdbServer(
+            cause: "ERROR: NO ROUTE TO HOST"
+        ), "대소문자 무시 — adb 메시지는 환경마다 다름")
+    }
+
+    @Test func otherCausesDoNotRestartServer() {
+        // kill-server는 진행 중 poll 1틱을 깨뜨리므로 꼭 필요할 때만
+        #expect(!WifiAdbLogic.shouldRestartAdbServer(cause: ""))
+        #expect(!WifiAdbLogic.shouldRestartAdbServer(cause: "device offline"))
+        #expect(!WifiAdbLogic.shouldRestartAdbServer(cause: "connection refused"))
+        #expect(!WifiAdbLogic.shouldRestartAdbServer(cause: "unauthorized"))
+    }
+
+    /// 재시작 기억상실 방지 — 비어 시작했는데 저장된 엔드포인트가 있으면 다시 찾는다 (2026-10-05)
+    /// lastEndpoint·유실목록이 메모리-only라 재시작하면 "붙어 있어야 할 기기"를 잊고 영원히 조용했다.
+    @Test func emptyStartSeedsSavedEndpoint() {
+        #expect(WifiAdbLogic.seedLostEndpoint(
+            savedLastEndpoint: "10.112.134.138:5555", foundEmpty: true, hasPending: false
+        ) == "10.112.134.138:5555")
+    }
+
+    @Test func seedYieldsToLiveState() {
+        // adb 목록에 뭐라도 있으면 저장값으로 덮지 않는다
+        #expect(WifiAdbLogic.seedLostEndpoint(
+            savedLastEndpoint: "10.112.134.138:5555", foundEmpty: false, hasPending: false
+        ) == nil)
+        // 대기 중인 유실이 이미 있으면 그것을 우선한다
+        #expect(WifiAdbLogic.seedLostEndpoint(
+            savedLastEndpoint: "10.112.134.138:5555", foundEmpty: true, hasPending: true
+        ) == nil)
+        // 저장값이 없거나 USB 시리얼이면 심지 않는다
+        #expect(WifiAdbLogic.seedLostEndpoint(
+            savedLastEndpoint: nil, foundEmpty: true, hasPending: false
+        ) == nil)
+        #expect(WifiAdbLogic.seedLostEndpoint(
+            savedLastEndpoint: "R5CT215F4QK", foundEmpty: true, hasPending: false
+        ) == nil, "USB 유실은 tcpip 경로가 처리한다 — 여기로 오면 안 된다")
+    }
 }

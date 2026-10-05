@@ -286,6 +286,38 @@ enum WifiAdbLogic {
         return true
     }
 
+    /// adb connect 성공 판정 — 순수 함수 (테스트 고정)
+    /// adb는 실패해도 exit 0을 반환하므로("failed to connect ..." + 0) 출력으로 판별한다.
+    /// 스크립트의 `grep -qE "^(already )?connected to"` 와 동일 기준.
+    /// exit 코드만 믿으면 실패를 성공으로 오판해 kill-server 폴백이 영원히 안 탄다 (2026-10-05 실측).
+    static func isConnectSuccess(output: String) -> Bool {
+        output.split(separator: "\n").contains { raw in
+            let line = raw.trimmingCharacters(in: .whitespaces).lowercased()
+            return line.hasPrefix("connected to") || line.hasPrefix("already connected to")
+        }
+    }
+
+    /// adb 서버 stuck 판정 — 순수 함수 (테스트 고정)
+    /// "No route to host"는 서버가 로컬 네트워크에 못 나가는 상태로 떠 있다는 신호다.
+    /// 이 상태에선 connect 재시도가 전부 실패하므로 kill-server → start-server 1회가 정답이다
+    /// (scrcpy_run.sh의 동일 단계 · USB 경로 connectWithRetry 선례).
+    static func shouldRestartAdbServer(cause: String) -> Bool {
+        cause.localizedCaseInsensitiveContains("no route to host")
+    }
+
+    /// 마지막 연결 엔드포인트 영속 키 — 재시작 기억상실 방지 (2026-10-05)
+    /// lastEndpoint·유실목록은 메모리-only라 재시작하면 "붙어 있어야 할 기기"를 잊고 영원히 조용했다.
+    static let lastEndpointKey = "relay.wifi.lastEndpoint"
+
+    /// 시작 시 유실 후보 선등록 판정 — 순수 함수 (테스트 고정)
+    /// adb 목록이 비어 시작했는데(재시작 직후) 저장된 엔드포인트가 있으면 그것을 잊지 않고 다시 찾는다.
+    /// 대기 중인 유실이 이미 있으면 그것을 우선한다.
+    static func seedLostEndpoint(savedLastEndpoint: String?, foundEmpty: Bool, hasPending: Bool) -> String? {
+        guard foundEmpty, !hasPending,
+              let saved = savedLastEndpoint, isNetworkEndpoint(saved) else { return nil }
+        return saved
+    }
+
     /// adbd 재기동 대기 — 고정 대기 대신 재시도로 판정한다 (스크립트는 4초 고정 대기)
     static let connectAttempts = 3
     static let connectRetryInterval: TimeInterval = 2
@@ -453,6 +485,15 @@ final class WifiAdbController: ObservableObject {
     /// 성공한 기기는 `adoptEndpoint` 에서 목록에서 뺀다.
     func retryLostNetworkEndpoints(found: Set<String>) async {
         lostNetworkEndpoints.subtract(found)
+        // 재시작 기억상실 방지 — 비어 시작했는데 저장된 엔드포인트가 있으면 선등록한다.
+        // 자동모드 OFF면 shouldReconnect 게이트가 막으므로 여기서 꺼내지 않는다.
+        if let seed = WifiAdbLogic.seedLostEndpoint(
+            savedLastEndpoint: UserDefaults.standard.string(forKey: WifiAdbLogic.lastEndpointKey),
+            foundEmpty: found.isEmpty,
+            hasPending: !lostNetworkEndpoints.isEmpty
+        ) {
+            lostNetworkEndpoints.insert(seed)
+        }
         for s in lostNetworkEndpoints {
             await autoReconnect(lostSerial: s)
         }
@@ -492,7 +533,10 @@ final class WifiAdbController: ObservableObject {
         let candidates = await resolveReconnectCandidates(adb: adb, lostSerial: lostSerial)
         guard !candidates.isEmpty else {
             reconnectFailures += 1
-            failAuto("wifi.reconnect.ipNotFound")
+            failAutoMessage(L10n.string("wifi.reconnect.ipNotFound"),
+                            serial: lostSerial,
+                            retryIn: WifiAdbLogic.reconnectDelay(failures: reconnectFailures),
+                            logKind: IssueLog.Kind.wifiReconnectFailed)
             return
         }
 
@@ -538,7 +582,13 @@ final class WifiAdbController: ObservableObject {
         // 후보를 전부 시도해도 안 붙었다 — 사유를 그대로 남긴다 ([표시②])
         // pending 에는 남겨둔다 — 다음 쿨다운에 다시 시도한다 (1회성이면 복귀를 놓친다)
         reconnectFailures += 1
-        failAuto("wifi.reconnect.failed", detail: lastFailureDetail.isEmpty ? "-" : lastFailureDetail)
+        let msg = (lastFailureDetail.isEmpty || lastFailureDetail == "-")
+            ? L10n.format("wifi.reconnect.failed", lostSerial)
+            : lastFailureDetail
+        failAutoMessage(msg,
+                        serial: lostSerial,
+                        retryIn: WifiAdbLogic.reconnectDelay(failures: reconnectFailures),
+                        logKind: IssueLog.Kind.wifiReconnectFailed)
         DebugLogger.shared.info(
             "WifiAdb",
             "[INFO] 재연결 실패 \(lostSerial) · 후보 \(tried.count)개 모두 불명"
@@ -555,14 +605,26 @@ final class WifiAdbController: ObservableObject {
         detail: inout String
     ) async -> Bool {
         do {
-            try? WifiAdbRunner.run(adb, WifiAdbLogic.disconnectArgs(endpoint: endpoint))
-            try WifiAdbRunner.run(adb, WifiAdbLogic.connectArgs(endpoint: endpoint))
-            guard await Self.isConnectedAsDevice(adb: adb, endpoint: endpoint) else {
+            do {
+                try? WifiAdbRunner.run(adb, WifiAdbLogic.disconnectArgs(endpoint: endpoint))
+                try WifiAdbRunner.runConnect(adb, WifiAdbLogic.connectArgs(endpoint: endpoint))
+            } catch {
+                // 서버 stuck이면 여기서 포기하지 않고 1회 회복 후 재시도 (스크립트와 동일).
+                // 이 폴백이 없으면 앱은 쿨다운마다 같은 실패를 반복하고 사용자는 스크립트를 직접 돌리게 된다.
+                guard WifiAdbLogic.shouldRestartAdbServer(cause: cause(error)) else {
+                    throw error
+                }
+                statusMessage = L10n.string("wifi.reconnect.serverRestart")
+                await restartAdbServerOnce(adb: adb, serial: lostSerial)
+                try? WifiAdbRunner.run(adb, WifiAdbLogic.disconnectArgs(endpoint: endpoint))
+                try WifiAdbRunner.runConnect(adb, WifiAdbLogic.connectArgs(endpoint: endpoint))
+            }
+            guard await Self.isConnectedAsDeviceSettled(adb: adb, endpoint: endpoint) else {
                 detail = L10n.format("wifi.reconnect.failed", endpoint)
                 return false
             }
             reconnectFailures = 0
-            lastEndpoint = endpoint
+            rememberEndpoint(endpoint)
             lostNetworkEndpoints.remove(lostSerial)
             statusIsError = false
             statusMessage = L10n.format("wifi.reconnect.done", endpoint)
@@ -646,6 +708,17 @@ final class WifiAdbController: ObservableObject {
         return out.split(separator: "\n").contains { line in
             line.hasPrefix(endpoint) && line.contains("device")
         }
+    }
+
+    /// connect 직후 settle 대기 — 서버 목록에 오르는 데 시간이 걸린다.
+    /// 스크립트 test_device와 동일하게 최대 3회까지 2초 간격으로 확인한다.
+    /// 즉시 1회만 보고 판정하면 붙을 수 있는 기기를 "실패"로 버린다.
+    private static func isConnectedAsDeviceSettled(adb: String, endpoint: String) async -> Bool {
+        for _ in 1...WifiAdbLogic.connectAttempts {
+            if await Self.isConnectedAsDevice(adb: adb, endpoint: endpoint) { return true }
+            try? await Task.sleep(for: .seconds(WifiAdbLogic.connectRetryInterval))
+        }
+        return false
     }
 
     /// adbd 포트가 열려 있는지 — **TCPconnect 만** 하고 즉시 끊는다
@@ -745,7 +818,7 @@ final class WifiAdbController: ObservableObject {
 
             // ③ 멱등 — 이미 TCP 로 열려 있으면 그대로 쓴다
             if isNetworkEndpointOpen(port: port) {
-                lastEndpoint = endpoint
+                rememberEndpoint(endpoint)
                 statusMessage = L10n.format("wifi.auto.alreadyOpen", endpoint)
                 DebugLogger.shared.info("WifiAdb", "[INFO] 이미 열려 있음 — tcpip 생략 \(endpoint)")
                 return
@@ -754,7 +827,7 @@ final class WifiAdbController: ObservableObject {
             // ④ tcpip → ⑤ 준비 대기(재시도) → ⑥ 정리 → ⑦ connect
             try WifiAdbRunner.run(adb, WifiAdbLogic.tcpipArgs(serial: serial, port: port))
             try await connectWithRetry(adb: adb, endpoint: endpoint, port: port)
-            lastEndpoint = endpoint
+            rememberEndpoint(endpoint)
             // ⑧ 옛 IP 정리 — IP 가 바뀌면 옛 항목이 남아 **같은 폰이 2개 기기**로 잡힌다(폴링 2배)
             await disconnectStaleEndpoints(adb: adb, keep: endpoint)
             statusMessage = L10n.format("wifi.status.connected", endpoint)
@@ -843,6 +916,24 @@ final class WifiAdbController: ObservableObject {
         }
     }
 
+    /// adb 서버 stuck 회복 — kill-server → start-server 1회 (스크립트와 동일 단계)
+    /// USB·TCP 자동·수동 경로가 함께 쓴다. 데몬 재시작이라 진행 중 poll 1틱은
+    /// 실패할 수 있으나 다음 틱에 복구된다 (USB 경로에서 이미 하던 일).
+    private func restartAdbServerOnce(adb: String, serial: String?) async {
+        DebugLogger.shared.warn("WifiAdb", "[WARN] No route to host — adb 서버 재시작 후 재시도")
+        IssueLog.append(
+            IssueLog.Entry(
+                kind: IssueLog.Kind.wifiServerRestart,
+                detail: "adb kill-server → start-server 후 재시도",
+                serial: serial
+            ),
+            name: "device"
+        )
+        try? WifiAdbRunner.run(adb, ["kill-server"])
+        try? await Task.sleep(for: .seconds(1))
+        try? WifiAdbRunner.run(adb, ["start-server"])
+    }
+
     /// adbd 재시작 직후엔 아직 준비 중일 수 있다 — 고정 대기 대신 **재시도로** 판정한다
     private func connectWithRetry(adb: String, endpoint: String, port: Int) async throws {
         var lastError: Error = WifiAdbError(cause: "")
@@ -850,7 +941,7 @@ final class WifiAdbController: ObservableObject {
             // 고아 연결 정리 — 남아 있으면 새 연결이 붙지 않는다
             try? WifiAdbRunner.run(adb, WifiAdbLogic.disconnectArgs(endpoint: endpoint))
             do {
-                try WifiAdbRunner.run(adb, WifiAdbLogic.connectArgs(endpoint: endpoint))
+                try WifiAdbRunner.runConnect(adb, WifiAdbLogic.connectArgs(endpoint: endpoint))
                 return
             } catch {
                 lastError = error
@@ -861,13 +952,10 @@ final class WifiAdbController: ObservableObject {
             }
         }
         // 마지막 시도도 "No route to host" 면 adb 서버 재시작 후 1회 (스크립트와 동일)
-        if WifiAdbLogic.cause(lastError).localizedCaseInsensitiveContains("no route to host") {
-            DebugLogger.shared.warn("WifiAdb", "[WARN] No route to host — adb 서버 재시작 후 재시도")
-            try? WifiAdbRunner.run(adb, ["kill-server"])
-            try? await Task.sleep(for: .seconds(1))
-            try? WifiAdbRunner.run(adb, ["start-server"])
+        if WifiAdbLogic.shouldRestartAdbServer(cause: WifiAdbLogic.cause(lastError)) {
+            await restartAdbServerOnce(adb: adb, serial: nil)
             try WifiAdbRunner.run(adb, WifiAdbLogic.disconnectArgs(endpoint: endpoint))
-            try WifiAdbRunner.run(adb, WifiAdbLogic.connectArgs(endpoint: endpoint))
+            try WifiAdbRunner.runConnect(adb, WifiAdbLogic.connectArgs(endpoint: endpoint))
             return
         }
         throw lastError
@@ -890,13 +978,25 @@ final class WifiAdbController: ObservableObject {
                 return
             }
             do {
-                try WifiAdbRunner.run(adb, WifiAdbLogic.connectArgs(endpoint: clean))
-                lastEndpoint = clean
-                statusMessage = L10n.format("wifi.status.connected", clean)
-                DebugLogger.shared.info("WifiAdb", "[INFO] [FEATURE] Wi-Fi 연결 \(clean)")
+                try WifiAdbRunner.runConnect(adb, WifiAdbLogic.connectArgs(endpoint: clean))
             } catch {
-                failDetail("wifi.error.connectFailed", detail: cause(error))
+                // 서버 stuck이면 수동 연결도 같은 함정에 빠진다 — 1회 회복 후 재시도 (스크립트와 동일)
+                guard WifiAdbLogic.shouldRestartAdbServer(cause: cause(error)) else {
+                    failDetail("wifi.error.connectFailed", detail: cause(error))
+                    return
+                }
+                statusMessage = L10n.string("wifi.reconnect.serverRestart")
+                await restartAdbServerOnce(adb: adb, serial: clean)
+                do {
+                    try WifiAdbRunner.runConnect(adb, WifiAdbLogic.connectArgs(endpoint: clean))
+                } catch {
+                    failDetail("wifi.error.connectFailed", detail: cause(error))
+                    return
+                }
             }
+            rememberEndpoint(clean)
+            statusMessage = L10n.format("wifi.status.connected", clean)
+            DebugLogger.shared.info("WifiAdb", "[INFO] [FEATURE] Wi-Fi 연결 \(clean)")
         }
     }
 
@@ -957,12 +1057,32 @@ final class WifiAdbController: ObservableObject {
 
     /// 자동 경로 실패 — 조용히 상태만 남긴다. 사용자가 아무것도 안 했는데
     /// 팝업이 튀면 방해가 된다. 대신 배지와 로그로는 남긴다 ([표시②]의 "조용한 return" 금지).
-    private func failAuto(_ key: String, detail: String? = nil) {
+    /// - retryIn: 다음 자동 재시도까지 남은 쿨다운(초). 있으면 "약 N분 후 재시도"를 상태에 함께 표시한다 (C).
+    /// - logKind/serial: IssueLog device 로그 기록용 (B) — 다음번 원인 추적을 위해 남긴다.
+    private func failAuto(_ key: String, detail: String? = nil, serial: String? = nil, retryIn: TimeInterval? = nil, logKind: String? = nil) {
+        let base = L10n.string(key)
+        let message = (detail?.isEmpty == false) ? "\(base) — \(detail!)" : base
+        failAutoMessage(message, serial: serial, retryIn: retryIn, logKind: logKind)
+    }
+
+    /// 완성된 문장으로 실패 기록 — base 키의 `%@` 를 이중으로 붙이지 않기 위해
+    /// 이미 포맷된 detail을 가진 호출부(autoReconnect)가 쓴다.
+    private func failAutoMessage(_ message: String, serial: String?, retryIn: TimeInterval?, logKind: String?) {
         autoFailed = true
         statusIsError = true
-        let base = L10n.string(key)
-        statusMessage = (detail?.isEmpty == false) ? "\(base) — \(detail!)" : base
-        DebugLogger.shared.warn("WifiAdb", "[WARN] [AUTO] \(key)\(detail.map { " \($0)" } ?? "")")
+        var msg = message
+        if let retryIn {
+            let mins = max(1, Int((retryIn + 59) / 60))
+            msg += " · \(L10n.format("wifi.reconnect.nextRetry", mins))"
+        }
+        statusMessage = msg
+        DebugLogger.shared.warn("WifiAdb", "[WARN] [AUTO] \(msg)")
+        if let logKind {
+            IssueLog.append(
+                IssueLog.Entry(kind: logKind, detail: msg, serial: serial),
+                name: "device"
+            )
+        }
     }
 
     /// 실패 표시 — 원문(adb stderr 등)을 함께 노출 (AGENTS.local §4 [표시②])
@@ -971,6 +1091,12 @@ final class WifiAdbController: ObservableObject {
         let base = L10n.string(key)
         statusMessage = (detail?.isEmpty == false) ? "\(base) — \(detail!)" : base
         DebugLogger.shared.warn("WifiAdb", "[WARN] \(key)\(detail.map { " \($0)" } ?? "")")
+    }
+
+    /// 마지막 연결 기록 — 메모리 + UserDefaults 동시 저장 (재시작 기억상실 방지)
+    private func rememberEndpoint(_ endpoint: String) {
+        lastEndpoint = endpoint
+        UserDefaults.standard.set(endpoint, forKey: WifiAdbLogic.lastEndpointKey)
     }
 
     /// 외부 명령 실패 원인 — WifiAdbError.cause 우선, 없으면 빈 문자열 (내부 코드 노출 금지)
@@ -1084,6 +1210,17 @@ enum MacRoute {
 enum WifiAdbRunner {
     static func run(_ path: String, _ args: [String]) throws {
         _ = try runCapture(path, args)
+    }
+
+    /// adb connect 전용 — exit 코드가 아니라 **출력**으로 성공 판별한다.
+    /// adb는 실패해도 exit 0을 반환하므로 출력에 "connected to"가 없으면 실패로 던진다
+    /// (스크립트의 grep 판별과 동일 — exit 코드만 믿으면 실패를 성공으로 오판한다).
+    static func runConnect(_ path: String, _ args: [String]) throws -> String {
+        let text = try runCapture(path, args)
+        guard WifiAdbLogic.isConnectSuccess(output: text) else {
+            throw WifiAdbError(cause: text.trimmingCharacters(in: .whitespacesAndNewlines))
+        }
+        return text
     }
 
     @discardableResult

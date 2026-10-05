@@ -549,12 +549,20 @@ struct SettingsView: View {
     }
 }
 
-/// scrcpy A안 — 경로·읽기전용·추가 옵션 (기본 8종은 코드 고정)
+/// scrcpy A안 — 경로·읽기전용·기본 8종·추가 옵션
 private struct ScrcpySettingsSection: View {
     @ObservedObject private var scrcpy = ScrcpyController.shared
 
     var body: some View {
         Toggle(L10n.string("settings.scrcpy.noControl"), isOn: $scrcpy.noControl)
+        Toggle(L10n.string("settings.scrcpy.showTouches"), isOn: $scrcpy.showTouches)
+        Toggle(L10n.string("settings.scrcpy.stayAwake"), isOn: $scrcpy.stayAwake)
+        Toggle(L10n.string("settings.scrcpy.legacyPaste"), isOn: $scrcpy.legacyPaste)
+        Toggle(L10n.string("settings.scrcpy.turnScreenOff"), isOn: $scrcpy.turnScreenOff)
+        scrcpyValueRow(labelKey: "settings.scrcpy.maxSize", text: $scrcpy.maxSize)
+        scrcpyValueRow(labelKey: "settings.scrcpy.videoBitRate", text: $scrcpy.videoBitRate)
+        scrcpyValueRow(labelKey: "settings.scrcpy.maxFps", text: $scrcpy.maxFps)
+        scrcpyValueRow(labelKey: "settings.scrcpy.screenOffTimeout", text: $scrcpy.screenOffTimeout)
         TextField(L10n.string("settings.scrcpy.path"), text: $scrcpy.customPath)
             .textFieldStyle(.roundedBorder)
             .font(OPFont.body(12))
@@ -585,6 +593,19 @@ private struct ScrcpySettingsSection: View {
             .buttonStyle(.plain)
             .font(OPFont.body(11))
             .foregroundStyle(OPColor.cta)
+        }
+    }
+
+    private func scrcpyValueRow(labelKey: String, text: Binding<String>) -> some View {
+        HStack {
+            Text(L10n.string(labelKey))
+                .font(OPFont.body(12))
+            Spacer()
+            TextField("", text: text)
+                .textFieldStyle(.roundedBorder)
+                .font(OPFont.number(12))
+                .frame(width: 90)
+                .multilineTextAlignment(.trailing)
         }
     }
 }
