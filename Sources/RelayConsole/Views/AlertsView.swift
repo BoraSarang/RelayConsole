@@ -366,6 +366,9 @@ struct AlertsView: View {
                             .foregroundStyle(OPColor.cta.opacity(0.9))
                             .lineLimit(2)
                     }
+                    if let d = store.diagnosis(for: e) {
+                        diagnoseSection(d)
+                    }
                     HStack(spacing: 8) {
                         Text(e.at.formatted(date: .abbreviated, time: .shortened))
                             .font(OPFont.body(10))
@@ -598,6 +601,31 @@ struct AlertsView: View {
     }
 
     // MARK: - helpers
+
+    /// 자동 진단 섹션 — 크래시 원인·빈도 (PLAN_auto_diagnose)
+    /// 필드 단위로 표시한다. 모르는 값은 애초에 결과에 없으므로 지어내지 않는다.
+    private func diagnoseSection(_ d: CrashDiagnose) -> some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text(L10n.string("diagnose.section"))
+                .font(OPFont.body(10))
+                .foregroundStyle(OPColor.warn)
+            Text(d.exception)
+                .font(OPFont.number(10))
+                .foregroundStyle(OPColor.ink)
+                .lineLimit(2)
+                .truncationMode(.tail)
+            Text(L10n.format("diagnose.frequency", d.count7d))
+                .font(OPFont.body(10))
+                .foregroundStyle(OPColor.inkDim)
+            if let at = d.dropboxAt {
+                Text(L10n.format("diagnose.dropbox", at))
+                    .font(OPFont.body(10))
+                    .foregroundStyle(OPColor.inkDim)
+                    .lineLimit(1)
+            }
+        }
+        .padding(.top, 2)
+    }
 
     /// kind 필터 바인딩
     private func kindBinding(_ kind: WatchKind) -> Binding<Bool> {

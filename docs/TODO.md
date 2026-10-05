@@ -5,6 +5,18 @@
 
 ## 완료 (2026-10-05)
 
+- [x] **T-2026-10-05-2 자동 진단 Phase 1 — 크래시** (`docs/plans/PLAN_auto_diagnose.md`)
+  - **트리거**: crash ingest 시 지문당 1회 백그라운드 (package·exception 없으면 진단 안 함).
+    adb는 detached + 20초 데드라인 (MainActor 붙잡지 않음).
+  - **재료**: `dumpsys dropbox --print data_app_crash | tail -c 8192` 최신 1건
+    (패키지·포그라운드·예외 첫줄 파서) + 7일 동일 패키지·예외 빈도 (메모리)
+  - **표시**: Alerts 행 "자동 진단" 섹션 (원인·7일 N회·dropbox 시각) · `diagnoses.json` 영속
+  - **실측**: dropbox 0.1초·당일 7건 · ANR 파일 목록만 읽기 가능(내용은 권한 거부) ·
+    batterystats --checkin 1858줄 0.24초 · thermal zone 30종 · 셀 변경 345↔93 확인
+  - **검증 [HARD]**: `swift test` **585 / 0 failed** (신규 5건) ·
+    `./scripts/build-macos.sh debug` **EXIT=0** · L10n **724키 en/ko 1:1** · U+FFFD 0건
+  - **다음**: Phase 2 발열 (throttling enter 시 top 1회 + 충전/핫스팟 + 최고온 센서)
+
 - [x] **T-2026-10-05-1 Sites·Jobs 제거 — 기기 관제로 집중** (`docs/DECISIONS.md` D1)
   - **결정**: 쓰는 사람도 만나는 데이터도 없어 덜어냈다. 앱은 "기기 관제탑" 한 문장.
     **다시 보지 않는다** — 부활 논의는 D1을 먼저 읽는다. 재료는 git 히스토리.

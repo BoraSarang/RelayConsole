@@ -1,29 +1,25 @@
 # RESEARCH_auto_diagnose — 자동 진단 재료 추출 (2026-10-05)
 
 > 방향: 상태가 발생하면 앱이 **스스로 원인을 캐내어** 리포트한다 (관제탑의 다음 단계).
-> 이 문서는 **무엇이 캐내지는가**만 정리한다. 계획(PLAN)은 다음 단계.
-> - ✅ = 앱이 이미 읽음 (추가 비용 ≈ 0, 조합만 하면 됨)
-> - 🔬 = 신규, 실측 후 확정 (이 기기 SM-S901N에서 명령 검증 필요)
-> - ⛔ = 안 됨 (권한·비용·정직성 한계)
->
-> 원칙: 이상 **감지 시에만** 무거운 명령 1회. 상시 폴링에 올리지 않는다 (성능 예산).
+> ## 실측 완료 (S22 SM-S901N · 10.112.134.138:5555 · 2026-10-05)
+> 아래 ✅🔬⛔은 실측 판정이다. 원칙 유지: 이상 **감지 시에만** 무거운 명령 1회.
 
 ## 1. 크래시가 났다 → "누가, 왜, 얼마나 자주"
 
 | 재료 | 상태 | 원천 |
 |---|---|---|
 | FATAL EXCEPTION 패키지·예외타입·발생 위치 | ✅ 파서 있음 (`extractProcessDeathContext`) | `logcat -b crash` (IncidentBundle이 이미 덤프) |
-| 패키지별 크래시 빈도·최근 N일 추이 | 🔬 쉬움 | 기존 이벤트 + DeviceDaily 집계 (새 코드 소량) |
-| dropbox 크래시 분류 (`data_app_crash`) | 🔬 | `dumpsys dropbox --print` (adb shell 읽기 가능 여부 실측) |
+| 패키지별 크래시 빈도·최근 N일 추이 | ✅ 가능 | 기존 이벤트 + DeviceDaily 집계 (새 코드 소량) |
+| dropbox 크래시 목록 (`data_app_crash`) | ✅ 실측 | `dumpsys dropbox --print` 0.1초·당일 7건 확인 — 전체 덤프가 아니라 목록+최신 N건만 읽는다 |
 | 난독화 스택의 근본 원인 | ⛔ | 매핑 파일 없이 원인까지는 불가 — "대략" 선에서 멈춘다 |
 
 ## 2. 온도가 올라갔다 → "주범은 누구"
 
 | 재료 | 상태 | 원천 |
 |---|---|---|
-| 발열 시점 CPU 상위 프로세스 스냅샷 | ✅ 거의 공짜 | ProcessListSheet가 이미 수집 — throttling enter 시점에 스냅샷 저장만 추가 |
+| 발열 시점 CPU 상위 프로세스 스냅샷 | ✅ 실측 | `top -n 1 -b -o %CPU,CMDLINE` 0.4초·파싱 가능 — throttling enter 시점에 1회 |
 | 충전 중 + 핫스팟 여부 (가장 흔한 조합) | ✅ 있음 | 배터리 상태 + 네트워크 상태 (오늘 실측 Status 4가 이 조합) |
-| 뜨거운 센서 종류 (skin/battery/soc) | ✅/🔬 | thermal zone (읽는 범위 실측 확인) |
+| 뜨거운 센서 종류 (skin/battery/soc) | ✅ 실측 | thermal zone 30종 읽기 가능 (pa 47.1℃·cpuss 45℃ 확인) — 최고온 3개만 리포트 |
 | 커널 wakelock급 원인 | ⛔ | `dumpsys batterystats`급 무게 — 이상 시 1회만 고려, 평소 금지 |
 
 ## 3. LTE 신호 감소 → "빈번한가, 왜 그런가"
@@ -31,26 +27,26 @@
 | 재료 | 상태 | 원천 |
 |---|---|---|
 | RSRP/RSRQ/SINR + RAT/BAND 추이 | ✅ 있음 | SignalGrade + metricsHistory |
-| 빈도·지속·시간대 패턴 ("빈번한가") | 🔬 쉬움 | DeviceDaily + insight patterns 집계 (새 코드 소량) |
-| 셀 변경 추정 (BAND/RAT 바뀜 = 핸드오버 정황) | 🔬 | 기존 값의 전이 기록 (새 코드 소량) |
+| 빈도·지속·시간대 패턴 ("빈번한가") | ✅ 가능 | DeviceDaily + insight patterns 집계 (새 코드 소량) |
+| 셀 변경 추정 (핸드오버 정황) | ✅ 실측 | `dumpsys telephony.registry`에 서빙셀(mCi/mPci/mTac/earfcn/bands)+이웃셀 — **오늘 345↔93 셀 변경 실측** (mCi 끝자리 ...23↔...87). 단 출력이 수 MB급이라 기기 내 grep으로 mCi/mPci/RSRP만 뽑아 전송 |
 | "어째서 좋지 않은가"의 진짜 이유 | ⛔ | 기지국·전파 환경은 기기에서 모름 — **원인 불명으로 적고 패턴만 낸다** ([표시②]) |
-| 셀 ID (이동 중인지 정체 중인지) | 🔬 | `dumpsys telephony.registry` 파싱 가능 여부 실측 (버전별 상이) |
 
 ## 4. 배터리 광탈 → "얼마나 빨리, 누가 먹나"
 
 | 재료 | 상태 | 원천 |
 |---|---|---|
 | 방치 추적 (충전 없이 임계 이하 지속) | ✅ 있음 | BatteryNeglectTracker |
-| 소모 속도 (%/h) | 🔬 쉬움 | levelHistory 기울기 (새 코드 소량) |
-| UID별 소모량 (주범) | 🔬 조건부 | `dumpsys batterystats` — **이상 감지 시 1회만** (상시 금지) |
-| Doze/대기 상태 구분 | 🔬 | `dumpsys deviceidle` (실측) |
+| 소모 속도 (%/h) | ✅ 가능 | levelHistory 기울기 (새 코드 소량) |
+| UID별 소모량 (주범) | ✅ 실측 | `dumpsys batterystats --checkin` 1858줄·0.24초 — 이상 감지 시 1회만 (상시 금지) |
+| Doze/대기 상태 구분 | ✅ 실측 | `dumpsys deviceidle` 읽기 가능 |
 
 ## 5. ANR → "어디서 멈췄나"
 
 | 재료 | 상태 | 원천 |
 |---|---|---|
 | ANR 발생 + 패키지 | ✅ 있음 | logcat 키워드 감시 |
-| main 스레드 스택 | ⛔/🔬 | `/data/anr/traces.txt`는 user 빌드에서 adb 읽기 불가. `bugreport`는 수십MB라 이상 시에도 무거움 — logcat 정황 + CPU로 "대략"만 |
+| ANR 목록 (횟수·시각) | ✅ 실측 | `/data/anr/` 목록 읽기 가능 (9/21 2건 확인) |
+| main 스레드 스택 | ⛔ 실측 | 파일 내용은 **Permission denied** — logcat 정황 + CPU로 "대략"만 |
 
 ## 6. 연결 끊김 → "왜 자주 끊기나"
 

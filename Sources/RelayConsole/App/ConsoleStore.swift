@@ -134,6 +134,7 @@ final class ConsoleStore: ObservableObject {
         if EventStore.shared.loadFailed {
             recordStoreProblem(.readFailed(ErrorCode.storeReadFailed))
         }
+        diagnoses = DiagnoseStore.shared.diagnoses
         // Phase1 스토어 로드
         _ = ConnectionSessionStore.shared
         _ = DeviceDailyStore.shared
@@ -575,6 +576,7 @@ final class ConsoleStore: ObservableObject {
         pushEvent(event.summary)
         EventStore.shared.save(recentWatchEvents)
         maybeCaptureIncident(event)
+        maybeDiagnoseCrash(event)
         // Phase1 — 일자 이벤트 카운트 (crash/anr/warn)
         DeviceDailyStore.shared.countEvent(
             serial: event.serial,
@@ -667,6 +669,67 @@ final class ConsoleStore: ObservableObject {
             event: event,
             adbPath: DeviceMonitor.adbPathNow()
         )
+    }
+
+    // MARK: - 자동 진단 (PLAN_auto_diagnose Phase 1 · 크래시)
+
+    /// 크래시 진단 결과 — Alerts "진단" 섹션이 읽는다 (DiagnoseStore 영속 + 메모리 미러)
+    @Published private(set) var diagnoses: [String: CrashDiagnose] = [:]
+
+    func diagnosis(for event: WatchEvent) -> CrashDiagnose? {
+        if let fp = event.errorFingerprint, let d = diagnoses[fp] { return d }
+        return diagnoses[event.fingerprint]
+    }
+
+    private func setDiagnosis(_ result: CrashDiagnose) {
+        var next = diagnoses
+        next[result.fingerprint] = result
+        diagnoses = next
+        DiagnoseStore.shared.put(result)
+    }
+
+    /// 크래시 자동 진단 — 지문당 1회, 백그라운드 (PLAN_auto_diagnose)
+    /// package·exception이 없으면 진단하지 않는다 (추측 금지).
+    /// adb 호출은 detached로 — MainActor를 붙잡지 않는다 (R4 교훈).
+    private func maybeDiagnoseCrash(_ event: WatchEvent) {
+        guard event.kind == .crash, !event.isClear,
+              let pkg = event.packageName, !pkg.isEmpty,
+              let exc = event.exceptionClass, !exc.isEmpty,
+              let fp = event.errorFingerprint,
+              diagnoses[fp] == nil else { return }
+        guard let adb = DeviceMonitor.adbPathNow() else { return }
+        let serial = event.serial
+        let snapshotEvents = recentWatchEvents
+        let at = event.at
+        Task.detached { [fp, pkg, exc, serial, snapshotEvents, at] in
+            let dropbox = await Self.fetchCrashDropbox(adb: adb, serial: serial, package: pkg)
+            let freq = CrashFrequency.summarize(events: snapshotEvents, package: pkg, exception: exc, now: at)
+            let result = CrashDiagnose(
+                fingerprint: fp,
+                package: pkg,
+                exception: exc,
+                foreground: dropbox?.foreground,
+                count7d: freq.count,
+                dropboxAt: dropbox?.at,
+                diagnosedAt: .now
+            )
+            await MainActor.run {
+                ConsoleStore.shared.setDiagnosis(result)
+                DebugLogger.shared.info("Diagnose", "[INFO] 크래시 진단 완료 \(pkg)")
+            }
+        }
+    }
+
+    /// dropbox 최신 data_app_crash 중 해당 패키지 1건 — tail 8KB만 전송 (상한)
+    nonisolated static func fetchCrashDropbox(adb: String, serial: String, package: String) async -> DropboxCrash? {
+        guard let out = try? await ProcessRunner.captureAsync(
+            adb,
+            ["-s", serial, "shell", "dumpsys dropbox --print data_app_crash | tail -c 8192"],
+            timeout: 20
+        ), !out.timedOut else { return nil }
+        let matches = CrashDropboxParser.parse(out.stdout).filter { $0.package == package }
+        // --print는 오래된 순이므로 마지막 매칭이 최신
+        return matches.last
     }
 
     // MARK: - 외부 알림 채널 (PLAN_notify_channels)
