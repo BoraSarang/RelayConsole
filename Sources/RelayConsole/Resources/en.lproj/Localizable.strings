@@ -568,10 +568,18 @@
 "settings.retention.90" = "90 days";
 "settings.retention.label" = "Data retention";
 "settings.retention.unlimited" = "Unlimited";
+"settings.scrcpy.legacyPaste" = "Legacy paste mode";
+"settings.scrcpy.maxFps" = "Max frame rate (fps)";
+"settings.scrcpy.maxSize" = "Max resolution (px)";
 "settings.scrcpy.noControl" = "Read-only mirror (no input)";
 "settings.scrcpy.opts" = "Extra options (appended after defaults)";
 "settings.scrcpy.path" = "scrcpy path (blank = PATH)";
 "settings.scrcpy.rescan" = "Rescan";
+"settings.scrcpy.screenOffTimeout" = "Keep screen off (sec)";
+"settings.scrcpy.showTouches" = "Show touches";
+"settings.scrcpy.stayAwake" = "Stay awake while mirroring";
+"settings.scrcpy.turnScreenOff" = "Turn device screen off";
+"settings.scrcpy.videoBitRate" = "Video bit rate";
 "settings.section.about" = "About";
 "settings.section.alerts" = "Alerts";
 "settings.section.alertsJobs" = "Alerts & Jobs";
@@ -787,6 +795,8 @@
 "wifi.reconnect.ipNotFound" = "Could not find the device IP — check Wi-Fi";
 "wifi.reconnect.notReachable" = "%@ is unreachable — check that you are on the same Wi-Fi";
 "wifi.reconnect.failed" = "Reconnect failed — %@";
+"wifi.reconnect.nextRetry" = "Retrying in ~%d min";
+"wifi.reconnect.serverRestart" = "adb server is stuck — restarting and retrying…";
 "settings.wifi.section" = "Wi-Fi ADB";
 "droid.logs.excluded" = "excluded %d tags on device";
 "droid.logs.exclude.tip" = "Tags repeating the same line thousands of times per second are excluded on the device. Turn this off to show everything.";

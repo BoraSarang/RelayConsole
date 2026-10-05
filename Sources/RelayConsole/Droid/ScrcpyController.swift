@@ -22,18 +22,74 @@ final class ScrcpyController: ObservableObject {
     @Published var customOpts: String {
         didSet { UserDefaults.standard.set(customOpts, forKey: "relay.scrcpy.customOpts") }
     }
+    // 미러링 기본 옵션 8종 — 설정에서 조정 (빈 값이면 해당 옵션 생략)
+    @Published var showTouches: Bool {
+        didSet { UserDefaults.standard.set(showTouches, forKey: "relay.scrcpy.showTouches") }
+    }
+    @Published var stayAwake: Bool {
+        didSet { UserDefaults.standard.set(stayAwake, forKey: "relay.scrcpy.stayAwake") }
+    }
+    @Published var legacyPaste: Bool {
+        didSet { UserDefaults.standard.set(legacyPaste, forKey: "relay.scrcpy.legacyPaste") }
+    }
+    @Published var turnScreenOff: Bool {
+        didSet { UserDefaults.standard.set(turnScreenOff, forKey: "relay.scrcpy.turnScreenOff") }
+    }
+    @Published var maxSize: String {
+        didSet { UserDefaults.standard.set(maxSize, forKey: "relay.scrcpy.maxSize") }
+    }
+    @Published var videoBitRate: String {
+        didSet { UserDefaults.standard.set(videoBitRate, forKey: "relay.scrcpy.videoBitRate") }
+    }
+    @Published var maxFps: String {
+        didSet { UserDefaults.standard.set(maxFps, forKey: "relay.scrcpy.maxFps") }
+    }
+    @Published var screenOffTimeout: String {
+        didSet { UserDefaults.standard.set(screenOffTimeout, forKey: "relay.scrcpy.screenOffTimeout") }
+    }
 
-    /// 사용자 스크립트 기본 8종 (PLAN_v0.7 §2)
-    static let defaultOpts = [
-        "--show-touches",
-        "--stay-awake",
-        "--legacy-paste",
-        "--max-size=1024",
-        "--video-bit-rate=2M",
-        "--max-fps=30",
-        "--screen-off-timeout=3600",
-        "--turn-screen-off",
-    ]
+    /// 종전 코드 고정 기본값 (PLAN_v0.7 §2) — 설정 미지정 시 동일 동작
+    nonisolated static let defaultShowTouches = true
+    nonisolated static let defaultStayAwake = true
+    nonisolated static let defaultLegacyPaste = true
+    nonisolated static let defaultTurnScreenOff = true
+    nonisolated static let defaultMaxSize = "1024"
+    nonisolated static let defaultVideoBitRate = "2M"
+    nonisolated static let defaultMaxFps = "30"
+    nonisolated static let defaultScreenOffTimeout = "3600"
+
+    /// scrcpy 인자 조립 — 순수 함수 (UserDefaults·싱글턴을 건드리지 않아 테스트 가능)
+    nonisolated static func mirrorArgs(serial: String, noControl: Bool,
+                           showTouches: Bool = defaultShowTouches,
+                           stayAwake: Bool = defaultStayAwake,
+                           legacyPaste: Bool = defaultLegacyPaste,
+                           turnScreenOff: Bool = defaultTurnScreenOff,
+                           maxSize: String = defaultMaxSize,
+                           videoBitRate: String = defaultVideoBitRate,
+                           maxFps: String = defaultMaxFps,
+                           screenOffTimeout: String = defaultScreenOffTimeout,
+                           customOpts: String = "") -> [String] {
+        var args: [String] = ["-s", serial]
+        if showTouches { args.append("--show-touches") }
+        if stayAwake { args.append("--stay-awake") }
+        if legacyPaste { args.append("--legacy-paste") }
+        let size = maxSize.trimmingCharacters(in: .whitespaces)
+        if !size.isEmpty { args.append("--max-size=\(size)") }
+        let rate = videoBitRate.trimmingCharacters(in: .whitespaces)
+        if !rate.isEmpty { args.append("--video-bit-rate=\(rate)") }
+        let fps = maxFps.trimmingCharacters(in: .whitespaces)
+        if !fps.isEmpty { args.append("--max-fps=\(fps)") }
+        let timeout = screenOffTimeout.trimmingCharacters(in: .whitespaces)
+        if !timeout.isEmpty { args.append("--screen-off-timeout=\(timeout)") }
+        if turnScreenOff { args.append("--turn-screen-off") }
+        if noControl {
+            args.append("--no-control")
+        }
+        if !customOpts.isEmpty {
+            args += customOpts.split(separator: " ").map(String.init)
+        }
+        return args
+    }
 
     private var process: Process?
     private var findCache: String?
@@ -44,6 +100,15 @@ final class ScrcpyController: ObservableObject {
         customPath = d.string(forKey: "relay.scrcpy.path") ?? ""
         customOpts = d.string(forKey: "relay.scrcpy.customOpts") ?? ""
         noControl = d.bool(forKey: "relay.scrcpy.noControl")
+        // Bool은 미지정 시 false를 반환하므로 object 존재 여부로 기본값(true) 구분
+        showTouches = d.object(forKey: "relay.scrcpy.showTouches") as? Bool ?? Self.defaultShowTouches
+        stayAwake = d.object(forKey: "relay.scrcpy.stayAwake") as? Bool ?? Self.defaultStayAwake
+        legacyPaste = d.object(forKey: "relay.scrcpy.legacyPaste") as? Bool ?? Self.defaultLegacyPaste
+        turnScreenOff = d.object(forKey: "relay.scrcpy.turnScreenOff") as? Bool ?? Self.defaultTurnScreenOff
+        maxSize = d.string(forKey: "relay.scrcpy.maxSize") ?? Self.defaultMaxSize
+        videoBitRate = d.string(forKey: "relay.scrcpy.videoBitRate") ?? Self.defaultVideoBitRate
+        maxFps = d.string(forKey: "relay.scrcpy.maxFps") ?? Self.defaultMaxFps
+        screenOffTimeout = d.string(forKey: "relay.scrcpy.screenOffTimeout") ?? Self.defaultScreenOffTimeout
         refresh()
         refreshTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
             Task { @MainActor in
@@ -212,14 +277,12 @@ final class ScrcpyController: ObservableObject {
         }
         if process?.isRunning == true { stop() }
 
-        var args: [String] = ["-s", serial]
-        args += Self.defaultOpts
-        if noControl {
-            args.append("--no-control")
-        }
-        if !customOpts.isEmpty {
-            args += customOpts.split(separator: " ").map(String.init)
-        }
+        let args = Self.mirrorArgs(serial: serial, noControl: noControl,
+                                     showTouches: showTouches, stayAwake: stayAwake,
+                                     legacyPaste: legacyPaste, turnScreenOff: turnScreenOff,
+                                     maxSize: maxSize, videoBitRate: videoBitRate,
+                                     maxFps: maxFps, screenOffTimeout: screenOffTimeout,
+                                     customOpts: customOpts)
 
         let proc = Process()
         proc.executableURL = URL(fileURLWithPath: path)
