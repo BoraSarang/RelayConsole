@@ -65,6 +65,8 @@ struct ConsoleView: View {
                 AlertsView(store: store)
             case .insights:
                 InsightsView(store: store)
+            case .plugins:
+                PluginView(store: store)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
