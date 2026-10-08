@@ -79,6 +79,39 @@ final class FloatingGraphTests: XCTestCase {
         XCTAssertFalse(FloatingGraphLogic.isOpen(.cpu, wins: wins))
     }
 
+    func testOpenWindowUsesGivenFrame() {
+        var wins: [FloatWin] = []
+        XCTAssertTrue(FloatingGraphLogic.openWindow(
+            metric: .network, serial: "S", frame: "20,1082,300,220", wins: &wins
+        ))
+        XCTAssertEqual(wins[0].frame, "20,1082,300,220")
+    }
+
+    func testOpenWindowDefaultsToEmptyFrame() {
+        var wins: [FloatWin] = []
+        XCTAssertTrue(FloatingGraphLogic.openWindow(metric: .network, serial: "S", wins: &wins))
+        XCTAssertEqual(wins[0].frame, "")
+    }
+
+    func testToggleMetricPassesFrame() {
+        var wins: [FloatWin] = []
+        XCTAssertTrue(FloatingGraphLogic.toggleMetric(
+            .cpu, serial: "S", frame: "20,1082,300,220", wins: &wins
+        ))
+        XCTAssertEqual(wins[0].frame, "20,1082,300,220")
+    }
+
+    func testLastFrameStringReturnsOnlyParsable() {
+        let d = UserDefaults(suiteName: "FloatingGraphTests.lastFrame")!
+        d.removePersistentDomain(forName: "FloatingGraphTests.lastFrame")
+        XCTAssertEqual(FloatingGraphController.lastFrameString(d), "")
+        d.set("20,1082,300,220", forKey: FloatingGraphController.lastFrameKey)
+        XCTAssertEqual(FloatingGraphController.lastFrameString(d), "20,1082,300,220")
+        d.set("not a frame", forKey: FloatingGraphController.lastFrameKey)
+        XCTAssertEqual(FloatingGraphController.lastFrameString(d), "")
+        d.removePersistentDomain(forName: "FloatingGraphTests.lastFrame")
+    }
+
     func testSetMetricKeepsIdAndFrame() {
         let id = UUID()
         var wins = [FloatWin(id: id, metric: .network, serial: "SER1", frame: "10,20,300,220")]
