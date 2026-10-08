@@ -71,21 +71,22 @@ enum FloatingGraphLogic {
     }
 
     /// 창 추가 — cap 초과 시 거부(반환 false)
+    /// `frame`이 비어 있으면 첫 표시 때 왼쪽 상단 기본값 (호출자가 lastFrame을 주면 이전 위치)
     @discardableResult
-    static func openWindow(metric: Metric, serial: String, wins: inout [FloatWin]) -> Bool {
+    static func openWindow(metric: Metric, serial: String, frame: String = "", wins: inout [FloatWin]) -> Bool {
         guard wins.count < maxWindows else { return false }
-        wins.append(FloatWin(id: UUID(), metric: metric, serial: serial, frame: ""))
+        wins.append(FloatWin(id: UUID(), metric: metric, serial: serial, frame: frame))
         return true
     }
 
     /// Settings 토글 — 해당 지표 창이 있으면 전부 닫고, 없으면 1개만 생성
     @discardableResult
-    static func toggleMetric(_ metric: Metric, serial: String, wins: inout [FloatWin]) -> Bool {
+    static func toggleMetric(_ metric: Metric, serial: String, frame: String = "", wins: inout [FloatWin]) -> Bool {
         if isOpen(metric, wins: wins) {
             wins.removeAll { $0.metric == metric }
             return false
         }
-        return openWindow(metric: metric, serial: serial, wins: &wins)
+        return openWindow(metric: metric, serial: serial, frame: frame, wins: &wins)
     }
 
     static func closeWindow(id: UUID, wins: inout [FloatWin]) {
@@ -285,6 +286,8 @@ final class FloatingGraphController: ObservableObject {
     static let windowID = WindowFocus.floatingGraphWindowID
     private static let originKey = "relay.float.origin"
     static let enabledKey = "relay.float.enabled"
+    /// 마지막으로 저장된 창 프레임 — 신규 창 기본 위치 (목록이 비어 위치를 잃어도 여기로)
+    nonisolated static let lastFrameKey = "relay.float.lastFrame"
 
     typealias Metric = FloatingGraphLogic.Metric
     typealias FloatWin = FloatingGraphLogic.FloatWin
@@ -356,8 +359,10 @@ final class FloatingGraphController: ObservableObject {
             return FloatingGraphLogic.decodeWins(d.string(forKey: key))
         }
         // 1회 마이그레이션 — 기존 단일 창 프레임 + 카드 토글 4키
+        // 최근 위치(lastFrame)가 있으면 구버전 origin보다 우선
+        let lastFrame = lastFrameString()
         let migrated = FloatingGraphLogic.migrateWins(
-            origin: d.string(forKey: originKey),
+            origin: lastFrame.isEmpty ? d.string(forKey: originKey) : lastFrame,
             network: boolDefault("relay.float.showNetwork", true),
             cpu: boolDefault("relay.float.showCPU", true),
             gpu: boolDefault("relay.float.showGPU", false),
@@ -372,6 +377,13 @@ final class FloatingGraphController: ObservableObject {
         UserDefaults.standard.set(FloatingGraphLogic.encodeWins(wins), forKey: FloatingGraphLogic.windowsKey)
     }
 
+    /// 마지막 저장 frame 조회 — 파싱 불가면 "" (호출자가 왼쪽 상단 기본값으로)
+    nonisolated static func lastFrameString(_ defaults: UserDefaults = .standard) -> String {
+        guard let raw = defaults.string(forKey: lastFrameKey),
+              !raw.isEmpty, FloatingGraphLogic.parseFrame(raw) != nil else { return "" }
+        return raw
+    }
+
     // MARK: - 표시/숨김
 
     func toggle() {
@@ -383,7 +395,10 @@ final class FloatingGraphController: ObservableObject {
     func show() {
         setEnabledFlag(true)
         if wins.isEmpty {
-            FloatingGraphLogic.openWindow(metric: .network, serial: defaultSerial(), wins: &wins)
+            FloatingGraphLogic.openWindow(
+                metric: .network, serial: defaultSerial(),
+                frame: Self.lastFrameString(), wins: &wins
+            )
             persistWins()
         }
         syncPanels()
@@ -403,7 +418,10 @@ final class FloatingGraphController: ObservableObject {
     func restoreAll() {
         guard isEnabled else { return }
         if wins.isEmpty {
-            FloatingGraphLogic.openWindow(metric: .network, serial: defaultSerial(), wins: &wins)
+            FloatingGraphLogic.openWindow(
+                metric: .network, serial: defaultSerial(),
+                frame: Self.lastFrameString(), wins: &wins
+            )
             persistWins()
         }
         syncPanels()
@@ -456,7 +474,8 @@ final class FloatingGraphController: ObservableObject {
         if open {
             guard !FloatingGraphLogic.isOpen(metric, wins: list) else { return }
             guard FloatingGraphLogic.openWindow(
-                metric: metric, serial: defaultSerial(), wins: &list
+                metric: metric, serial: defaultSerial(),
+                frame: Self.lastFrameString(), wins: &list
             ) else {
                 DebugLogger.shared.warn("FloatGraph", "[WARN] 창 최대 \(FloatingGraphLogic.maxWindows)개 도달")
                 return
@@ -636,6 +655,9 @@ final class FloatingGraphController: ObservableObject {
         // 생성 직후 content 크기 반영 전 frame을 못 맞추면 maxY가 깨져 저장됨 — 의도한 좌상단으로 고정
         panel.setFrame(NSRect(origin: origin, size: savedSize), display: false)
         observeMove(id: win.id, panel: panel)
+        // 신규 생성 패널은 여기서 표시 — 없으면 다음 syncPanels까지 invisible이라
+        // 기동 직후 첫 토글이 구조적으로 한 박자 밀렸다 (2026-10-08 실측)
+        if isEnabled { panel.orderFront(nil) }
         DebugLogger.shared.action("FloatGraph", "창 생성 metric=\(win.metric.rawValue) 위치=\(origin)")
         fitToContent(id: win.id)
     }
@@ -786,6 +808,8 @@ final class FloatingGraphController: ObservableObject {
         guard let i = FloatingGraphLogic.indexOf(id: id, wins: wins), wins[i].frame != str else { return }
         wins[i].frame = str
         persistWins()
+        // 신규 창 기본 위치 — 목록이 비어 위치를 잃어도 여기로 (2026-10-08)
+        UserDefaults.standard.set(str, forKey: Self.lastFrameKey)
     }
 
     /// 기존 프레임 그대로 패널에 적용 (arrange 직후)
