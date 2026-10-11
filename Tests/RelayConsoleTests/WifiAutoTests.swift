@@ -113,10 +113,22 @@ struct WifiAutoTests {
         #expect(WifiAdbLogic.needsTcpip(isNetworkSerialPresent: false) == true)
     }
 
+    /// stale lastEndpoint는 확인 대상 IP만 낸다 — "열려 있음" 단정은 포트 검사 몫 (2026-10-10 실측:
+    /// 재부팅은 포트를 닫는데 문자열은 남겨, 접미사만 보면 USB 재연결이 영원히 스킵된다)
+    @Test func openEndpointHostExtractsVerifiableIp() {
+        #expect(WifiAdbLogic.openEndpointHost(lastEndpoint: "10.164.172.249:5555", port: 5555) == "10.164.172.249")
+        #expect(WifiAdbLogic.openEndpointHost(lastEndpoint: nil, port: 5555) == nil)
+        #expect(WifiAdbLogic.openEndpointHost(lastEndpoint: "10.164.172.249:5556", port: 5555) == nil)
+        #expect(WifiAdbLogic.openEndpointHost(lastEndpoint: "R5CT215F4QK", port: 5555) == nil)
+        #expect(WifiAdbLogic.openEndpointHost(lastEndpoint: "", port: 5555) == nil)
+    }
+
     @Test func connectRetryBudgetIsBounded() {
         // 무한 재시도는 안 된다 — 3회면 충분 (스크립트 주석: "adbd 아직 준비중일 수 있음")
         #expect(WifiAdbLogic.connectAttempts == 3)
         #expect(WifiAdbLogic.connectRetryInterval >= 1)
+        // 서버 재시작 뒤는 1회로 끊지 않는다 — 목록 반영 지연에 조용히 죽는다 (2026-10-10)
+        #expect(WifiAdbLogic.postRestartAttempts >= 2)
     }
 
     // MARK: - 게이트웨이 파싱
@@ -443,6 +455,47 @@ struct WifiReconnectTests {
         ) == nil)
         #expect(WifiAdbLogic.seedLostEndpoint(
             savedLastEndpoint: "R5CT215F4QK", foundEmpty: true, hasPending: false
-        ) == nil, "USB 유실은 tcpip 경로가 처리한다 — 여기로 오면 안 된다")
+        ) == nil)
+    }
+
+    // MARK: - 기기별 기억 (2026-10-11 · 2대 운용)
+
+    @Test func endpointsByDeviceRoundTrip() {
+        let map = ["R5CT215F4QK": "192.168.84.79:5555", "R3QXXXX": "192.168.198.49:5555"]
+        let back = WifiAdbLogic.decodeEndpointsByDevice(WifiAdbLogic.encodeEndpointsByDevice(map))
+        #expect(back == map)
+    }
+
+    @Test func endpointsByDeviceRejectsGarbage() {
+        // 깨진 JSON·빈 키·USB 값은 버린다
+        #expect(WifiAdbLogic.decodeEndpointsByDevice(nil) == [:])
+        #expect(WifiAdbLogic.decodeEndpointsByDevice("not-json") == [:])
+        #expect(WifiAdbLogic.decodeEndpointsByDevice(#"{"":"192.168.1.2:5555","A":"R5CT215F4QK"}"#) == [:])
+    }
+
+    @Test func seedLostEndpointsSkipsFoundAndPending() {
+        // S22가 살아 있어도 Router 기억은 시드된다 — 단일 슬롯 foundEmpty 게이트와 달리
+        let remembered = ["pidRouter": "192.168.84.79:5555", "pidS22": "192.168.198.49:5555"]
+        let seeded = WifiAdbLogic.seedLostEndpoints(
+            remembered: remembered,
+            found: ["192.168.198.49:5555"],
+            pending: []
+        )
+        #expect(seeded == ["192.168.84.79:5555"])
+        // 발견됐거나 대기 중이면 제외
+        #expect(WifiAdbLogic.seedLostEndpoints(
+            remembered: remembered,
+            found: ["192.168.84.79:5555", "192.168.198.49:5555"],
+            pending: []
+        ) == [])
+        #expect(WifiAdbLogic.seedLostEndpoints(
+            remembered: remembered, found: [], pending: ["192.168.84.79:5555"]
+        ) == ["192.168.198.49:5555"])
+    }
+
+    @Test func physicalIdForEndpointReverseLookup() {
+        let map = ["pidRouter": "192.168.84.79:5555"]
+        #expect(WifiAdbLogic.physicalIdForEndpoint("192.168.84.79:5555", in: map) == "pidRouter")
+        #expect(WifiAdbLogic.physicalIdForEndpoint("10.0.0.1:5555", in: map) == nil)
     }
 }

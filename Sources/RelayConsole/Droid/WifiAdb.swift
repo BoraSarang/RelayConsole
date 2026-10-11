@@ -207,6 +207,26 @@ enum WifiAdbLogic {
     /// 이미 TCP 로 열려 있다면 기기는 재부팅된 적이 없으니 다시 걸 이유가 없다.
     static func needsTcpip(isNetworkSerialPresent: Bool) -> Bool { !isNetworkSerialPresent }
 
+    /// 저장된 엔드포인트에서 실제 확인할 IP — 접미사 일치 + IPv4 추출 (순수)
+    ///
+    /// 포트 개방 여부(`nc`)는 IO라 컨트롤러에서 확인하고, 여기서는 문자열 판정만 한다.
+    /// 접미사만 보고 "열려 있음"으로 단정하면 재부팅 직후 stale에 스킵된다 (2026-10-10 실측).
+    static func openEndpointHost(lastEndpoint: String?, port: Int) -> String? {
+        guard let ep = lastEndpoint, ep.hasSuffix(":\(port)") else { return nil }
+        return host(ofEndpoint: ep)
+    }
+
+    /// 실패 문장 조립 — `%@` 포함 키는 치환, 없으면 원인 병기 (AGENTS.local §4 [표시②])
+    ///
+    /// `%@` 키에 detail을 뒤에 붙이면 `%@` 원문이 화면에 노출된다 (2026-10-10 실측:
+    /// `%@ 에 닿지 않습니다 — ... — 10.164.172.249:5555`). 포함 여부로 분기한다.
+    static func failText(key: String, detail: String?) -> String {
+        let base = L10n.string(key)
+        guard let detail, !detail.isEmpty else { return base }
+        if base.contains("%@") { return L10n.format(key, detail) }
+        return "\(base) — \(detail)"
+    }
+
     /// `ro.boot.serialno` 로 읽는 **물리 기기 고유값** — TCP 엔드포인트의 정체
     ///
     /// ## 왜 이게 정답인가 (2026-09-27 실측)
@@ -309,6 +329,43 @@ enum WifiAdbLogic {
     /// lastEndpoint·유실목록은 메모리-only라 재시작하면 "붙어 있어야 할 기기"를 잊고 영원히 조용했다.
     static let lastEndpointKey = "relay.wifi.lastEndpoint"
 
+    /// 기기별 기억 영속 키 — 물리 ID(`ro.boot.serialno`) → 마지막 TCP 엔드포인트 (2026-10-11)
+    ///
+    /// 단일 `lastEndpoint`만으로는 2대 운용이 안 된다: S22 IP가 기억돼 있으면
+    /// Router USB 감지 시 "이미 Wi-Fi 연결됨"으로 스킵돼 Router는 영원히 자동으로 안 붙었다.
+    /// IP는 바뀌어도 물리 ID는 고정이므로 키로 쓴다.
+    static let endpointsByDeviceKey = "relay.wifi.endpointsByDevice"
+
+    /// 기기별 기억 디코딩 — 깨지면 빈 dict (하나 오염으로 전체를 버리지 않음)
+    static func decodeEndpointsByDevice(_ raw: String?) -> [String: String] {
+        guard let raw, let data = raw.data(using: .utf8),
+              let map = try? JSONDecoder().decode([String: String].self, from: data) else { return [:] }
+        return map.filter { !$0.key.isEmpty && isNetworkEndpoint($0.value) }
+    }
+
+    static func encodeEndpointsByDevice(_ map: [String: String]) -> String {
+        guard let data = try? JSONEncoder().encode(map),
+              let json = String(data: data, encoding: .utf8) else { return "{}" }
+        return json
+    }
+
+    /// 엔드포인트 → 물리 ID 역조회 — 재연결 후보 ①번(전에 붙었던 IP)을 기기별로 고르기 위함
+    static func physicalIdForEndpoint(_ endpoint: String, in map: [String: String]) -> String? {
+        map.first { $0.value == endpoint }?.key
+    }
+
+    /// 기기별 기억 시드 — 이미 발견된(found)·대기 중(pending)이 아닌 기억만 유실 목록에 올린다 (2026-10-11)
+    ///
+    /// 종전 `seedLostEndpoint`는 "아무것도 안 보일 때"만 단일 슬롯을 살렸다.
+    /// S22가 살아 있으면 Router 기억은 영원히 시드되지 않았다.
+    static func seedLostEndpoints(
+        remembered: [String: String],
+        found: Set<String>,
+        pending: Set<String>
+    ) -> [String] {
+        remembered.values.filter { !found.contains($0) && !pending.contains($0) }.sorted()
+    }
+
     /// 시작 시 유실 후보 선등록 판정 — 순수 함수 (테스트 고정)
     /// adb 목록이 비어 시작했는데(재시작 직후) 저장된 엔드포인트가 있으면 그것을 잊지 않고 다시 찾는다.
     /// 대기 중인 유실이 이미 있으면 그것을 우선한다.
@@ -321,6 +378,8 @@ enum WifiAdbLogic {
     /// adbd 재기동 대기 — 고정 대기 대신 재시도로 판정한다 (스크립트는 4초 고정 대기)
     static let connectAttempts = 3
     static let connectRetryInterval: TimeInterval = 2
+    /// 서버 재시작 뒤 추가 시도 — 재시작 직후 목록 반영이 늦어 1회로 끊으면 조용히 죽는다 (2026-10-10)
+    static let postRestartAttempts = 2
 
     /// adb 오류에서 사람이 읽을 수 있는 원문을 뽑는다 (안쪽에 이미 `cause` 가 있다)
     static func cause(_ error: Error) -> String { (error as? WifiAdbError)?.cause ?? "" }
@@ -466,8 +525,12 @@ final class WifiAdbController: ObservableObject {
     /// 재연결 상태 — 쿨다운과 연속 실패 횟수
     private var reconnectLastAttemptAt: Date?
     private var reconnectFailures = 0
-    /// 추적 중인 기기의 물리 ID — TCP 엔드포인트가 IP 라 바뀌어도 "어느 폰" 이었는지 알 수 있다
-    private(set) var trackedPhysicalId: String?
+    /// 기기별 기억 — 물리 ID → 마지막 TCP 엔드포인트 (2대 운용 · UserDefaults 영속)
+    private var endpointsByDevice: [String: String] = {
+        WifiAdbLogic.decodeEndpointsByDevice(
+            UserDefaults.standard.string(forKey: WifiAdbLogic.endpointsByDeviceKey)
+        )
+    }()
 
     private init() {}
 
@@ -485,13 +548,22 @@ final class WifiAdbController: ObservableObject {
     /// 성공한 기기는 `adoptEndpoint` 에서 목록에서 뺀다.
     func retryLostNetworkEndpoints(found: Set<String>) async {
         lostNetworkEndpoints.subtract(found)
+        // 기기별 기억 시드 — S22가 살아 있어도 Router 기억은 살린다 (단일 슬롯의 foundEmpty 게이트와 달리).
+        // 죽은 기기 기억은 쿨다운+백오프로 소진되므로 폭주하지 않는다.
+        for ep in WifiAdbLogic.seedLostEndpoints(
+            remembered: endpointsByDevice, found: found, pending: lostNetworkEndpoints
+        ) {
+            lostNetworkEndpoints.insert(ep)
+        }
         // 재시작 기억상실 방지 — 비어 시작했는데 저장된 엔드포인트가 있으면 선등록한다.
         // 자동모드 OFF면 shouldReconnect 게이트가 막으므로 여기서 꺼내지 않는다.
-        if let seed = WifiAdbLogic.seedLostEndpoint(
-            savedLastEndpoint: UserDefaults.standard.string(forKey: WifiAdbLogic.lastEndpointKey),
-            foundEmpty: found.isEmpty,
-            hasPending: !lostNetworkEndpoints.isEmpty
-        ) {
+        // (기기별 기억이 있으면 이미 위에서 시드됐으므로 구 단일 슬롯은 폴백으로만)
+        if endpointsByDevice.isEmpty,
+           let seed = WifiAdbLogic.seedLostEndpoint(
+               savedLastEndpoint: UserDefaults.standard.string(forKey: WifiAdbLogic.lastEndpointKey),
+               foundEmpty: found.isEmpty,
+               hasPending: !lostNetworkEndpoints.isEmpty
+           ) {
             lostNetworkEndpoints.insert(seed)
         }
         for s in lostNetworkEndpoints {
@@ -624,7 +696,7 @@ final class WifiAdbController: ObservableObject {
                 return false
             }
             reconnectFailures = 0
-            rememberEndpoint(endpoint)
+            rememberEndpoint(endpoint, physicalId: physicalId(of: endpoint, adb: adb))
             lostNetworkEndpoints.remove(lostSerial)
             statusIsError = false
             statusMessage = L10n.format("wifi.reconnect.done", endpoint)
@@ -692,8 +764,16 @@ final class WifiAdbController: ObservableObject {
             .map { MacRoute.arpNeighbours(onSubnet: $0) } ?? []
 
         // 순서는 **순수 함수**가 정한다 — 여기서 손대지 않는다 (테스트가 고정한다)
+        // ①번(전에 붙었던 IP)은 기기별 기억에서 — 유실된 엔드포인트의 물리 ID를 역조회.
+        // 못 찾으면 구 단일 슬롯으로 폴백 (마이그레이션 전 기억).
+        let ownEndpoint: String? = {
+            if let pid = WifiAdbLogic.physicalIdForEndpoint(lostSerial, in: endpointsByDevice) {
+                return endpointsByDevice[pid]
+            }
+            return lastEndpoint
+        }()
         let order = WifiAdbLogic.reconnectCandidateOrder(
-            lastEndpoint: lastEndpoint,
+            lastEndpoint: ownEndpoint,
             lostSerial: lostSerial,
             deviceReported: deviceReported,
             gateway: gateway,
@@ -776,12 +856,34 @@ final class WifiAdbController: ObservableObject {
     }
 
     /// 자동 모드 진입점 — 설정이 꺼져 있으면 아무것도 하지 않는다 (기본 ON)
+    ///
+    /// 판정은 **기기별**이다 (2026-10-11): 이 기기의 기억된 엔드포인트가 열려 있을 때만
+    /// 스킵한다. 종전엔 전역 lastEndpoint 하나만 보고 "이미 Wi-Fi 연결됨"으로 생략해서,
+    /// S22 IP가 살아 있으면 Router USB 감지 시 Router 자동 연결이 영원히 안 됐다.
     func autoEnableIfEnabled(serial: String) async {
         guard UserDefaults.standard.object(forKey: WifiAdbLogic.autoModeKey) as? Bool ?? true else { return }
-        // 이미 TCP 로 열려 있으면 adbd 를 건드리지 않는다 (tcpip 은 adbd 재시작을 부른다)
-        if isNetworkEndpointOpen() {
-            DebugLogger.shared.info("WifiAdb", "[INFO] 이미 Wi-Fi 연결됨 — 자동 실행 생략 \(serial)")
-            return
+        guard let adb = DeviceMonitor.adbPathNow() else { return }
+        if let pid = physicalId(of: serial, adb: adb),
+           let own = endpointsByDevice[pid],
+           WifiAdbLogic.isNetworkEndpoint(own),
+           await isEndpointOpen(own) {
+            if await Self.isConnectedAsDevice(adb: adb, endpoint: own) {
+                rememberEndpoint(own, physicalId: pid)
+                DebugLogger.shared.info("WifiAdb", "[INFO] 이미 Wi-Fi 연결됨 — 자동 실행 생략 \(serial) → \(own)")
+                return
+            }
+            // 포트는 열려 있는데 adb 목록에만 없음(맥·서버 재시작 직후) — connect만, tcpip 금지
+            // (tcpip은 adbd 재시작이라 멀쩡한 연결을 끊는다)
+            try? WifiAdbRunner.run(adb, WifiAdbLogic.disconnectArgs(endpoint: own))
+            if (try? WifiAdbRunner.runConnect(adb, WifiAdbLogic.connectArgs(endpoint: own))) != nil,
+               await Self.isConnectedAsDeviceSettled(adb: adb, endpoint: own) {
+                rememberEndpoint(own, physicalId: pid)
+                statusIsError = false
+                statusMessage = L10n.format("wifi.reconnect.done", own)
+                DebugLogger.shared.info("WifiAdb", "[INFO] Wi-Fi 재등록 \(serial) → \(own)")
+                return
+            }
+            // connect 실패 → 아래 전체 경로(tcpip 포함)로 폴백
         }
         autoFailed = false
         await enableWifiAutomatically(serial: serial)
@@ -790,10 +892,15 @@ final class WifiAdbController: ObservableObject {
     /// 자동 모드 설정 키 — 기본 ON (사용자 확정)
     static let autoModeKey = "relay.wifiAutoTcpip"
 
-    /// 이미 TCP 로 열려 있으면 adbd 를 건드리지 않는다 — `tcpip` 은 adbd 를 재시작해서
-    /// 그 순간 USB 연결이 잠깐 사라지기 때문(기기가 재부팅된 적 없다면 다시 걸 이유가 없다)
-    func isNetworkEndpointOpen(port: Int = WifiAdbLogic.defaultPort) -> Bool {
-        lastEndpoint.map { $0.hasSuffix(":\(port)") } ?? false
+    /// 지정 엔드포인트의 포트가 실제로 열려 있는지 — `nc` 는 detached 실행이라 MainActor를 막지 않는다.
+    ///
+    /// 메모리 문자열 접미사가 아니라 **실제 포트 개방**으로 판정한다.
+    /// 재부팅은 포트를 닫는데 문자열은 남으므로, 접미사만 보면 재부팅 직후 USB 재연결이
+    /// 영원히 스킵된다 (2026-10-10 실측).
+    /// 전역 lastEndpoint가 아닌 인자 endpoint 기준 — 다른 기기 IP 때문에 스킵되면 안 된다 (2026-10-11).
+    func isEndpointOpen(_ endpoint: String, port: Int = WifiAdbLogic.defaultPort) async -> Bool {
+        guard let ip = WifiAdbLogic.openEndpointHost(lastEndpoint: endpoint, port: port) else { return false }
+        return await Task.detached { Self.adbdPortOpen(ip: ip, port: port) }.value
     }
 
     private func runEnable(serial: String, port: Int, adb: String, quiet: Bool) async {
@@ -805,9 +912,14 @@ final class WifiAdbController: ObservableObject {
             }
             let endpoint = WifiAdbLogic.defaultEndpoint(ip: ip, port: port)
 
-            // ② 도달 확인 — 닿지 않는 기기에 tcpip 을 걸면 adbd 만 재시작된 채 끝난다
-            //    (ping 이 아니라 adb 포트 — 핫스팟 폰은 ICMP 를 막는다, 실측)
-            guard PingProbe.reachable(ip: ip, port: port) else {
+            // ② USB 전송 확인 — tcpip은 USB로 걸므로 USB가 살아 있으면 진행한다.
+            //    포트 닫힘(재부팅 직후)은 이 버튼이 해결해야 할 본래 작업이라,
+            //    TCP 포트로 게이트하면 닫힌 뒤엔 영원히 복구되지 않는다 (2026-10-10 실측:
+            //    재부팅 후 `service.adb.tcp.port` 빈칸 + `nc` 실패 상태에서 버튼이
+            //    tcpip을 한 번도 실행하지 못하고 "닿지 않습니다"만 반복).
+            //    (ping이 아니라 USB get-state — 핫스팟 폰은 ICMP를 막는다, 실측)
+            let usbState = try? WifiAdbRunner.runCapture(adb, ["-s", serial, "get-state"])
+            guard usbState?.trimmingCharacters(in: .whitespacesAndNewlines) == "device" else {
                 if quiet {
                     failAuto("wifi.auto.notReachable", detail: endpoint)
                 } else {
@@ -816,9 +928,10 @@ final class WifiAdbController: ObservableObject {
                 return
             }
 
-            // ③ 멱등 — 이미 TCP 로 열려 있으면 그대로 쓴다
-            if isNetworkEndpointOpen(port: port) {
-                rememberEndpoint(endpoint)
+            // ③ 멱등 — 이 기기의 엔드포인트 포트가 실제로 열려 있으면 그대로 쓴다
+            // (전역 lastEndpoint 기준이 아님 — 다른 기기 IP가 열려 있다고 스킵되면 안 됨, 2026-10-11)
+            if await isEndpointOpen(endpoint, port: port) {
+                rememberEndpoint(endpoint, physicalId: physicalId(of: serial, adb: adb))
                 statusMessage = L10n.format("wifi.auto.alreadyOpen", endpoint)
                 DebugLogger.shared.info("WifiAdb", "[INFO] 이미 열려 있음 — tcpip 생략 \(endpoint)")
                 return
@@ -827,14 +940,16 @@ final class WifiAdbController: ObservableObject {
             // ④ tcpip → ⑤ 준비 대기(재시도) → ⑥ 정리 → ⑦ connect
             try WifiAdbRunner.run(adb, WifiAdbLogic.tcpipArgs(serial: serial, port: port))
             try await connectWithRetry(adb: adb, endpoint: endpoint, port: port)
-            rememberEndpoint(endpoint)
+            rememberEndpoint(endpoint, physicalId: physicalId(of: serial, adb: adb))
             // ⑧ 옛 IP 정리 — IP 가 바뀌면 옛 항목이 남아 **같은 폰이 2개 기기**로 잡힌다(폴링 2배)
             await disconnectStaleEndpoints(adb: adb, keep: endpoint)
             statusMessage = L10n.format("wifi.status.connected", endpoint)
             DebugLogger.shared.info("WifiAdb", "[INFO] [FEATURE] Wi-Fi 연결 \(endpoint)")
         } catch {
             if quiet {
-                failAuto("wifi.error.connectFailed", detail: cause(error))
+                // 자동 실패는 기기 로그에 남긴다 — 시트가 닫혀 있으면 상태 문구가 어디에도 안 보여
+                // 다음 진단 때 원인을 찾을 수 없다 (2026-10-10 실측: 재시작 뒤 실패가 로그에 없었다)
+                failAuto("wifi.error.connectFailed", detail: cause(error), serial: serial, logKind: IssueLog.Kind.wifiReconnectFailed)
             } else {
                 failDetail("wifi.error.connectFailed", detail: cause(error))
             }
@@ -954,9 +1069,21 @@ final class WifiAdbController: ObservableObject {
         // 마지막 시도도 "No route to host" 면 adb 서버 재시작 후 1회 (스크립트와 동일)
         if WifiAdbLogic.shouldRestartAdbServer(cause: WifiAdbLogic.cause(lastError)) {
             await restartAdbServerOnce(adb: adb, serial: nil)
-            try WifiAdbRunner.run(adb, WifiAdbLogic.disconnectArgs(endpoint: endpoint))
-            try WifiAdbRunner.runConnect(adb, WifiAdbLogic.connectArgs(endpoint: endpoint))
-            return
+            // 재시작 직후엔 목록 반영이 늦는다 — device 확인 없이 성공을 말하지 않는다
+            // (2026-10-10 실측: 재시작 1회성 connect 뒤 entries에 오르지 않아 조용히 죽었다)
+            var connected = false
+            for _ in 1...WifiAdbLogic.postRestartAttempts {
+                try? WifiAdbRunner.run(adb, WifiAdbLogic.disconnectArgs(endpoint: endpoint))
+                do {
+                    try WifiAdbRunner.runConnect(adb, WifiAdbLogic.connectArgs(endpoint: endpoint))
+                    connected = true
+                    break
+                } catch {
+                    lastError = error
+                }
+            }
+            if connected, await Self.isConnectedAsDeviceSettled(adb: adb, endpoint: endpoint) { return }
+            throw WifiAdbError(cause: WifiAdbLogic.cause(lastError))
         }
         throw lastError
     }
@@ -994,7 +1121,7 @@ final class WifiAdbController: ObservableObject {
                     return
                 }
             }
-            rememberEndpoint(clean)
+            rememberEndpoint(clean, physicalId: physicalId(of: clean, adb: adb))
             statusMessage = L10n.format("wifi.status.connected", clean)
             DebugLogger.shared.info("WifiAdb", "[INFO] [FEATURE] Wi-Fi 연결 \(clean)")
         }
@@ -1060,8 +1187,7 @@ final class WifiAdbController: ObservableObject {
     /// - retryIn: 다음 자동 재시도까지 남은 쿨다운(초). 있으면 "약 N분 후 재시도"를 상태에 함께 표시한다 (C).
     /// - logKind/serial: IssueLog device 로그 기록용 (B) — 다음번 원인 추적을 위해 남긴다.
     private func failAuto(_ key: String, detail: String? = nil, serial: String? = nil, retryIn: TimeInterval? = nil, logKind: String? = nil) {
-        let base = L10n.string(key)
-        let message = (detail?.isEmpty == false) ? "\(base) — \(detail!)" : base
+        let message = WifiAdbLogic.failText(key: key, detail: detail)
         failAutoMessage(message, serial: serial, retryIn: retryIn, logKind: logKind)
     }
 
@@ -1088,15 +1214,22 @@ final class WifiAdbController: ObservableObject {
     /// 실패 표시 — 원문(adb stderr 등)을 함께 노출 (AGENTS.local §4 [표시②])
     private func failDetail(_ key: String, detail: String?) {
         statusIsError = true
-        let base = L10n.string(key)
-        statusMessage = (detail?.isEmpty == false) ? "\(base) — \(detail!)" : base
+        statusMessage = WifiAdbLogic.failText(key: key, detail: detail)
         DebugLogger.shared.warn("WifiAdb", "[WARN] \(key)\(detail.map { " \($0)" } ?? "")")
     }
 
     /// 마지막 연결 기록 — 메모리 + UserDefaults 동시 저장 (재시작 기억상실 방지)
-    private func rememberEndpoint(_ endpoint: String) {
+    /// physicalId가 있으면 기기별 기억에도 저장 (2대 운용 · 2026-10-11)
+    private func rememberEndpoint(_ endpoint: String, physicalId: String? = nil) {
         lastEndpoint = endpoint
         UserDefaults.standard.set(endpoint, forKey: WifiAdbLogic.lastEndpointKey)
+        if let physicalId, !physicalId.isEmpty {
+            endpointsByDevice[physicalId] = endpoint
+            UserDefaults.standard.set(
+                WifiAdbLogic.encodeEndpointsByDevice(endpointsByDevice),
+                forKey: WifiAdbLogic.endpointsByDeviceKey
+            )
+        }
     }
 
     /// 외부 명령 실패 원인 — WifiAdbError.cause 우선, 없으면 빈 문자열 (내부 코드 노출 금지)

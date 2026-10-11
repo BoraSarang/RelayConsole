@@ -103,6 +103,8 @@
 "apple.tools.title" = "libimobiledevice 필요";
 "briefing.line" = "%d/%d 폰 · critical %d";
 "cards.empty" = "표시할 카드가 없습니다 — 설정에서 카드 켜기";
+"popover.cards.mode.list" = "상세";
+"popover.cards.mode.tiles" = "타일";
 "common.na" = "—";
 "diagnose.charging" = "충전 중";
 "diagnose.dropbox" = "dropbox 기록 %@";
@@ -247,6 +249,7 @@
 "float.card.gpu" = "GPU";
 "float.card.memory" = "메모리";
 "float.card.network" = "네트워크";
+"float.card.summary" = "요약";
 "files.action.open" = "열기";
 "files.action.cancel" = "취소";
 "files.action.delete" = "삭제";
@@ -496,6 +499,7 @@
 "settings.float.network" = "네트워크";
 "settings.float.opacity" = "창 투명도";
 "settings.float.section" = "플로팅 그래프";
+"settings.float.summary" = "요약";
 "settings.github" = "GitHub";
 "settings.incident.auto" = "Incident 번들 자동 캡처";
 "settings.incident.auto.help" = "ANR·크래시·사이트 down 시 manifest·logcat·스크린샷을 로컬 번들로 저장합니다 (5분 쿨다운).";
@@ -604,11 +608,11 @@
 "signal.diagnose.overall" = "종합";
 "signal.diagnose.rat" = "접속망";
 "signal.diagnose.title" = "네트워크 신호 진단";
-"signal.grade.bad" = "매우 나퀴";
+"signal.grade.bad" = "매우 나쁨";
 "signal.grade.excellent" = "우수";
 "signal.grade.fair" = "보통";
-"signal.grade.good" = "양조";
-"signal.grade.poor" = "나퀴";
+"signal.grade.good" = "양호";
+"signal.grade.poor" = "나쁨";
 "store.read.failed" = "저장된 데이터를 읽지 못했습니다 — 다음 저장에서 덮어써질 수 있습니다";
 "store.write.failed" = "저장에 실패했습니다 — 디스크 여유 공간을 확인해 주세요";
 "ui.debug.clear" = "지우기";
@@ -660,6 +664,8 @@
 "wifi.enable.action" = "USB→Wi-Fi 전환";
 "wifi.enable.noUsb" = "USB 기기가 없습니다. 케이블로 연결한 뒤 다시 시도하세요.";
 "wifi.endpoint.placeholder" = "예: 192.168.0.5:5555";
+"wifi.manual.last" = "최근: %@";
+"wifi.manual.pairHint" = "Android 11+ 무선 디버깅은 별도 페어링 포트 사용 — 기기에서 먼저 페어링하세요.";
 "wifi.error.adbMissing" = "adb 바이너리를 찾을 수 없습니다";
 "wifi.error.connectFailed" = "Wi-Fi 연결에 실패했습니다";
 "wifi.error.disconnectFailed" = "Wi-Fi 연결 해제에 실패했습니다";

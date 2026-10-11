@@ -111,7 +111,7 @@ struct AppleDashboardView: View {
                     store.selectedAppleUdid = d.udid
                     UserDefaults.standard.set(d.udid, forKey: "relay.selectedAppleUdid")
                 } label: {
-                    Label(d.displayName, systemImage: d.isOnline ? "iphone" : "iphone.slash")
+                    Label(d.identLabel, systemImage: d.isOnline ? "iphone" : "iphone.slash")
                 }
             }
         } label: {

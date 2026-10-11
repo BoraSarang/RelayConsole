@@ -18,9 +18,6 @@ struct FloatingGraphView: View {
 
     private static let corner: CGFloat = 12
     private static let width: CGFloat = 300
-    /// 헤더 우측 고정 슬롯 — hover 시 opacity만 변화 (삽입/삭제로 인한 출렁임 방지)
-    /// dashboard(22) + scrcpy(≈90) + menu/opacity/close(22×3) + spacing(4×5)
-    private static let trailingSlotWidth: CGFloat = 200
 
     /// 이 창의 기기 — serial이 비었거나 기기가 사라졌으면 전역 선택으로 폴백
     private var device: DeviceSnapshot? {
@@ -53,7 +50,7 @@ struct FloatingGraphView: View {
                     .padding(.bottom, 10)
             }
         }
-        .frame(width: Self.width)
+        .frame(width: Self.width, alignment: .leading)
         .background(
             // 블러(뒤 내용 흐림) + 브랜드 틴트 — 텍스트는 항상 불투명
             RoundedRectangle(cornerRadius: Self.corner, style: .continuous)
@@ -104,25 +101,79 @@ struct FloatingGraphView: View {
                 backgroundOpacity: bg,
                 onMore: { onOpenProcesses() }
             )
+        case .summary:
+            summaryGrid
+                .environment(\.dynamicTypeSize, .xSmall)
         }
     }
 
+    /// 요약 6칸 — 팝오버 타일과 동일 값, 추가 adb 없음
+    private var summaryGrid: some View {
+        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 6) {
+            summaryCell(titleKey: "droid.card.cpu.title", value: DroidCards.cpuValue(device))
+            summaryCell(titleKey: "droid.card.memory.title", value: DroidCards.memoryValue(device))
+            summaryCell(titleKey: "droid.card.network.title", value: DroidCards.networkSubline(device) ?? L10n.na)
+            summaryCell(titleKey: "droid.card.battery.title", value: DroidCards.batteryValue(device))
+            summaryCell(titleKey: "droid.card.gpu.title", value: DroidCards.gpuValue(device))
+            summaryCell(titleKey: "droid.card.storage.title", value: DroidCards.storageValue(device))
+        }
+    }
+
+    private func summaryCell(titleKey: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(L10n.string(titleKey))
+                .font(OPFont.number(8))
+                .foregroundStyle(OPColor.inkDim)
+            Text(value)
+                .font(OPFont.number(11))
+                .foregroundStyle(OPColor.ink)
+                .lineLimit(2)
+                .minimumScaleFactor(0.75)
+        }
+        .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
+        .padding(6)
+        .background(OPColor.card, in: RoundedRectangle(cornerRadius: 8))
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(OPColor.border, lineWidth: 1))
+    }
+
     private var headerRow: some View {
+        // in-flow 레이아웃: leading(기기명, 유연) + trailing(버튼군, 고정).
+        // trailing은 항상 자리 차지(hover 시 출렁임 방지)하되 아이콘 위주로
+        // 줄여서 "Galaxy A90 5G"가 들어가게 함. overlay로 띄우면 hover 시
+        // 기기 피커를 가려 선택이 안 되는 문제.
         HStack(spacing: 8) {
             Circle()
                 .fill(device?.isOnline == true ? OPColor.ok : OPColor.inkDim)
                 .frame(width: 7, height: 7)
             if devices.count > 1 {
                 devicePicker
+                    .layoutPriority(0)
             } else {
-                Text(device?.displayName ?? L10n.string("float.noDevice"))
+                Text(device?.pickerLabel ?? L10n.string("float.noDevice"))
                     .font(OPFont.body(11))
                     .foregroundStyle(OPColor.ink)
                     .lineLimit(1)
-                    .truncationMode(.tail)
+                    .truncationMode(.middle)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .layoutPriority(0)
+                    .help(device?.pickerLabel ?? "")
             }
             Spacer(minLength: 4)
-            // 항상 레이아웃 점유 — 메뉴/닫기 아이콘이 생겨도 헤더 폭·높이 고정
+                .layoutPriority(0)
+            trailingButtons
+                .layoutPriority(1)
+        }
+        .padding(.horizontal, 12)
+        .padding(.top, 10)
+        .padding(.bottom, 2)
+        // 헤더 높이 고정 — hover/menu 오픈 시 출렁임 방지
+        .frame(height: 34)
+        .clipped()
+    }
+
+    /// hover 시에만 보이는 우측 버튼군 — 항상 자리 차지(출렁임 방지),
+    /// 미러링은 아이콘만(compact)으로 폭 절약
+    private var trailingButtons: some View {
             HStack(spacing: 4) {
                 // 대시보드(콘솔) 창 열기 — 플로팅에서 전체 화면으로 전환
                 Button {
@@ -213,7 +264,7 @@ struct FloatingGraphView: View {
                 }
 
                 if let d = device, !d.serial.isEmpty {
-                    ScrcpyHeaderButton(serial: d.serial)
+                    ScrcpyHeaderButton(serial: d.serial, compact: true)
                 }
 
                 Button {
@@ -227,41 +278,39 @@ struct FloatingGraphView: View {
                 .buttonStyle(.plain)
                 .help(L10n.string("float.close"))
             }
-            .frame(width: Self.trailingSlotWidth, alignment: .trailing)
+            .fixedSize()
             .opacity(isHovering ? 1 : 0)
             .allowsHitTesting(isHovering)
-        }
-        .padding(.horizontal, 12)
-        .padding(.top, 10)
-        .padding(.bottom, 2)
-        // 헤더 높이 고정 — hover/menu 오픈 시 출렁임 방지
-        .frame(height: 34)
     }
 
     /// 다중 기기 — **이 창 전용** 기기 지정 (전역 선택은 건드리지 않음)
+    /// 남는 폭에서 말줄임. 우측 버튼군은 항상 자리 차지라 밀려나지 않고,
+    /// hover와 무관하게 항상 클릭 가능.
     private var devicePicker: some View {
         Menu {
             ForEach(devices, id: \.serial) { d in
                 Button {
                     FloatingGraphController.shared.setSerial(id: win.id, serial: d.serial)
                 } label: {
-                    Label(d.displayName, systemImage: d.isOnline ? "iphone" : "iphone.slash")
+                    Label(d.pickerLabel, systemImage: d.isOnline ? "iphone" : "iphone.slash")
                 }
             }
         } label: {
-            Text(device?.displayName ?? L10n.string("float.noDevice"))
-                .font(OPFont.body(11))
-                .foregroundStyle(OPColor.ink)
-                .lineLimit(1)
-                .truncationMode(.tail)
-            Image(systemName: "chevron.down")
-                .font(.system(size: 8, weight: .semibold))
-                .foregroundStyle(OPColor.inkDim)
+            HStack(spacing: 2) {
+                Text(device?.pickerLabel ?? L10n.string("float.noDevice"))
+                    .font(OPFont.body(11))
+                    .foregroundStyle(OPColor.ink)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 8, weight: .semibold))
+                    .foregroundStyle(OPColor.inkDim)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .menuStyle(.borderlessButton)
         .menuIndicator(.hidden)
-        .fixedSize()
-        .help(L10n.string("droid.header.picker"))
+        .help(device?.pickerLabel ?? L10n.string("droid.header.picker"))
     }
 
     private var emptyHint: some View {
