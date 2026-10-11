@@ -172,6 +172,12 @@ enum DroidCards {
                     .foregroundStyle(OPColor.inkDim)
                     .lineLimit(1)
             }
+            if let disp = displayValue(device) {
+                Text(disp)
+                    .font(OPFont.number(10))
+                    .foregroundStyle(OPColor.inkDim)
+                    .lineLimit(1)
+            }
             if let busy = device?.gpuUtilPercent {
                 ProgressView(value: busy, total: 100)
                     .progressViewStyle(.linear)
@@ -365,12 +371,12 @@ enum DroidCards {
 
     static func batteryGrid(_ d: DeviceSnapshot?) -> some View {
         let cells: [(String, String)] = [
-            (L10n.string("droid.battery.health"), d?.batteryHealthPct.map { "\($0)%" } ?? L10n.na),
+            (L10n.string("droid.battery.health"), healthValue(d)),
             (L10n.string("droid.battery.voltage"), d?.voltageMV.map { String(format: "%.2fV", Double($0) / 1000) } ?? L10n.na),
             (L10n.string("droid.battery.cycles"), d?.cycleEstimate.map(String.init) ?? L10n.na),
             (L10n.string("droid.battery.temp"), d?.batteryTempC.map { String(format: "%.1f°C", $0) } ?? L10n.na),
-            (L10n.string("droid.battery.current"), L10n.na),
-            (L10n.string("droid.battery.type"), L10n.na)
+            (L10n.string("droid.battery.current"), d?.batteryCurrentMA.map { String(format: "%.2fA", $0 / 1000) } ?? L10n.na),
+            (L10n.string("droid.battery.type"), d?.batteryTechnology ?? L10n.na)
         ]
         return LazyVGrid(columns: [
             GridItem(.flexible(), spacing: 6),
@@ -725,6 +731,17 @@ enum DroidCards {
         return parts.isEmpty ? L10n.na : parts.joined(separator: " · ")
     }
 
+    /// 디스플레이 요약 — "1080x2340 · 60Hz", 둘 다 없으면 nil
+    static func displayValue(_ device: DeviceSnapshot?) -> String? {
+        guard let d = device else { return nil }
+        var parts: [String] = []
+        if let size = d.displaySize, !size.isEmpty { parts.append(size) }
+        if let hz = d.displayRefreshHz {
+            parts.append(String(format: "%.0fHz", hz))
+        }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
     static func memoryValue(_ device: DeviceSnapshot?) -> String {
         guard let d = device,
               let used = d.memoryUsedGB,
@@ -744,6 +761,16 @@ enum DroidCards {
               let used = d.storageUsedGB,
               let total = d.storageTotalGB else { return "\(L10n.na) / \(L10n.na)" }
         return String(format: "%.0f / %.0f GB", used, total)
+    }
+
+    /// 건강 요약 — "BSOH · ASOC" 순 (예: "91 · 93"). 둘 다 %이며 순서 고정.
+    /// 하나만 있으면 그것만, 둘 다 없으면 미측정. 순서 약속은 호출부가 아닌 여기서 고정.
+    static func healthValue(_ device: DeviceSnapshot?) -> String {
+        var parts: [String] = []
+        if let b = device?.batteryHealthPct { parts.append("\(b)") }
+        if let a = device?.batteryAsocPct { parts.append("\(a)") }
+        guard !parts.isEmpty else { return L10n.na }
+        return parts.joined(separator: " · ") + "%"
     }
 
     static func batteryValue(_ device: DeviceSnapshot?) -> String {

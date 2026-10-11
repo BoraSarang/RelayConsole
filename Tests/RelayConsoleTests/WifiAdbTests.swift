@@ -77,4 +77,26 @@ struct WifiAdbTests {
         #expect(!WifiAdbLogic.isIPv4("1.2.3.4.5"))
         #expect(!WifiAdbLogic.isIPv4("a.b.c.d"))
     }
+
+    // MARK: - failText (%@ 노출 회귀 · 2026-10-10)
+
+    /// `%@` 포함 키에 detail이 있으면 치환 — 원문 노출 금지
+    @Test func failTextSubstitutesPlaceholder() {
+        let msg = WifiAdbLogic.failText(key: "wifi.auto.notReachable", detail: "10.164.172.249:5555")
+        #expect(!msg.contains("%@"))
+        #expect(msg.contains("10.164.172.249:5555"))
+    }
+
+    /// `%@` 없는 키는 원인 병기 유지
+    @Test func failTextAppendsDetailForPlainKey() {
+        let msg = WifiAdbLogic.failText(key: "wifi.error.connectFailed", detail: "refused")
+        #expect(msg.contains("refused"))
+        #expect(msg.contains("—"))
+    }
+
+    /// detail 없으면 원문 그대로
+    @Test func failTextWithoutDetailReturnsBase() {
+        #expect(WifiAdbLogic.failText(key: "wifi.error.connectFailed", detail: nil) == L10n.string("wifi.error.connectFailed"))
+        #expect(WifiAdbLogic.failText(key: "wifi.error.connectFailed", detail: "") == L10n.string("wifi.error.connectFailed"))
+    }
 }

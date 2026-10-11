@@ -45,6 +45,8 @@
 ### 기기 관제 (Android · Apple Phase1)
 - 8카드: CPU / GPU / MEM / SENSORS / BATTERY / NETWORK / THERMAL / STORAGE
 - 5분 스파크라인 · 메모리·프로세스 상위 · scrcpy 원클릭 미러링(읽기 전용 기본)
+- Wi-Fi ADB: USB 연결 시 자동 전환, 케이블을 뽑아도 유지. 단 재부팅하면 adbd TCP가
+  닫히므로 USB를 한 번 다시 꽂아야 함. 폰과 맥이 같은 Wi-Fi(또는 폰 핫스팟)에 있어야 함.
 - 감시 18종: 스로틀링·배터리·PSI·load·메모리·Bsoh·RSRP·ANR·크래시 등  
   hysteresis + 쿨다운 · 시스템 알림 · 화면 상단 배너 · Alerts ack/mute/note
 - Apple: `libimobiledevice` Trust-only 연결·배터리/스토리지 카드 (Phase1)

@@ -24,6 +24,27 @@ struct DashboardLayoutTests {
         #expect(ordered.last == .sensors)
     }
 
+    /// 팝오버 타일 6칸 — 상세 리스트와 합치면 전체, 겹치지 않음 (제거 없음)
+    @Test func tileCardsSplitWithoutLoss() {
+        #expect(DashboardCard.tileCards == [.cpu, .memory, .network, .battery, .gpu, .storage])
+        #expect(Set(DashboardCard.tileCards).isDisjoint(with: Set(DashboardCard.listOnlyCards)))
+        #expect(Set(DashboardCard.tileCards + DashboardCard.listOnlyCards) == Set(DashboardCard.allCases))
+    }
+
+    /// 타일 제목 키 전부 해소 + 값 헬퍼가 nil 기기에서 죽지 않음
+    @Test func tileCardsHaveTitlesAndNilSafeValues() {
+        for card in DashboardCard.tileCards {
+            let key = "droid.card.\(card.rawValue).title"
+            #expect(L10n.string(key) != key, "missing L10n key: \(key)")
+        }
+        _ = DroidCards.cpuValue(nil)
+        _ = DroidCards.memoryValue(nil)
+        _ = DroidCards.networkSubline(nil)
+        _ = DroidCards.batteryValue(nil)
+        _ = DroidCards.gpuValue(nil)
+        _ = DroidCards.storageValue(nil)
+    }
+
     @Test func settingsLabelKeysResolve() {
         for card in DashboardCard.allCases {
             let key = card.settingsLabelKey
