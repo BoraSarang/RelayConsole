@@ -6,7 +6,7 @@ import Combine
 enum FloatingGraphLogic {
     /// 창이 표시하는 지표 단위 (한 창 = 한 지표)
     enum Metric: String, CaseIterable, Codable, Equatable, Sendable {
-        case network, cpu, gpu, memory
+        case network, cpu, gpu, memory, summary
 
         var l10nKey: String { "float.card.\(rawValue)" }
     }

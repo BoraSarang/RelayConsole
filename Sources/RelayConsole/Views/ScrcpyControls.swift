@@ -5,6 +5,8 @@ import Combine
 /// 헤더용 scrcpy 버튼 + 미설치 시 설치 시트 (PLAN_v0.7 A안)
 struct ScrcpyHeaderButton: View {
     let serial: String
+    /// 플로팅처럼 폭이 빡빡한 곳에서는 아이콘만 (텍스트가 기기 피커를 밀어내지 않도록)
+    var compact: Bool = false
     @ObservedObject private var scrcpy = ScrcpyController.shared
     @State private var showInstall = false
     @State private var showError = false
@@ -21,11 +23,14 @@ struct ScrcpyHeaderButton: View {
                     Image(systemName: state == .running ? "rectangle.fill.on.rectangle.fill" : "rectangle.on.rectangle")
                         .font(.system(size: 10, weight: .semibold))
                 }
-                Text(label)
-                    .font(OPFont.number(10))
+                if !compact {
+                    Text(label)
+                        .font(OPFont.number(10))
+                        .lineLimit(1)
+                }
             }
             .foregroundStyle(foreground)
-            .padding(.horizontal, 7)
+            .padding(.horizontal, compact ? 5 : 7)
             .padding(.vertical, 4)
             .background(background, in: RoundedRectangle(cornerRadius: 6))
             .overlay(

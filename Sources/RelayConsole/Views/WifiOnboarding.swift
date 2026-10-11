@@ -52,6 +52,8 @@ struct WifiOnboardingSheet: View {
 
     @State private var manualEndpoint = ""
     @State private var selectedUsbSerial: String = ""
+    /// 마지막 연결 — 탭하면 입력칸에 채움 (재시작 기억상실 방지용 영속값)
+    @AppStorage("relay.wifi.lastEndpoint") private var lastEndpoint = ""
 
     private var usbDevices: [DeviceSnapshot] {
         store.inventory.devices.filter { $0.connectionKind == .usb || $0.connectionKind == nil }
@@ -100,6 +102,14 @@ struct WifiOnboardingSheet: View {
 
             // 2) 수동 연결
             sectionCard(L10n.string("wifi.section.manual")) {
+                if !lastEndpoint.isEmpty {
+                    Button(L10n.format("wifi.manual.last", lastEndpoint)) {
+                        manualEndpoint = lastEndpoint
+                    }
+                    .buttonStyle(.plain)
+                    .font(OPFont.number(12))
+                    .foregroundStyle(OPColor.cta)
+                }
                 TextField(
                     "",
                     text: $manualEndpoint,
@@ -115,6 +125,10 @@ struct WifiOnboardingSheet: View {
                     wifi.connect(endpoint: manualEndpoint)
                 }
                 .disabled(wifi.busy)
+                Text(L10n.string("wifi.manual.pairHint"))
+                    .font(OPFont.body(10))
+                    .foregroundStyle(OPColor.inkDim)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
             // 3) 연결 해제

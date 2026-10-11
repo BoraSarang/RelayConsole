@@ -203,4 +203,10 @@ struct PollBatchTests {
         // 마커는 따옴표로 감싸져 경로와 무관하게 정확히 출력된다
         #expect(s.contains("echo \"@@RLY0@@\""))
     }
+
+    /// 핫스팟 폰(S22 · swlan0) IP 수집 — wlan0만 보면 핫스팟에서 IP가 비어 stale 처리된다 (2026-10-10 실측)
+    @Test func ipWlanCoversHotspotInterface() {
+        #expect(PollBatch.Cmd.ipWlan.shell.contains("swlan0"))
+        #expect(PollBatch.Cmd.ipWlan.shell.contains("wlan0"))
+    }
 }

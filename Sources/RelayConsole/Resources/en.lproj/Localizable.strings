@@ -103,6 +103,8 @@
 "apple.tools.title" = "libimobiledevice required";
 "briefing.line" = "%d/%d phones · %d critical";
 "cards.empty" = "No cards visible — enable cards in Settings";
+"popover.cards.mode.list" = "Detail";
+"popover.cards.mode.tiles" = "Tiles";
 "common.na" = "—";
 "diagnose.charging" = "Charging";
 "diagnose.dropbox" = "dropbox %@";
@@ -247,6 +249,7 @@
 "float.card.gpu" = "GPU";
 "float.card.memory" = "Memory";
 "float.card.network" = "Network";
+"float.card.summary" = "Summary";
 "files.action.open" = "Open";
 "files.action.cancel" = "Cancel";
 "files.action.delete" = "Delete";
@@ -496,6 +499,7 @@
 "settings.float.network" = "Network";
 "settings.float.opacity" = "Window opacity";
 "settings.float.section" = "Floating graphs";
+"settings.float.summary" = "Summary";
 "settings.github" = "GitHub";
 "settings.incident.auto" = "Auto-capture incident bundles";
 "settings.incident.auto.help" = "On ANR·crash·site down, save manifest·logcat·screenshot as a local bundle (5 min cooldown).";
@@ -660,6 +664,8 @@
 "wifi.enable.action" = "Switch USB→Wi-Fi";
 "wifi.enable.noUsb" = "No USB device. Connect a cable and try again.";
 "wifi.endpoint.placeholder" = "e.g. 192.168.0.5:5555";
+"wifi.manual.last" = "Last: %@";
+"wifi.manual.pairHint" = "Android 11+ wireless debugging uses a separate pairing port — pair on the device first.";
 "wifi.error.adbMissing" = "adb binary not found";
 "wifi.error.connectFailed" = "Wi-Fi connection failed";
 "wifi.error.disconnectFailed" = "Wi-Fi disconnection failed";

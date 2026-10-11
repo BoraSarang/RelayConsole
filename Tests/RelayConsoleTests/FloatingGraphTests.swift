@@ -58,6 +58,20 @@ final class FloatingGraphTests: XCTestCase {
 
     // MARK: - 창 조작
 
+    // 요약 창 (6타일)
+    func testSummaryMetricOpensLikeOthers() {
+        XCTAssertTrue(Metric.allCases.contains(.summary))
+        XCTAssertEqual(Metric.summary.l10nKey, "float.card.summary")
+        for m in Metric.allCases {
+            XCTAssertNotEqual(L10n.string(m.l10nKey), m.l10nKey, "missing L10n key: \(m.l10nKey)")
+        }
+        var wins: [FloatWin] = []
+        XCTAssertTrue(FloatingGraphLogic.openWindow(metric: .summary, serial: "S", wins: &wins))
+        XCTAssertTrue(FloatingGraphLogic.isOpen(.summary, wins: wins))
+        XCTAssertFalse(FloatingGraphLogic.toggleMetric(.summary, serial: "S", wins: &wins))
+        XCTAssertTrue(wins.isEmpty)
+    }
+
     func testOpenWindowRejectsAtCapacity() {
         var wins: [FloatWin] = []
         for _ in 0..<FloatingGraphLogic.maxWindows {

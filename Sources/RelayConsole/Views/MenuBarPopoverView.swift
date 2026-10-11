@@ -23,6 +23,8 @@ struct MenuBarPopoverView: View {
     @State private var now = Date()
     @AppStorage("relay.menubarMetrics") private var menubarMetrics = true
     @AppStorage("relay.briefing.enabled") private var briefingEnabled = true
+    /// 팝오버 카드 표시 모드 — 상세 리스트 ↔ 6타일 그리드 (기본 상세, 기존 UI 유지)
+    @AppStorage("relay.popoverCardsMode") private var cardsMode = "list"
     /// 플로팅 On/Off 상태 표시 — 단일 진실원천(FloatingGraphController.isEnabled)
     @ObservedObject private var floating = FloatingGraphController.shared
 
@@ -645,6 +647,12 @@ struct MenuBarPopoverView: View {
         VStack(spacing: 12) {
             // 플로팅 그래프 진입 (PLAN_floating_graphs)
             HStack {
+                Picker("", selection: $cardsMode) {
+                    Text(L10n.string("popover.cards.mode.list")).tag("list")
+                    Text(L10n.string("popover.cards.mode.tiles")).tag("tiles")
+                }
+                .pickerStyle(.segmented)
+                .frame(width: 140)
                 Spacer()
                 Button {
                     FloatingGraphController.shared.toggle()
@@ -670,9 +678,25 @@ struct MenuBarPopoverView: View {
                 .help(L10n.string("float.toggle.help"))
             }
             // 카드 순서 = DashboardLayout (콘솔 대시보드와 동일 우선순위)
-            ForEach(DashboardCard.ordered, id: \.self) { card in
-                if store.cardEnabled(card) {
-                    popoverCardView(card)
+            // 타일 모드: 6타일 그리드 + 나머지 리스트 (상세 리스트는 그대로 유지, 제거 없음)
+            if cardsMode == "tiles" {
+                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
+                    ForEach(DashboardCard.tileCards, id: \.self) { card in
+                        if store.cardEnabled(card) {
+                            popoverTile(card)
+                        }
+                    }
+                }
+                ForEach(DashboardCard.listOnlyCards, id: \.self) { card in
+                    if store.cardEnabled(card) {
+                        popoverCardView(card)
+                    }
+                }
+            } else {
+                ForEach(DashboardCard.ordered, id: \.self) { card in
+                    if store.cardEnabled(card) {
+                        popoverCardView(card)
+                    }
                 }
             }
             if DashboardCard.ordered.allSatisfy({ !store.cardEnabled($0) }) {
@@ -738,6 +762,38 @@ struct MenuBarPopoverView: View {
             DroidCards.storage(device: device, metrics: metrics)
         case .sensors:
             DroidCards.sensors(device: device, metrics: metrics)
+        }
+    }
+
+    /// 팝오버 6타일 한 칸 — 기존 값 헬퍼 재사용, 추가 adb 없음
+    private func popoverTile(_ card: DashboardCard) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(L10n.string("droid.card.\(card.rawValue).title"))
+                .font(OPFont.number(9))
+                .foregroundStyle(OPColor.inkDim)
+            Text(popoverTileValue(card))
+                .font(OPFont.number(12))
+                .foregroundStyle(OPColor.ink)
+                .lineLimit(2)
+                .minimumScaleFactor(0.8)
+        }
+        .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
+        .padding(8)
+        .background(OPColor.card, in: RoundedRectangle(cornerRadius: 10))
+        .overlay(RoundedRectangle(cornerRadius: 10).stroke(OPColor.border, lineWidth: 1))
+        .opacity(device?.isOnline == true ? 1 : 0.55)
+    }
+
+    /// 타일 값 — DroidCards 요약과 동일 산식 (미측정은 "—", 0으로 뭉치지 않음)
+    private func popoverTileValue(_ card: DashboardCard) -> String {
+        switch card {
+        case .cpu: return DroidCards.cpuValue(device)
+        case .memory: return DroidCards.memoryValue(device)
+        case .network: return DroidCards.networkSubline(device) ?? L10n.na
+        case .battery: return DroidCards.batteryValue(device)
+        case .gpu: return DroidCards.gpuValue(device)
+        case .storage: return DroidCards.storageValue(device)
+        case .thermal, .health, .sensors: return L10n.na
         }
     }
 

@@ -55,6 +55,9 @@ actor DeviceMonitor {
         var cachePhysicalId: String?
         var cacheGpuRenderer: String?
         var cacheGpuEs: String?
+        /// `wm size` + `dumpsys display` renderFrameRate — 연결 시 1회
+        var cacheDisplaySize: String?
+        var cacheDisplayRefreshHz: Double?
         var prevDisk = AdbClient.DiskSample()
         var prevDiskAt: Date?
         var prevAccelRotation: String?
@@ -313,14 +316,7 @@ actor DeviceMonitor {
 
         if let battText = batch[.battery] {
             let batt = AdbClient.parseBatteryEx(battText)
-            snap.batteryLevel = batt.batteryLevel
-            snap.batteryTempC = batt.batteryTempC
-            snap.isCharging = batt.isCharging
-            snap.voltageMV = batt.voltageMV
-            snap.batteryHealthPct = batt.batteryHealthPct
-            snap.isProtectionMode = batt.isProtectionMode
-            snap.protectionThresholdPct = batt.protectionThresholdPct
-            snap.cycleEstimate = batt.cycleEstimate
+            snap.applyBattery(batt)
 
             // 충전 방치 — **시간 축이므로 이벤트가 아니라 상태**. 여기서 누적한다
             let neglectSecs = BatteryNeglectTracker.shared.observe(
@@ -662,6 +658,21 @@ actor DeviceMonitor {
                     if let e = g.esVersion { state.cacheGpuEs = e }
                 }
             }
+            // ── 디스플레이 (wm size + renderFrameRate, 연결 시 1회 · 기기내 grep)
+            if state.cacheDisplaySize == nil {
+                if let sizeText = try? shell(serial, "wm size"),
+                   let size = AdbClient.parseDisplaySize(sizeText) {
+                    state.cacheDisplaySize = size
+                }
+            }
+            if state.cacheDisplayRefreshHz == nil {
+                if let rateText = try? shell(serial, "dumpsys display | grep -m1 renderFrameRate"),
+                   let hz = AdbClient.parseDisplayRefreshHz(rateText) {
+                    state.cacheDisplayRefreshHz = hz
+                }
+            }
+            snap.displaySize = state.cacheDisplaySize
+            snap.displayRefreshHz = state.cacheDisplayRefreshHz
             if let busyText = batch[.gpuBusy],
                let busy = AdbClient.parseGpuBusyPercent(busyText) {
                 snap.gpuUtilPercent = busy

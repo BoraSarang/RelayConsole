@@ -93,6 +93,12 @@ struct DeviceSnapshot: Sendable, Equatable {
     /// Wi-Fi / LTE / NR / … — dumpsys connectivity Active default
     var networkType: String?
     var voltageMV: Int?
+    /// `mSavedBatteryAsoc` (삼성 전용, 원값 그대로 · BSOH와 함께 건강 셀 표시)
+    var batteryAsocPct: Int?
+    /// `current now` mA (충전 중 + / 방전 −) — 기기별 μA 보고 시 /1000 정규화
+    var batteryCurrentMA: Double?
+    /// `technology` (예: Li-ion) — 미보고 시 nil
+    var batteryTechnology: String?
     var batteryHealthPct: Int?
     var isProtectionMode: Bool?
     var protectionThresholdPct: Int?
@@ -149,6 +155,10 @@ struct DeviceSnapshot: Sendable, Equatable {
     var gpuEsVersion: String?
     /// kgsl gpuclk MHz
     var gpuFreqMHz: Double?
+    /// `wm size` 물리 해상도 (예: 1080x2340) — 연결 시 1회
+    var displaySize: String?
+    /// `dumpsys display` 현재 renderFrameRate Hz (예: 60) — 연결 시 1회
+    var displayRefreshHz: Double?
     /// kgsl gpu_busy_percentage 0…100
     var gpuUtilPercent: Double?
     /// sensorservice 전체 n/w 센서 수
@@ -175,6 +185,24 @@ struct DeviceSnapshot: Sendable, Equatable {
 
     /// Equatable — 배열/옵셔널 필드 자동 합성 충분 (tuple 없음)
 
+    /// 배터리 파싱 결과 반영 — 단일 진입점 (AGENTS.local §4 [표시②])
+    ///
+    /// 파서에 필드를 추가하면 여기에도 한 줄 추가해야 한다.
+    /// 빠뜨리면 `batteryCopyTransfersEveryParsedField` 가 잡는다 (2026-10-10 실측: 전류·유형 누락).
+    mutating func applyBattery(_ batt: DeviceSnapshot) {
+        batteryLevel = batt.batteryLevel
+        batteryTempC = batt.batteryTempC
+        isCharging = batt.isCharging
+        voltageMV = batt.voltageMV
+        batteryHealthPct = batt.batteryHealthPct
+        isProtectionMode = batt.isProtectionMode
+        protectionThresholdPct = batt.protectionThresholdPct
+        cycleEstimate = batt.cycleEstimate
+        batteryAsocPct = batt.batteryAsocPct
+        batteryTechnology = batt.batteryTechnology
+        batteryCurrentMA = batt.batteryCurrentMA
+    }
+
     /// ≥40°C or thermal Status≥2 (V0-2 Surface A)
     var isThermalAlert: Bool {
         if let t = deviceTempC ?? batteryTempC, t >= 40 { return true }
@@ -185,6 +213,22 @@ struct DeviceSnapshot: Sendable, Equatable {
     /// 헤더 표시 이름 — deviceName > model > serial 원문
     var displayName: String {
         AdbClient.displayDeviceName(deviceName: deviceName, model: model, serial: serial)
+    }
+
+    /// 연결 구분 짧은 표기 — USB | IP:PORT (선택 목록 구분용)
+    var connShort: String {
+        if connectionKind == .network {
+            if let l = connectionLabel, !l.isEmpty { return l }
+            return serial
+        }
+        if let l = connectionLabel, !l.isEmpty, l != "USB" { return l }
+        return "USB"
+    }
+
+    /// 선택 목록용 라벨 — 동명 기기 구분 (예: Router · USB / Router · 192.168.0.2:5555)
+    /// 온라인 여부는 호출부의 아이콘/점 표시로 (중복 표기 방지)
+    var pickerLabel: String {
+        "\(displayName) · \(connShort)"
     }
 
     /// 기기 식별 라벨 — 화면·알림·내보내기 공통 진입점 (마스킹 금지 · AGENTS.local §4)
@@ -235,7 +279,10 @@ struct DeviceInventory: Equatable {
                 merged.netDownMBps = merged.netDownMBps ?? prev.netDownMBps
                 merged.networkType = merged.networkType ?? prev.networkType
                 merged.voltageMV = merged.voltageMV ?? prev.voltageMV
+                merged.batteryCurrentMA = merged.batteryCurrentMA ?? prev.batteryCurrentMA
+                merged.batteryTechnology = merged.batteryTechnology ?? prev.batteryTechnology
                 merged.batteryHealthPct = merged.batteryHealthPct ?? prev.batteryHealthPct
+                merged.batteryAsocPct = merged.batteryAsocPct ?? prev.batteryAsocPct
                 merged.isProtectionMode = merged.isProtectionMode ?? prev.isProtectionMode
                 merged.protectionThresholdPct = merged.protectionThresholdPct ?? prev.protectionThresholdPct
                 merged.isLowPowerMode = merged.isLowPowerMode ?? prev.isLowPowerMode
@@ -281,6 +328,8 @@ struct DeviceInventory: Equatable {
                 merged.gpuEsVersion = merged.gpuEsVersion ?? prev.gpuEsVersion
                 merged.gpuFreqMHz = merged.gpuFreqMHz ?? prev.gpuFreqMHz
                 merged.gpuUtilPercent = merged.gpuUtilPercent ?? prev.gpuUtilPercent
+                merged.displaySize = merged.displaySize ?? prev.displaySize
+                merged.displayRefreshHz = merged.displayRefreshHz ?? prev.displayRefreshHz
                 merged.sensorTotalCount = merged.sensorTotalCount ?? prev.sensorTotalCount
                 merged.sensorActiveCount = merged.sensorActiveCount ?? prev.sensorActiveCount
                 merged.sensorActiveNames = merged.sensorActiveNames ?? prev.sensorActiveNames

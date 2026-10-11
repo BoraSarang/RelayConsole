@@ -454,9 +454,11 @@ struct DroidDashboardView: View {
                 Button {
                     store.select(d.serial)
                 } label: {
-                    Text(d.displayName)
+                    Text(d.pickerLabel)
                         .font(OPFont.number(10))
                         .foregroundStyle(d.serial == store.selectedSerial ? .white : OPColor.inkDim)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
                         .background(

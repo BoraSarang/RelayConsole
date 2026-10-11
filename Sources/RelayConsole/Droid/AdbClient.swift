@@ -51,8 +51,22 @@ enum AdbClient {
                 snap.isCharging = (value == "2" || value == "5")
             case "voltage":
                 snap.voltageMV = Int(value)
+            case "current now":
+                // 단위 기기별 상이 — S22 실측 `526` (mA, 충전 중) vs AOSP μA (예: 526000).
+                // 절댓값 10000 이상이면 μA로 보고 /1000, 아니면 mA 그대로.
+                if let raw = Double(value) {
+                    snap.batteryCurrentMA = abs(raw) >= 10000 ? raw / 1000.0 : raw
+                }
+            case "technology":
+                if !value.isEmpty { snap.batteryTechnology = value }
             case "mSavedBatteryBsoh":
                 snap.batteryHealthPct = Int(value)
+            case "mSavedBatteryAsoc":
+                // "[93]" → 93 (원값 그대로 · 해석 없음). "-1"은 미지원 센티넬이라 버린다.
+                let t = value.trimmingCharacters(in: .whitespaces)
+                if t == "-1" { break }
+                let digits = t.filter(\.isNumber)
+                if !digits.isEmpty { snap.batteryAsocPct = Int(digits) }
             case "mProtectBatteryMode":
                 snap.isProtectionMode = (Int(value) ?? 0) != 0
             case "mProtectionThreshold":
@@ -1446,6 +1460,38 @@ enum AdbClient {
         if hz >= 1_000_000 { return hz / 1_000_000.0 }
         if hz > 0 && hz < 10_000 { return hz } // already MHz
         return nil
+    }
+
+    /// `wm size` → "1080x2340" (Physical 우선, Override만 있으면 그것)
+    static func parseDisplaySize(_ text: String) -> String? {
+        for line in text.split(separator: "\n") {
+            let s = String(line)
+            guard s.contains("size:") else { continue }
+            let chars = Array(s)
+            for i in chars.indices where chars[i] == "x" || chars[i] == "X" {
+                var l = i
+                while l > chars.startIndex, chars[chars.index(before: l)].isNumber {
+                    l = chars.index(before: l)
+                }
+                var r = chars.index(after: i)
+                while r < chars.endIndex, chars[r].isNumber {
+                    r = chars.index(after: r)
+                }
+                let w = String(chars[l..<i])
+                let h = String(chars[chars.index(after: i)..<r])
+                if !w.isEmpty, !h.isEmpty { return "\(w)x\(h)" }
+            }
+        }
+        return nil
+    }
+
+    /// `dumpsys display | grep renderFrameRate` → 현재 Hz (예: 60.000004 → 60)
+    static func parseDisplayRefreshHz(_ text: String) -> Double? {
+        guard let range = text.range(of: "renderFrameRate") else { return nil }
+        let after = text[range.upperBound...]
+        let digits = after.drop(while: { !$0.isNumber }).prefix { $0.isNumber || $0 == "." }
+        guard let hz = Double(digits), hz > 0, hz <= 1000 else { return nil }
+        return (hz * 10).rounded() / 10
     }
 
     // MARK: - P2: Sensors summary

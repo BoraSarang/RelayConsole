@@ -81,7 +81,7 @@ enum PollBatch {
                 // 자기 RustSignal 수신 grep
                 return "dumpsys telephony.registry | grep -E 'mSignalStrength|mOperatorAlphaLong|mServiceState|mDataConnectionState'"
             case .activity: return "dumpsys activity activities"
-            case .ipWlan: return "ip -f inet addr show wlan0"
+            case .ipWlan: return "ip -f inet addr show swlan0; ip -f inet addr show wlan0"
             case .df: return "df -h /data"
             case .gpuBusy: return "cat /sys/class/kgsl/kgsl-3d0/gpu_busy_percentage"
             case .gpuGpubusy: return "cat /sys/class/kgsl/kgsl-3d0/gpubusy"

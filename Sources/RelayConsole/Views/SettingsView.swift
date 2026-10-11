@@ -217,6 +217,7 @@ struct SettingsView: View {
             Toggle(L10n.string("settings.float.cpu"), isOn: metricBinding(.cpu))
             Toggle(L10n.string("settings.float.gpu"), isOn: metricBinding(.gpu))
             Toggle(L10n.string("settings.float.memory"), isOn: metricBinding(.memory))
+            Toggle(L10n.string("settings.float.summary"), isOn: metricBinding(.summary))
             Text(L10n.string("float.limit"))
                 .font(OPFont.body(10))
                 .foregroundStyle(.secondary)

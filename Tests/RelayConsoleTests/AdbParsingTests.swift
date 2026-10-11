@@ -24,6 +24,95 @@ struct AdbParsingTests {
         #expect(snap.isCharging == true)
     }
 
+    /// `current now` 단위 정규화 — S22 실측 mA(526) 그대로, AOSP μA(526000)는 /1000
+    @Test func parseBatteryCurrentNormalizesUnit() {
+        #expect(AdbClient.parseBatteryEx("current now: 526").batteryCurrentMA == 526)
+        #expect(AdbClient.parseBatteryEx("current now: -185").batteryCurrentMA == -185)
+        #expect(AdbClient.parseBatteryEx("current now: 526000").batteryCurrentMA == 526)
+        #expect(AdbClient.parseBatteryEx("current now: -1420000").batteryCurrentMA == -1420)
+        #expect(AdbClient.parseBatteryEx("level: 73").batteryCurrentMA == nil)
+    }
+
+    @Test func parseBatteryTechnology() {
+        #expect(AdbClient.parseBatteryEx("technology: Li-ion").batteryTechnology == "Li-ion")
+        #expect(AdbClient.parseBatteryEx("level: 73").batteryTechnology == nil)
+    }
+
+    @Test func parseBatteryAsoc() {
+        #expect(AdbClient.parseBatteryEx("mSavedBatteryAsoc: [93]").batteryAsocPct == 93)
+        #expect(AdbClient.parseBatteryEx("mSavedBatteryAsoc: 87").batteryAsocPct == 87)
+        #expect(AdbClient.parseBatteryEx("mSavedBatteryAsoc: -1").batteryAsocPct == nil)
+        #expect(AdbClient.parseBatteryEx("level: 73").batteryAsocPct == nil)
+    }
+
+    /// 건강 셀 — BSOH·ASOC 순, 하나만 있으면 그것만
+    @Test func healthValueShowsBsohThenAsoc() {
+        #expect(DroidCards.healthValue(nil) == L10n.na)
+        var d = DeviceSnapshot()
+        #expect(DroidCards.healthValue(d) == L10n.na)
+        d.batteryHealthPct = 91
+        #expect(DroidCards.healthValue(d) == "91%")
+        d.batteryAsocPct = 93
+        #expect(DroidCards.healthValue(d) == "91 · 93%")
+        var e = DeviceSnapshot()
+        e.batteryAsocPct = 87
+        #expect(DroidCards.healthValue(e) == "87%")
+    }
+
+    // MARK: - Display
+
+    @Test func parseDisplaySize() {
+        #expect(AdbClient.parseDisplaySize("Physical size: 1080x2340") == "1080x2340")
+        #expect(AdbClient.parseDisplaySize("Override size: 720x1280") == "720x1280")
+        #expect(AdbClient.parseDisplaySize("no size here") == nil)
+        #expect(AdbClient.parseDisplaySize("") == nil)
+    }
+
+    @Test func parseDisplayRefreshHz() {
+        #expect(AdbClient.parseDisplayRefreshHz("renderFrameRate 60.000004") == 60)
+        #expect(AdbClient.parseDisplayRefreshHz("renderFrameRate 120.00001") == 120)
+        #expect(AdbClient.parseDisplayRefreshHz("no rate") == nil)
+        #expect(AdbClient.parseDisplayRefreshHz("") == nil)
+    }
+
+    /// 파서 신규 필드가 폴링 복사에서 빠지면 잡는다 — Mirror 전수 대조 (2026-10-10 전류·유형 누락)
+    @Test func batteryCopyTransfersEveryParsedField() {
+        let sample = """
+        level: 73
+        voltage: 4123
+        temperature: 442
+        status: 2
+        technology: Li-ion
+        current now: 526
+        mProtectBatteryMode: 1
+        mProtectionThreshold: 80
+        mSavedBatteryUsage: [81185]
+        mSavedBatteryBsoh: 91
+        mSavedBatteryAsoc: [93]
+        """
+        let parsed = AdbClient.parseBatteryEx(sample)
+        var applied = DeviceSnapshot()
+        applied.applyBattery(parsed)
+        let appliedMirror = Mirror(reflecting: applied)
+        var checked = 0
+        for child in Mirror(reflecting: parsed).children {
+            guard let label = child.label else { continue }
+            let childMirror = Mirror(reflecting: child.value)
+            let isNil = childMirror.displayStyle == .optional && childMirror.children.count == 0
+            guard !isNil else { continue }
+            guard let found = appliedMirror.children.first(where: { $0.label == label }) else {
+                Issue.record("applyBattery 누락(필드 없음): \(label)")
+                continue
+            }
+            #expect(
+                String(describing: found.value) == String(describing: child.value),
+                "applyBattery 누락: \(label)"
+            )
+            checked += 1
+        }
+        #expect(checked >= 10, "표본이 빈약하면 가드가 무의미하다 (현재 \(checked)건)")
+    }
+
     @Test func parseBatteryExSamsung() {
         let sample = """
         level: 84
