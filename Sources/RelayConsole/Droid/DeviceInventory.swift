@@ -90,6 +90,12 @@ struct DeviceSnapshot: Sendable, Equatable {
     var networkInfo: String?
     var netUpMBps: Double?
     var netDownMBps: Double?
+    /// 셀룰러 경로 속도 (외부 후보 — Router의 활성 경로) — shell 제외 후, nil = 미측정
+    var netCellUpMBps: Double? = nil
+    var netCellDownMBps: Double? = nil
+    /// Wi-Fi 경로 속도 (외부 후보 — 테더 클라이언트의 활성 경로) — shell 제외 후, nil = 미측정
+    var netWifiUpMBps: Double? = nil
+    var netWifiDownMBps: Double? = nil
     /// Wi-Fi / LTE / NR / … — dumpsys connectivity Active default
     var networkType: String?
     var voltageMV: Int?
@@ -277,6 +283,10 @@ struct DeviceInventory: Equatable {
                 merged.networkInfo = merged.networkInfo ?? prev.networkInfo
                 merged.netUpMBps = merged.netUpMBps ?? prev.netUpMBps
                 merged.netDownMBps = merged.netDownMBps ?? prev.netDownMBps
+                merged.netCellUpMBps = merged.netCellUpMBps ?? prev.netCellUpMBps
+                merged.netCellDownMBps = merged.netCellDownMBps ?? prev.netCellDownMBps
+                merged.netWifiUpMBps = merged.netWifiUpMBps ?? prev.netWifiUpMBps
+                merged.netWifiDownMBps = merged.netWifiDownMBps ?? prev.netWifiDownMBps
                 merged.networkType = merged.networkType ?? prev.networkType
                 merged.voltageMV = merged.voltageMV ?? prev.voltageMV
                 merged.batteryCurrentMA = merged.batteryCurrentMA ?? prev.batteryCurrentMA

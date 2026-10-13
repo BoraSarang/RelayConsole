@@ -133,7 +133,18 @@
     L10n **721키 en/ko 1:1** · U+FFFD 0건
 
 ## 진행 중 (bd ready)
-- **PR #57** `chore/macos-cjk-hook` — 한자 커밋 훅 + 육안 목록 문서화 (검토 대기)
+- **T-2026-10-13-6 외부(인터넷) 트래픽 분리 표시** — `docs/plans/PLAN_net_external.md`
+  - Router down 혼입 실측 (ipa 중복·전달분·LAN) → 기준=활성 기본 경로 (Router=rmnet, S22=wifi)
+  - 구현 완료(미커밋): `parseNetDev` ipa 적응 제외 + cell/wifi 그룹 · `NetRates` 3종 ·
+    스냅샷 4필드 + merge 폴백 · `BriefingLogic.externalNetRates` · 카드 "외부" 행 (L10n 1키 양쪽)
+  - **검증 [HARD]**: `swift test` **XCTest 180/0 + Swift Testing 657/0** · `./scripts/build-macos.sh debug` **EXIT=0**
+    · L10n **778키 en/ko 1:1** · 한자 0건
+  - **라이브 대조**: adb 10초 델타(data2 +2.67MB + swlan0 +2.81MB, ipa +2.86MB 제외)
+    → 메뉴바 ↓583K 일치 (구식은 ~840K+). 크래시 0, 앱 생존
+  - **DroidRelay 대조**: M-28이 동일 결함 이미 해결 (ipa 99.2% 일치 → 제외, 3구간). 우리 실측과 교차 검증됨.
+    단 DroidRelay external은 "rmnet만"이라 테더 클라이언트(S22)의 외부는 0으로 보임 — 우리 정의(활성 경로)와 다름
+  - **육안 대기** → `docs/MANUAL_VERIFY.md` 43번 (카드 "외부" 행)
+- (없음 — PR #57은 2026-09-28에 이미 MERGED, TODO 기재가 stale이었음. 정정)
 - **PR #57** `chore/macos-cjk-hook` — 한자 커밋 훅 + 육안 목록 문서화 (검토 대기)
 - **착수 준비** S3 Rules as Code — `docs/plans/PLAN_rules_yaml.md` (조사 완료 · 구현 착수 지점 명시)
 - bd 이슈: (0건 — 이번 작업은 TODO T-번호로 관리)

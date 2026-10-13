@@ -226,4 +226,54 @@ final class ActiveCriticalCountTests: XCTestCase {
         XCTAssertNil(BriefingLogic.menuColumnIndex(
             devices: [dev("A", online: false)], selectedSerial: nil, showAll: true, serial: "A"))
     }
+
+    // MARK: - externalNetRates (외부 경로 — T-2026-10-13-6)
+
+    func testExternalUsesCellularForRouter() {
+        var d = dev("R")
+        d.networkType = "LTE"
+        d.netCellUpMBps = 1.5
+        d.netCellDownMBps = 9.0
+        d.netWifiUpMBps = 99.0
+        d.netWifiDownMBps = 99.0
+        let ext = BriefingLogic.externalNetRates(d)
+        XCTAssertEqual(ext?.up, 1.5)
+        XCTAssertEqual(ext?.down, 9.0)
+    }
+
+    func testExternalCellularVariants() {
+        for t in ["NR", "CELLULAR"] {
+            var d = dev("R")
+            d.networkType = t
+            d.netCellUpMBps = 2.0
+            d.netCellDownMBps = 3.0
+            XCTAssertNotNil(BriefingLogic.externalNetRates(d), t)
+        }
+    }
+
+    func testExternalUsesWifiForTethered() {
+        var d = dev("S")
+        d.networkType = "Wi-Fi"
+        d.netCellUpMBps = 0.0
+        d.netCellDownMBps = 0.0
+        d.netWifiUpMBps = 0.5
+        d.netWifiDownMBps = 4.0
+        let ext = BriefingLogic.externalNetRates(d)
+        XCTAssertEqual(ext?.up, 0.5)
+        XCTAssertEqual(ext?.down, 4.0)
+    }
+
+    func testExternalNilWhenUnresolvable() {
+        // 타입 없음·Ethernet·값 미측정 → 행 숨김 (0을 지어내지 않음)
+        var d1 = dev("A")
+        d1.netCellDownMBps = 1.0
+        XCTAssertNil(BriefingLogic.externalNetRates(d1))
+        var d2 = dev("B")
+        d2.networkType = "Ethernet"
+        d2.netCellDownMBps = 1.0
+        XCTAssertNil(BriefingLogic.externalNetRates(d2))
+        var d3 = dev("C")
+        d3.networkType = "LTE"
+        XCTAssertNil(BriefingLogic.externalNetRates(d3))
+    }
 }

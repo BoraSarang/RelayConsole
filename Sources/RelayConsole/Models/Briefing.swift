@@ -138,6 +138,24 @@ enum BriefingLogic {
         )
     }
 
+    /// 외부(인터넷) 경로 속도 — 활성 기본 경로가 기준 (T-2026-10-13-6, PLAN_net_external).
+    /// - Router (활성=CELLULAR/LTE/NR) → 셀룰러쌍 · S22 (활성=Wi-Fi, Router 테더) → Wi-Fi쌍.
+    /// - 같은 `swlan0` 이름이라도 모드(AP vs station)가 다르므로 이름이 아니라
+    ///   `networkType`(`parseNetworkType` 값)이 기준이다.
+    /// - nil = 해석 불가 → 호출자가 행을 숨긴다 (0을 지어내지 않음 [표시②]).
+    static func externalNetRates(_ d: DeviceSnapshot) -> (up: Double, down: Double)? {
+        switch d.networkType {
+        case "Wi-Fi":
+            guard let up = d.netWifiUpMBps, let down = d.netWifiDownMBps else { return nil }
+            return (up, down)
+        case "LTE", "NR", "CELLULAR":
+            guard let up = d.netCellUpMBps, let down = d.netCellDownMBps else { return nil }
+            return (up, down)
+        default:
+            return nil
+        }
+    }
+
     /// 팝오버 범례용 열 번호 (1-based) — 메뉴바 열과 동일 순서. 표시 안 되면 nil.
     static func menuColumnIndex(
         devices: [DeviceSnapshot],

@@ -142,6 +142,7 @@
 "droid.card.memory.pressure" = "압박 %@";
 "droid.card.memory.title" = "MEMORY";
 "droid.card.network.down" = "다운";
+"droid.card.network.external" = "외부";
 "droid.card.network.note" = "합계 실시간 · adb 제외 · 앱별 60초 평균";
 "droid.card.network.title" = "NETWORK";
 "droid.card.network.up" = "업";

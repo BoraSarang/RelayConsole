@@ -255,13 +255,32 @@ enum AdbClient {
     struct NetSample: Equatable, Sendable {
         var rxBytes: UInt64?
         var txBytes: UInt64?
+        /// 셀룰러(`rmnet_*`, ipa 제외 후) — Router의 외부 경로 (nil = rmnet 없음)
+        var cellRxBytes: UInt64? = nil
+        var cellTxBytes: UInt64? = nil
+        /// Wi-Fi(`wlan*/swlan*/wlp*`) — 테더 클라이언트의 외부 경로 (nil = wifi 없음)
+        var wifiRxBytes: UInt64? = nil
+        var wifiTxBytes: UInt64? = nil
     }
 
     /// Sum all non-lo interfaces — delta for MB/s
+    ///
+    /// ## 인터페이스 그룹 분리 + ipa 중복 제외 (T-2026-10-13-6, PLAN_net_external)
+    /// - **셀룰러 중복**: `rmnet_ipa0` 는 Qualcomm IPA 오프로드 가상 장치로 같은 패킷을
+    ///   또 센다. Router(.8) 라이브 실측: data2 RX +4.01MB vs ipa0 RX +4.17MB (10초 델타).
+    ///   DroidRelay M-28도 동일 결론 (99.2% 일치 → 명시 제외, 교차 검증됨).
+    /// - **적응 제외**: `rmnet_data*` 중 누적 nonzero가 하나라도 있으면 `rmnet_ipa*` 제외.
+    ///   없으면(ipa 단독 기기 가드) 유지 — 0으로 만드는 쪽이 거짓말이다.
+    /// - 그룹 합: cell(`rmnet_*`, ipa 제외 후) + wifi(`isWifiInterface`).
+    ///   이름이 아니라 활성 경로(`parseNetworkType`)가 외부 기준 — 선택은
+    ///   `BriefingLogic.externalNetRates` 가 한다 (Router=cell, 테더 S22=wifi).
     static func parseNetDev(_ text: String) -> NetSample {
-        var rx: UInt64 = 0
-        var tx: UInt64 = 0
-        var saw = false
+        struct Counters { var rx: UInt64 = 0; var tx: UInt64 = 0; var saw = false }
+        var all = Counters()
+        var cell = Counters()
+        var wifi = Counters()
+        // 1패스: 인터페이스별 수집 (ipa 판정은 전체를 본 뒤)
+        var rows: [(name: String, rx: UInt64, tx: UInt64)] = []
         for line in text.split(separator: "\n") {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
             guard let colon = trimmed.firstIndex(of: ":") else { continue }
@@ -272,12 +291,53 @@ enum AdbClient {
             // rx: bytes packets errs drop fifo frame compressed multicast
             // tx: bytes ...
             guard rest.count >= 10 else { continue }
-            rx += rest[0]
-            tx += rest[8]
-            saw = true
+            rows.append((name: ifName, rx: rest[0], tx: rest[8]))
         }
-        guard saw else { return NetSample() }
-        return NetSample(rxBytes: rx, txBytes: tx)
+        guard !rows.isEmpty else { return NetSample() }
+        func baseName(_ raw: String) -> String {
+            var n = raw
+            if let at = n.firstIndex(of: "@") { n = String(n[n.startIndex..<at]) }
+            return n.lowercased()
+        }
+        func isIpa(_ raw: String) -> Bool { baseName(raw).hasPrefix("rmnet_ipa") }
+        func isCell(_ raw: String) -> Bool { baseName(raw).hasPrefix("rmnet") }
+        // rmnet_data* 실체가 있으면 ipa는 중복이므로 제외, 없으면 유지 (단독 기기 가드)
+        let hasDataBearer = rows.contains {
+            let n = baseName($0.name)
+            return n.hasPrefix("rmnet_data") && ($0.rx > 0 || $0.tx > 0)
+        }
+        for r in rows {
+            if hasDataBearer && isIpa(r.name) { continue }
+            all.rx += r.rx; all.tx += r.tx; all.saw = true
+            if isCell(r.name) && !isIpa(r.name) {
+                cell.rx += r.rx; cell.tx += r.tx; cell.saw = true
+            } else if isCell(r.name) && isIpa(r.name) && !hasDataBearer {
+                // ipa 단독 기기 — 셀룰러 원천으로 유지
+                cell.rx += r.rx; cell.tx += r.tx; cell.saw = true
+            }
+            if WifiAdbLogic.isWifiInterface(r.name) {
+                wifi.rx += r.rx; wifi.tx += r.tx; wifi.saw = true
+            }
+        }
+        guard all.saw else { return NetSample() }
+        return NetSample(
+            rxBytes: all.rx, txBytes: all.tx,
+            cellRxBytes: cell.saw ? cell.rx : nil,
+            cellTxBytes: cell.saw ? cell.tx : nil,
+            wifiRxBytes: wifi.saw ? wifi.rx : nil,
+            wifiTxBytes: wifi.saw ? wifi.tx : nil
+        )
+    }
+
+    /// total·cell·wifi 3종 속도 — 같은 seconds로 나눈다 (T-2026-10-13-6).
+    /// 그룹 한쪽이라도 미측정이면 그 쌍은 nil (0을 지어내지 않음 [표시②]).
+    struct NetRates: Equatable, Sendable {
+        var up: Double
+        var down: Double
+        var cellUp: Double?
+        var cellDown: Double?
+        var wifiUp: Double?
+        var wifiDown: Double?
     }
 
     /// MB/s from consecutive net samples over interval seconds. nil if first tick.
@@ -285,14 +345,29 @@ enum AdbClient {
         prev: NetSample,
         curr: NetSample,
         seconds: Double
-    ) -> (up: Double, down: Double)? {
+    ) -> NetRates? {
         guard seconds > 0,
               let pr = prev.rxBytes, let pt = prev.txBytes,
               let cr = curr.rxBytes, let ct = curr.txBytes,
               cr >= pr, ct >= pt else { return nil }
         let down = Double(cr - pr) / seconds / (1024 * 1024)
         let up = Double(ct - pt) / seconds / (1024 * 1024)
-        return (up: up, down: down)
+        func group(_ pp: (rx: UInt64?, tx: UInt64?), _ cc: (rx: UInt64?, tx: UInt64?)) -> (up: Double, down: Double)? {
+            guard let prx = pp.rx, let ptx = pp.tx,
+                  let crx = cc.rx, let ctx = cc.tx,
+                  crx >= prx, ctx >= ptx else { return nil }
+            return (
+                up: Double(ctx - ptx) / seconds / (1024 * 1024),
+                down: Double(crx - prx) / seconds / (1024 * 1024)
+            )
+        }
+        let cell = group((prev.cellRxBytes, prev.cellTxBytes), (curr.cellRxBytes, curr.cellTxBytes))
+        let wifi = group((prev.wifiRxBytes, prev.wifiTxBytes), (curr.wifiRxBytes, curr.wifiTxBytes))
+        return NetRates(
+            up: up, down: down,
+            cellUp: cell?.up, cellDown: cell?.down,
+            wifiUp: wifi?.up, wifiDown: wifi?.down
+        )
     }
 
     /// 네트워크 속도 표시 단위 — ≥1.0 MB/s → MB/s, 미만 → KB/s
