@@ -10,7 +10,7 @@
     플로팅창(`ultraThinMaterial` + 투명도 슬라이더) 위에서 검은 사각형으로 떠 보임. 이웃 헤더 아이콘 4종은 배경 없이 아이콘만이라 투명 정상
   - **수정**: `Sources/RelayConsole/Views/ScrcpyControls.swift` — compact는 pill 배경/테두리 제거, 이웃과 동일 규격(22x22, size 11 아이콘만). 심볼 상태색 유지(ready=cta, running=ok, missing=warn). 일반(대시보드/팝오버) 버튼은 그대로
   - **검증 [HARD]**: `swift test` **642 / 0 failed** · `./scripts/build-macos.sh debug` **EXIT=0** (서명 검증 통과 · 앱 재시작)
-  - **육안 대기** → `docs/MANUAL_VERIFY.md` 36번
+  - **육안** → `docs/MANUAL_VERIFY.md` 36번 ✅ **사용자 확인** (2026-10-13)
 
 ## 완료 (2026-10-10 · 미커밋 — 리뷰 후 PR)
 
