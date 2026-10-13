@@ -5,6 +5,23 @@
 
 ## 완료 (2026-10-13)
 
+- [x] **T-2026-10-13-3 네트워크 진짜 속도 (합계 live·adb제외 + uid행 60초)** — `docs/plans/PLAN_net_truespeed.md` · 사용자 실측 보고로 착수
+  - **관측**: ① S22는 Router 테더가 아니라 Home AP에 붙어 있었음 (기기 간 비교 자체가 성립 안 했음) ·
+    ② Router 카드 안 모순은 진짜 결함 — 합계 ↓6.4 (live) vs `uid -5` ↓250 (버킷 flush 뻥튀기, `rb` 동일 실측으로 확정) ·
+    ③ Xt live는 기기 파편화로 폐기 (Router만, S22는 `xt_qtaguid` 삭제·eBPF root 필요)
+  - **수정**: 합계는 `/proc/net/dev` live 유지 + shell(uid 2000) 기여분 차감 (0 클램프) ·
+    uid행은 45~60초 전 기준선 델타 + shell 행 제외 · `prevAppNet`은 5개 링으로 대체 ·
+    카드 1줄 설명 + 시트 hint 갱신 (누적은 버킷 합이라 정확, 그대로)
+  - **검증 [HARD]**: `swift test` **651 / 0 failed** (신규 5건) · `./scripts/build-macos.sh debug` **EXIT=0** ·
+    L10n **772키 en/ko 1:1** (신규 1키 양쪽 동시) · 차트·Insights·`/metrics`·Daily는 같은 캐시라 자동 반영
+  - **육안 대기** → `docs/MANUAL_VERIFY.md` 38번 (shell 행 사라짐 · 합계 수동 대조 · flush 타이밍 무튀김)
+
+- [x] **T-2026-10-13-2 플러그인 액션 후 자동 결과 확인** — 사용자 보고로 착수 ("명령 실행 후 확인중만 계속 뜸, 결과 확인을 눌러야 확인됨")
+  - **원인**: `PluginStore.request()`가 fire-and-forget이라 결과는 다음 덤프를 긁어야 오는데, 그걸 손으로 눌러야 했음. 계약상 정상이었으나 UX 결함
+  - **수정**: 발송 전 기준선 1회 덤프 → 발송 → 3초·12초 뒤 최대 2회 자동 덤프, 기준선과 다른 `[REMOTE]`만 귀속. 무응답이면 조용히 pending 유지, 수동 버튼 그대로. 신선도 판정은 순수 함수 `isFreshRemote`로 분리 (ConsoleStore 싱글턴이라 스토어 직접 테스트 불가 — 기존 관례)
+  - **검증 [HARD]**: `swift test` **646 / 0 failed** (신규 4건) · `./scripts/build-macos.sh debug` **EXIT=0** (서명 검증 통과 · 앱 재시작) · L10n **771키 en/ko 1:1** (문구만 변경, 키 동일)
+  - **육안 대기** → `docs/MANUAL_VERIFY.md` 37번 (액션 실행 후 버튼 안 누르고 결과가 뜨는지)
+
 - [x] **T-2026-10-13-1 플로팅 미러링 아이콘 불투명** — 사용자 스크린샷 보고로 착수
   - **원인**: `ScrcpyHeaderButton` compact 분기가 `OPColor.card`(alpha 1.0) pill 배경을 그대로 사용 —
     플로팅창(`ultraThinMaterial` + 투명도 슬라이더) 위에서 검은 사각형으로 떠 보임. 이웃 헤더 아이콘 4종은 배경 없이 아이콘만이라 투명 정상

@@ -333,6 +333,10 @@ enum AdbClient {
 
     // MARK: - Per-UID network stats (dumpsys netstats detail / pm list packages -U)
 
+    /// adb 셸 UID — 내부 폴링 트래픽의 귀속처. 전 안드로이드 고정값(AID_SHELL).
+    /// 패키지명 매칭이 아니라 번호로 제외한다 (매핑 없어도 `uid 2000`으로 보일 수 있음).
+    static let shellUid = 2000
+
     /// uid별 누적 트래픽 (RX/TX 바이트)
     struct UidNetSample: Equatable, Sendable {
         var uid: Int
@@ -414,16 +418,20 @@ enum AdbClient {
         return UInt64(digits)
     }
 
-    /// 두 netstats 스냅샷 사이 앱별 속도 (MB/s) — 누적량 역전은 0으로 클램프
+    /// 두 netstats 스냅샷 사이 앱별 속도 (MB/s) — 누적량 역전은 0으로 클램프.
+    /// `excluding`에 든 uid는 표시·합산에서 제외 (내부용 shell 등). 호출자가 누적 스냅샷은
+    /// 그대로 두고 속도 계산에서만 빼므로, 합계 차감용 shell 속도는 `shellRate`로 따로 구한다.
     static func appNetRates(
         prev: [AppNetStat],
         curr: [AppNetStat],
-        seconds: Double
+        seconds: Double,
+        excluding: Set<Int> = []
     ) -> [AppNetRate] {
         guard seconds > 0 else { return [] }
         let prevMap = Dictionary(prev.map { ($0.uid, $0) }, uniquingKeysWith: { a, _ in a })
         let mb = 1024.0 * 1024.0
         return curr.map { c in
+            guard !excluding.contains(c.uid) else { return nil }
             let p = prevMap[c.uid]
             let rx = delta(c.rxBytes, p?.rxBytes)
             let tx = delta(c.txBytes, p?.txBytes)
@@ -436,8 +444,42 @@ enum AdbClient {
                 downMBps: max(0, down)
             )
         }
+        .compactMap { $0 }
         .filter { $0.totalMBps > 0 }
         .sorted { $0.totalMBps > $1.totalMBps }
+    }
+
+    /// shell(uid 2000) 속도 — 합계에서 뺄 adb(내부 폴링) 기여분. 같은 윈도우로 스무딩된 값을 쓴다.
+    static func shellRate(
+        prev: [AppNetStat],
+        curr: [AppNetStat],
+        seconds: Double
+    ) -> (up: Double, down: Double) {
+        guard let r = appNetRates(prev: prev, curr: curr, seconds: seconds).first(where: {
+            $0.uid == shellUid
+        }) else { return (0, 0) }
+        return (r.upMBps, r.downMBps)
+    }
+
+    /// 합계(live 인터페이스 카운터)에서 adb 기여분 제외.
+    /// L2/L3 단위차·샘플 시각차로 과차감될 수 있어 0 클램프 (음수 속도는 거짓말).
+    static func excludeShell(
+        up: Double,
+        down: Double,
+        shellUp: Double,
+        shellDown: Double
+    ) -> (up: Double, down: Double) {
+        (max(0, up - shellUp), max(0, down - shellDown))
+    }
+
+    /// 60초 윈도우 기준 샘플 인덱스 — `ages`는 오래된 순 경과초.
+    /// 45초 이상 지난 가장 오래된 샘플을 고른다 (45~60초 윈도우, 경계 지터 흡수).
+    /// 없으면 nil → 호출자가 직전 샘플로 폴백 (기동 후 첫 1분 = 종전 15초 동작).
+    static func appNetBaselineIndex(
+        ages: [TimeInterval],
+        minAge: TimeInterval = 45
+    ) -> Int? {
+        ages.firstIndex { $0 >= minAge }
     }
 
     private static func delta(_ curr: UInt64, _ prev: UInt64?) -> UInt64 {

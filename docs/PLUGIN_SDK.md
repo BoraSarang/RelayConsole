@@ -206,6 +206,7 @@ v1(SpotShift·DroidRelay)이 쓰던 `am start …/.MainActivity`는 요청 때�
 - 아이콘은 versionCode 키 캐시, 없으면 SF Symbol.
 - EVENT → 알림: `(plugin,type,id)` 영속 중복제거 + `level` 매핑 + 기존 쿨다운·토글. 스윕 때만 수집(실시간 아님)임을 UI에 명시.
 - 실패 표시는 stderr·에러코드 원문 유지, 기기 지칭은 serial 원문.
+- 액션 후 자동 재확인 (2026-10-13): 발송 3초·12초 뒤 최대 2회 덤프, 발송 전 기준선과 다른 `[REMOTE]`만 귀속 (옛 replay는 pending 유지). 상시 폴링 아님 — 사용자 액션에 딸린 유한 추적. 무응답이면 수동 "결과 확인" 그대로.
 
 ## 13. 변경 이력
 

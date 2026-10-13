@@ -344,6 +344,14 @@ enum PluginDiscoveryLogic {
         return out
     }
 
+    /// 자동 재확인이 덤프에서 건진 결과가 이번 요청에 대한 새 응답인가.
+    /// 발송 전 기준선과 같으면 옛 로그 replay라 pending 유지, 다르면(또는 기준선 없음) 새 응답.
+    /// `raw`에 로그 시각이 통째로 들어있어 같은 줄 replay는 동등, 재emit은 상이로 판정된다.
+    static func isFreshRemote(found: RemoteResult?, baseline: RemoteResult?) -> Bool {
+        guard let found else { return false }
+        return found != baseline
+    }
+
     // MARK: - 필드 추출
 
     private static func intField(_ text: String, key: String) -> Int? {

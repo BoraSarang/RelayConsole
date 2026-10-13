@@ -476,6 +476,10 @@ enum DroidCards {
                         }
                     }
                 }
+                Text(L10n.string("droid.card.network.note"))
+                    .font(OPFont.number(9))
+                    .foregroundStyle(OPColor.inkDim.opacity(0.8))
+                    .lineLimit(1)
             }
             // 차트는 더보기 직전(카드 하단 고정) — 전 카드 위치·높이 규칙 통일
             OPDualSparkline(
