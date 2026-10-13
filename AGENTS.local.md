@@ -26,8 +26,10 @@ swift test
 
 ## 1. 프로젝트 정보
 - **프로젝트명**: RelayConsole / 앱 이름 **Relay Console** (구 Outpost → 브랜드 이관, 코드 신규)
-- **플랫폼**: macos (확정 예정 — 이관 시점 가정: SwiftUI MenuBarExtra)
+- **플랫폼**: macOS 확정 — SwiftUI MenuBarExtra, macOS 26.0+ 상주
 - **기술 스택**: SwiftPM + SwiftUI MenuBarExtra + AppKit + 시스템 ADB 외부 호출 (GRDB는 범위 밖 · **외부 scrcpy 호출은 허용**, 내장 미러링은 범위 밖) · `RelayMcpCore`(읽기 전용 로컬 MCP 프로토콜·데이터) + `relay-mcp` 바이너리 — 감시 경로에서 쓰기 금지
+- **구조**: `Sources/RelayConsole/`(App/Droid/Apple/Incident/Models/Views/DesignSystem/Utils, `RelayWidgetCore`에만 의존) · `Sources/RelayWidgetCore`(위젯 공유 — SPM 등록) · `Sources/RelayWidget`(SPM 미등록 — §4 위젯 참조) · `Sources/RelayMcpCore`+`Sources/RelayMcp` · `Tests/RelayConsoleTests/`
+- **서버 없음 · 로컬 전용** — 외부 전송은 사용자가 연결한 ntfy/Slack 채널에만
 - **테스트**: `swift test` 전체, 단일 포커스는 `swift test --filter <TestClass>`
 - **최소 OS**: macOS 26.0 Tahoe (BrandKit/AppStore_Metadata)
 - **선정 이유**: 맥 메뉴바 상주 — 외부 안드로이드 기기 관제
@@ -45,9 +47,9 @@ swift test
 - 무거운 dumpsys(meminfo·batterystats 등) 상시 폴링 금지 — RESEARCH §2-3
 
 ## 4. 프로젝트 특화 예외 규칙
-- 외부 바이너리(adb, scrcpy)는 시스템 PATH 우선, 없으면 안내·사용자 확인 brew 설치만 (자동 다운로드 금지)
+- 외부 바이너리(adb, scrcpy, libimobiledevice)는 시스템 PATH 우선, 없으면 안내·사용자 확인 brew 설치만 (자동 다운로드 금지)
 - scrcpy **외부 프로세스 실행은 허용** (A안) · 내장 미러링·Android 설정 쓰기는 금지 — 감시(읽기) 전용
-- C3 "Scrcpy 버튼 없음" **해제** (PLAN_v0.7 사용자 승인) · 금지 grep `Scrcpy` 제거
+- **Sites·Jobs 감시는 제거됨 (2026-10-05, `docs/DECISIONS.md` D1) — 부활 금지.** 경위는 git 히스토리에서 (`git log -- Sources/RelayConsole/Sites`)
 - **[표시 ①] 기기 식별이 가능하도록 정확하게 표시** — 화면·알림·내보내기·번들/파일명에서 기기를 지칭할 때 **식별 가능한 원문**을 쓴다
   - 네트워크 기기: `IP:PORT` (serial 원문) / USB: `기기명 또는 모델 · 시리얼 원문` / Apple: `deviceName 또는 productType · udid 원문`
   - `…5555` 같은 마스킹·축약 표시는 **화면·알림·내보내기에 금지** (`…5555`는 USB·Wi-Fi 기기를 구분할 수 없음 — Wi-Fi는 전부 `…5555`로 동일)
