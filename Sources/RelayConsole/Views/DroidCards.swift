@@ -412,7 +412,8 @@ enum DroidCards {
         metrics: DroidMetrics?,
         backgroundOpacity: Double = 1,
         fillsRow: Bool = false,
-        onMore: (() -> Void)? = nil
+        onMore: (() -> Void)? = nil,
+        headlineOnly: Bool = false
     ) -> some View {
         let up = device?.netUpMBps
         let down = device?.netDownMBps
@@ -450,55 +451,58 @@ enum DroidCards {
                         .foregroundStyle(OPColor.inkDim)
                 }
             }
-            if let sub = networkSubline(device) {
-                Text(sub)
-                    .font(OPFont.number(11))
-                    .foregroundStyle(OPColor.inkDim)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                    .minimumScaleFactor(0.9)
-            }
-            if let top = device?.appNetRates?.prefix(3), !top.isEmpty {
-                VStack(alignment: .leading, spacing: 2) {
-                    ForEach(Array(top)) { r in
-                        HStack(spacing: 6) {
-                            Text(r.packageName ?? "uid \(r.uid)")
-                                .font(OPFont.number(10))
-                                .foregroundStyle(OPColor.ink.opacity(0.75))
-                                .lineLimit(1)
-                                .truncationMode(.middle)
-                            Spacer(minLength: 0)
-                            Text(AdbClient.formatNetRatePair(up: r.upMBps, down: r.downMBps))
-                                .font(OPFont.number(10))
-                                .foregroundStyle(OPColor.inkDim)
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.85)
+            // 접힘 상태는 업·다운 숫자까지만 — 행·설명·그래프·더보기는 펼쳤을 때
+            if !headlineOnly {
+                if let sub = networkSubline(device) {
+                    Text(sub)
+                        .font(OPFont.number(11))
+                        .foregroundStyle(OPColor.inkDim)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .minimumScaleFactor(0.9)
+                }
+                if let top = device?.appNetRates?.prefix(3), !top.isEmpty {
+                    VStack(alignment: .leading, spacing: 2) {
+                        ForEach(Array(top)) { r in
+                            HStack(spacing: 6) {
+                                Text(r.packageName ?? "uid \(r.uid)")
+                                    .font(OPFont.number(10))
+                                    .foregroundStyle(OPColor.ink.opacity(0.75))
+                                    .lineLimit(1)
+                                    .truncationMode(.middle)
+                                Spacer(minLength: 0)
+                                Text(AdbClient.formatNetRatePair(up: r.upMBps, down: r.downMBps))
+                                    .font(OPFont.number(10))
+                                    .foregroundStyle(OPColor.inkDim)
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.85)
+                            }
                         }
                     }
+                    Text(L10n.string("droid.card.network.note"))
+                        .font(OPFont.number(9))
+                        .foregroundStyle(OPColor.inkDim.opacity(0.8))
+                        .lineLimit(1)
                 }
-                Text(L10n.string("droid.card.network.note"))
-                    .font(OPFont.number(9))
-                    .foregroundStyle(OPColor.inkDim.opacity(0.8))
-                    .lineLimit(1)
-            }
-            // 차트는 더보기 직전(카드 하단 고정) — 전 카드 위치·높이 규칙 통일
-            OPDualSparkline(
-                up: metrics?.netUpHistory ?? [],
-                down: metrics?.netDownHistory ?? [],
-                height: chartHeight
-            )
-            .frame(height: chartHeight)
-            if let onMore {
-                Button(action: onMore) {
-                    Text(L10n.string("droid.process.more"))
-                        .font(OPFont.body(11))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 5)
-                        .contentShape(Rectangle())
+                // 차트는 더보기 직전(카드 하단 고정) — 전 카드 위치·높이 규칙 통일
+                OPDualSparkline(
+                    up: metrics?.netUpHistory ?? [],
+                    down: metrics?.netDownHistory ?? [],
+                    height: chartHeight
+                )
+                .frame(height: chartHeight)
+                if let onMore {
+                    Button(action: onMore) {
+                        Text(L10n.string("droid.process.more"))
+                            .font(OPFont.body(11))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 5)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(OPColor.cta)
+                    .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.plain)
-                .foregroundStyle(OPColor.cta)
-                .frame(maxWidth: .infinity)
             }
         }
     }

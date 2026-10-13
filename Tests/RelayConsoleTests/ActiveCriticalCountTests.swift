@@ -102,4 +102,128 @@ final class ActiveCriticalCountTests: XCTestCase {
         XCTAssertEqual(BriefingLogic.activeCriticalCount(newestFirst(chronological)), 1,
                        "저장 순서(최신 우선)로도 1개여야 한다")
     }
+
+    // MARK: - maxUnresolvedSeverity (메뉴바 ambient 신호)
+
+    func testMaxSeverityEmptyIsNil() {
+        XCTAssertNil(BriefingLogic.maxUnresolvedSeverity([]))
+    }
+
+    func testMaxSeverityPicksHighest() {
+        let e = newestFirst([
+            ev(.throttling, .warning, 0),
+            ev(.loadSpike, .info, 0),
+        ])
+        XCTAssertEqual(BriefingLogic.maxUnresolvedSeverity(e), .warning)
+    }
+
+    func testMaxSeverityCriticalBeatsWarning() {
+        let e = newestFirst([
+            ev(.throttling, .warning, 0, serial: "A"),
+            ev(.crash, .critical, 0, serial: "B"),
+        ])
+        XCTAssertEqual(BriefingLogic.maxUnresolvedSeverity(e), .critical)
+    }
+
+    func testMaxSeverityClearRemoves() {
+        let e = newestFirst([
+            ev(.throttling, .info, 100, clear: true),
+            ev(.throttling, .critical, 0),
+        ])
+        XCTAssertNil(BriefingLogic.maxUnresolvedSeverity(e))
+    }
+
+    func testMaxSeveritySerialScope() {
+        let e = newestFirst([
+            ev(.throttling, .warning, 0, serial: "A"),
+            ev(.crash, .critical, 0, serial: "B"),
+        ])
+        XCTAssertEqual(BriefingLogic.maxUnresolvedSeverity(e, serial: "A"), .warning)
+        XCTAssertEqual(BriefingLogic.maxUnresolvedSeverity(e, serial: "B"), .critical)
+        XCTAssertNil(BriefingLogic.maxUnresolvedSeverity(e, serial: "ZZZ"))
+    }
+
+    func testMaxSeverityRepeatedEnterKeepsMax() {
+        // 같은 지문이 warning→critical로 에스컬레이트되면 critical
+        let e = newestFirst([
+            ev(.throttling, .critical, 100),
+            ev(.throttling, .warning, 0),
+        ])
+        XCTAssertEqual(BriefingLogic.maxUnresolvedSeverity(e), .critical)
+    }
+
+    // MARK: - menuPickedColumns / menuSpeedCells / menuColumnIndex (메뉴바 기기열)
+
+    private func dev(
+        _ serial: String,
+        up: Double? = nil, down: Double? = nil, online: Bool = true
+    ) -> DeviceSnapshot {
+        DeviceSnapshot(serial: serial, model: "M", isOnline: online, netUpMBps: up, netDownMBps: down)
+    }
+
+    func testMenuPickedEmptyWhenOffline() {
+        let ds = [dev("B", online: false)]
+        XCTAssertTrue(BriefingLogic.menuPickedColumns(
+            devices: ds, selectedSerial: nil, showAll: true).isEmpty)
+        XCTAssertNil(BriefingLogic.menuSpeedCells(
+            devices: ds, selectedSerial: nil, showAll: true))
+    }
+
+    func testMenuPickedSortsBySerialAndCapsAtTwo() {
+        let ds = [dev("B", up: 1, down: 2), dev("A", up: 3, down: 4), dev("C", up: 5, down: 6)]
+        let picked = BriefingLogic.menuPickedColumns(devices: ds, selectedSerial: nil, showAll: true)
+        XCTAssertEqual(picked.map(\.serial), ["A", "B"])
+    }
+
+    func testMenuPickedSelectedOnly() {
+        let ds = [dev("A", up: 1, down: 1), dev("B", up: 2, down: 2)]
+        let picked = BriefingLogic.menuPickedColumns(devices: ds, selectedSerial: "B", showAll: false)
+        XCTAssertEqual(picked.map(\.serial), ["B"])
+        // 선택이 온라인에 없으면 첫 온라인으로 폴백
+        let picked2 = BriefingLogic.menuPickedColumns(devices: ds, selectedSerial: "ZZZ", showAll: false)
+        XCTAssertEqual(picked2.map(\.serial), ["A"])
+    }
+
+    func testMenuSpeedCellsExactValues() {
+        // 필드 단위 렌더용 — 패딩·구분자 없음 (정렬은 RelayMenuBarView 고정폭 필드가 못박는다)
+        let ds = [dev("A", up: 32.0 / 1024, down: 401.0 / 1024),
+                  dev("B", up: 11.0 / 1024, down: 144.0 / 1024)]
+        let cells = BriefingLogic.menuSpeedCells(devices: ds, selectedSerial: nil, showAll: true)
+        XCTAssertEqual(cells?.up, ["32K", "11K"])
+        XCTAssertEqual(cells?.down, ["401K", "144K"])
+    }
+
+    func testMenuSpeedCellsNilBecomesDash() {
+        // 미측정은 "—" — 0("0K")과 구분 유지 [표시②]
+        let ds = [dev("A")]
+        let cells = BriefingLogic.menuSpeedCells(devices: ds, selectedSerial: nil, showAll: true)
+        XCTAssertEqual(cells?.up, ["—"])
+        XCTAssertEqual(cells?.down, ["—"])
+    }
+
+    func testMenuSpeedCellsFollowsPickedOrder() {
+        // 셀 순서는 menuPickedColumns(serial 정렬·최대 2)와 동일 — 범례 "n열"과 일치해야 한다
+        let ds = [dev("B", up: 1, down: 1), dev("A", up: 2, down: 2), dev("C", up: 3, down: 3)]
+        let cells = BriefingLogic.menuSpeedCells(devices: ds, selectedSerial: nil, showAll: true)
+        XCTAssertEqual(cells?.up, ["2M", "1M"])
+        XCTAssertEqual(cells?.down, ["2M", "1M"])
+    }
+
+    func testMenuSpeedCellsNoneWhenOffline() {
+        XCTAssertNil(BriefingLogic.menuSpeedCells(
+            devices: [dev("B", online: false)], selectedSerial: nil, showAll: true))
+    }
+
+    func testMenuColumnIndexLegend() {
+        let ds = [dev("B"), dev("A")]
+        XCTAssertEqual(BriefingLogic.menuColumnIndex(
+            devices: ds, selectedSerial: nil, showAll: true, serial: "A"), 1)
+        XCTAssertEqual(BriefingLogic.menuColumnIndex(
+            devices: ds, selectedSerial: nil, showAll: true, serial: "B"), 2)
+        // 선택 모드에서 안 보이는 기기는 번호 없음
+        XCTAssertNil(BriefingLogic.menuColumnIndex(
+            devices: ds, selectedSerial: "A", showAll: false, serial: "B"))
+        XCTAssertNil(BriefingLogic.menuColumnIndex(
+            devices: [dev("A", online: false)], selectedSerial: nil, showAll: true, serial: "A"))
+    }
 }

@@ -289,6 +289,8 @@
 "files.transfer.cancel" = "Cancel transfer";
 "files.transfer.cancelled" = "Transfer cancelled";
 "float.close" = "Close";
+"float.collapse" = "Collapse";
+"float.expand" = "Expand";
 "float.console" = "Open dashboard";
 "float.empty" = "No Android device connected";
 "float.limit" = "Up to 6 windows";
@@ -387,6 +389,7 @@
 "kind.signalDrop" = "Signal drop";
 "kind.throttling" = "Throttling";
 "menubar.alert.thermal" = "Thermal Warning %@°C";
+"menubar.column" = "col %d";
 "menubar.alert.throttling" = "Throttling";
 "menubar.battery.cycle" = "cycle %d";
 "menubar.button.debug" = "Debug";
@@ -525,6 +528,8 @@
 "settings.mcp.help" = "Expose read-only tools to MCP clients such as Claude via the relay-mcp executable (stdio).";
 "settings.mcp.section" = "Local MCP";
 "settings.menubarMetrics" = "Show device count";
+"settings.menubarSpeed" = "Show speed in menu bar";
+"settings.menubarAll" = "Show all devices (off: selected only)";
 "settings.notify.hint" = "Sends an HTTP POST to each enabled channel on events. Tokens and webhooks stay on this Mac.";
 "settings.notify.minSeverity" = "Minimum severity";
 "settings.notify.ntfy" = "ntfy";

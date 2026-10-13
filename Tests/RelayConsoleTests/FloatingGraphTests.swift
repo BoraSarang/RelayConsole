@@ -411,4 +411,51 @@ final class FloatingGraphTests: XCTestCase {
             XCTAssertTrue(u.contains(s.frame), "합집합이 모든 화면을 포함해야 함")
         }
     }
+
+    // MARK: - 접기/펴기
+
+    func testDecodeLegacyWinsWithoutCollapsedKey() {
+        // 구버전 4키 JSON — 접기 키가 없어도 펼침(false)으로 읽혀 창이 사라지면 안 됨
+        let id = UUID()
+        let raw = """
+        [{"id":"\(id.uuidString)","metric":"network","serial":"SER1","frame":"20,1082,300,220"}]
+        """
+        let back = FloatingGraphLogic.decodeWins(raw)
+        XCTAssertEqual(back.count, 1)
+        XCTAssertEqual(back[0].id, id)
+        XCTAssertEqual(back[0].metric, .network)
+        XCTAssertEqual(back[0].serial, "SER1")
+        XCTAssertFalse(back[0].collapsed)
+    }
+
+    func testDecodeWinsRoundTripKeepsCollapsed() {
+        var wins = [
+            FloatWin(id: UUID(), metric: .network, serial: "SER1", frame: "")
+        ]
+        FloatingGraphLogic.toggleCollapsed(id: wins[0].id, wins: &wins)
+        let back = FloatingGraphLogic.decodeWins(FloatingGraphLogic.encodeWins(wins))
+        XCTAssertEqual(back, wins)
+        XCTAssertTrue(back[0].collapsed)
+    }
+
+    func testToggleCollapsedFlipsAndKeepsPosition() {
+        var wins = [
+            FloatWin(id: UUID(), metric: .cpu, serial: "SER1", frame: "10,20,300,200")
+        ]
+        let id = wins[0].id
+        FloatingGraphLogic.toggleCollapsed(id: id, wins: &wins)
+        XCTAssertTrue(wins[0].collapsed)
+        XCTAssertEqual(wins[0].frame, "10,20,300,200")
+        XCTAssertEqual(wins[0].metric, .cpu)
+        FloatingGraphLogic.toggleCollapsed(id: id, wins: &wins)
+        XCTAssertFalse(wins[0].collapsed)
+    }
+
+    func testToggleCollapsedUnknownIdNoOp() {
+        var wins = [
+            FloatWin(id: UUID(), metric: .cpu, serial: "SER1", frame: "")
+        ]
+        FloatingGraphLogic.toggleCollapsed(id: UUID(), wins: &wins)
+        XCTAssertFalse(wins[0].collapsed)
+    }
 }

@@ -32,6 +32,8 @@ struct SettingsView: View {
     @ObservedObject var store: ConsoleStore
     @ObservedObject private var theme = ThemeManager.shared
     @AppStorage("relay.menubarMetrics") private var menubarMetrics = true
+    @AppStorage("relay.menubarSpeed") private var menubarSpeed = true
+    @AppStorage("relay.menubarAll") private var menubarAll = true
     @AppStorage("relay.alerts.defaultPeriod") private var alertsPeriod = "24h"
     @AppStorage(FloatingGraphLogic.opacityKey) private var floatOpacity = FloatingGraphLogic.defaultOpacity
     /// On/Off·창 리스트 단일 진실원천 — FloatingGraphController (AppStorage 분리 기록 금지)
@@ -108,6 +110,8 @@ struct SettingsView: View {
                 Text(L10n.string("settings.theme.light")).tag(OPThemeMode.light)
             }
             Toggle(L10n.string("settings.menubarMetrics"), isOn: $menubarMetrics)
+            Toggle(L10n.string("settings.menubarSpeed"), isOn: $menubarSpeed)
+            Toggle(L10n.string("settings.menubarAll"), isOn: $menubarAll)
             Toggle(L10n.string("settings.briefing"), isOn: $store.briefingEnabled)
             Picker(L10n.string("settings.language"), selection: $store.appLanguage) {
                 Text(L10n.string("settings.language.system")).tag("system")

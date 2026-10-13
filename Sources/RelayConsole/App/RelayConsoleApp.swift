@@ -10,64 +10,33 @@ struct RelayConsoleApp: App {
     @Environment(\.openSettings) private var openSettings
 
     var body: some Scene {
-        MenuBarExtra {
-            MenuBarPopoverView(store: store, openConsole: {
-                openConsole()
-            }, openDebug: {
-                openDebug()
-            }, openSettings: {
-                openSettingsWindow()
-            }, openProcesses: {
-                openProcesses()
-            }, openLogs: {
-                openLogs()
-            }, openAppNetwork: {
-                openAppNetwork()
-            }, openFiles: {
-                openFiles()
-            })
-            .frame(width: 360, height: 560)
-            .preferredColorScheme(theme.mode.preferred)
-            .background(OPColor.popBG) // SOLID — V0-2: no material/glass
-        }
-        label: {
-            // 아이콘만 — 텍스트 없음. 0대: 흰 안테나 · 1대+: 흰 Android + 초록점 · critical 미해결: 주황 배지
-            ZStack(alignment: .topTrailing) {
-                Image(nsImage: statusIcon)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(height: 18)
-                    .onAppear {
-                        // 플로팅에서 각 창 열기 — openWindow Environment 주입 (항상 메뉴바에 존재)
-                        FloatingGraphController.shared.openProcesses = { openProcesses() }
-                        FloatingGraphController.shared.openAppNetwork = { openAppNetwork() }
-                        FloatingGraphController.shared.openConsole = { openConsole() }
-                        // 위젯 딥링크 라우팅 — 클로저 주입 완료 후 보류 URL 플러시
-                        WidgetDeepLink.shared.openProcesses = { openProcesses() }
-                        WidgetDeepLink.shared.openLogs = { openLogs() }
-                        WidgetDeepLink.shared.openAppNetwork = { openAppNetwork() }
-                        WidgetDeepLink.shared.openSettings = { openSettingsWindow() }
-                        WidgetDeepLink.shared.openConsole = { openConsole() }
-                        WidgetDeepLink.shared.flush()
-                    }
-                if store.hasActiveCritical {
-                    Circle()
-                        .fill(OPColor.thermal)
-                        .frame(width: 7, height: 7)
-                        .offset(x: 3, y: -1)
-                }
+        // **SwiftUI 는 body 평가 시점에만 Environment(openWindow/openSettings)를 읽는다.**
+        // 메뉴바는 AppKit NSStatusItem(StatusItemController)으로 그린다 (PLAN_menubar_nsstatusitem)
+        // — 여기서 창 열기 클로저를 넘긴다. 설치 자체는 AppDelegate.didFinishLaunching.
+        let _ = StatusItemController.shared.adopt(
+            actions: StatusItemController.Actions(
+                openConsole: { openConsole() },
+                openDebug: { openDebug() },
+                openSettings: { openSettings() },
+                openProcesses: { openProcesses() },
+                openLogs: { openLogs() },
+                openAppNetwork: { openAppNetwork() },
+                openFiles: { openFiles() }
+            ),
+            bootstrap: {
+                // 플로팅에서 각 창 열기 — openWindow Environment 주입 (구 MenuBarExtra label onAppear)
+                FloatingGraphController.shared.openProcesses = { openProcesses() }
+                FloatingGraphController.shared.openAppNetwork = { openAppNetwork() }
+                FloatingGraphController.shared.openConsole = { openConsole() }
+                // 위젯 딥링크 라우팅 — 클로저 주입 완료 후 보류 URL 플러시
+                WidgetDeepLink.shared.openProcesses = { openProcesses() }
+                WidgetDeepLink.shared.openLogs = { openLogs() }
+                WidgetDeepLink.shared.openAppNetwork = { openAppNetwork() }
+                WidgetDeepLink.shared.openSettings = { openSettingsWindow() }
+                WidgetDeepLink.shared.openConsole = { openConsole() }
+                WidgetDeepLink.shared.flush()
             }
-        }
-        .menuBarExtraStyle(.window)
-        .windowResizability(.contentSize)
-        .commands {
-            CommandGroup(replacing: .appTermination) {
-                Button(L10n.string("menubar.button.quit")) {
-                    NSApp.terminate(nil)
-                }
-                .keyboardShortcut("q")
-            }
-        }
+        )
 
         // 창 크롬 통일: 전부 시스템 타이틀바 (Settings scene과 동일 — DESIGN §4 native)
         Window(L10n.string("droid.header.title"), id: "console") {
@@ -114,6 +83,15 @@ struct RelayConsoleApp: App {
             SettingsView(store: store)
                 .frame(minWidth: 560, maxWidth: 640, minHeight: 400, maxHeight: 720)
                 .preferredColorScheme(theme.mode.preferred)
+        }
+        // ⌘Q 종료 커맨드 — 구 MenuBarExtra scene 제거로 여기로 이동
+        .commands {
+            CommandGroup(replacing: .appTermination) {
+                Button(L10n.string("menubar.button.quit")) {
+                    NSApp.terminate(nil)
+                }
+                .keyboardShortcut("q")
+            }
         }
 
         debugScenes
@@ -193,38 +171,6 @@ struct RelayConsoleApp: App {
         openWindow(id: "files")
         WindowFocus.present(sceneID: "files")
     }
-
-    /// 기기 0대 → Off(흰 안테나) · 1대+ → Online(흰 Android + 초록점)
-    /// 다크 메뉴바용 흰색 리소스 — template 금지(색 유지)
-    private var statusIcon: NSImage {
-        // [표시②] "한 번이라도 본 기기"(devices.isEmpty)가 아니라 **현재 온라인인 기기**로 판정
-        // — 오프라인 기기는 배열에서 제거되지 않으므로 isEmpty만 보면 0대여도 Online으로 잘못 표시됨
-        let online = store.inventory.devices.contains { $0.isOnline }
-        let name = online ? "MenuBar-Online" : "MenuBar-Off"
-        guard let img = Bundle.main.image(forResource: name) else {
-            return Self.fallbackIcon
-        }
-        img.isTemplate = false
-        let displayH: CGFloat = 18
-        if let tiff = img.tiffRepresentation,
-           let rep = NSBitmapImageRep(data: tiff),
-           rep.pixelsHigh > 0 {
-            let displayW = max(1, displayH * CGFloat(rep.pixelsWide) / CGFloat(rep.pixelsHigh))
-            img.size = NSSize(width: displayW, height: displayH)
-        } else {
-            img.size = NSSize(width: displayH, height: displayH)
-        }
-        return img
-    }
-
-    private static let fallbackIcon: NSImage = {
-        guard let img = Bundle.main.image(forResource: "MenuBarTemplate") else {
-            return NSImage(size: NSSize(width: 18, height: 18))
-        }
-        img.isTemplate = true
-        img.size = NSSize(width: 18, height: 18)
-        return img
-    }()
 }
 
 struct EmptyScene: Scene {

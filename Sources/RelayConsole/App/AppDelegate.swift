@@ -6,6 +6,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // 강제 종료(SIGTERM) 정리 — **install 을 launch 맨 처음에** 해야 한다.
         // 늦으면 그 사이의 SIGTERM 이 기본 처리로 빠져 고아 adb 와 저장 유실이 그대로 난다
         TerminationGuard.install()
+        // 메뉴바 NSStatusItem 설치 — MenuBarExtra 대체 (PLAN_menubar_nsstatusitem).
+        // SwiftUI body 의 adopt(클로저 주입)와 순서 무관 — update 는 speedView 생긴 뒤에만 돈다.
+        StatusItemController.shared.install()
         // V0-2: appearance는 NSApp 준비 후 세팅 — 테마(시스템/다크/화이트) 연동
         ThemeManager.shared.applyAppearance()
         DebugLogger.shared.info("App", "[INFO] [FEATURE] Relay Console \(AppVersion.display) 시작")

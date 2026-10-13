@@ -40,7 +40,21 @@ struct FloatingGraphView: View {
             headerRow
             Divider().overlay(OPColor.border).padding(.horizontal, 12).padding(.vertical, 6)
 
-            if device == nil {
+            if win.collapsed {
+                // 접힘: 업·다운 숫자까지만 (network) / 지표 한 줄 (그 외)
+                if win.metric == .network {
+                    DroidCards.network(
+                        device: device,
+                        metrics: metrics,
+                        backgroundOpacity: FloatingGraphLogic.clampOpacity(opacity),
+                        headlineOnly: true
+                    )
+                    .padding(.horizontal, 10)
+                    .padding(.bottom, 10)
+                } else {
+                    collapsedStrip
+                }
+            } else if device == nil {
                 emptyHint
                     .padding(.horizontal, 12)
                     .padding(.bottom, 12)
@@ -136,12 +150,55 @@ struct FloatingGraphView: View {
         .overlay(RoundedRectangle(cornerRadius: 8).stroke(OPColor.border, lineWidth: 1))
     }
 
+    /// 접힘 상태 한 줄 — network 외 지표 (network는 업·다운 숫자 블록으로 표시)
+    private var collapsedStrip: some View {
+        Text(collapsedHeadline)
+            .font(OPFont.number(12))
+            .foregroundStyle(OPColor.ink)
+            .lineLimit(1)
+            .minimumScaleFactor(0.8)
+            .padding(.horizontal, 10)
+            .padding(.bottom, 10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var collapsedHeadline: String {
+        switch win.metric {
+        case .network:
+            return ""
+        case .cpu:
+            return DroidCards.cpuValue(device)
+        case .gpu:
+            return DroidCards.gpuValue(device)
+        case .memory:
+            return DroidCards.memoryValue(device)
+        case .summary:
+            if let d = device, let up = d.netUpMBps, let down = d.netDownMBps {
+                let u = AdbClient.formatNetRate(up)
+                let dn = AdbClient.formatNetRate(down)
+                return "↓\(dn.value) \(dn.unit) · ↑\(u.value) \(u.unit)"
+            }
+            return DroidCards.networkSubline(device) ?? L10n.na
+        }
+    }
+
     private var headerRow: some View {
         // in-flow 레이아웃: leading(기기명, 유연) + trailing(버튼군, 고정).
         // trailing은 항상 자리 차지(hover 시 출렁임 방지)하되 아이콘 위주로
         // 줄여서 "Galaxy A90 5G"가 들어가게 함. overlay로 띄우면 hover 시
         // 기기 피커를 가려 선택이 안 되는 문제.
         HStack(spacing: 8) {
+            // 접기/펴기 — 항상 조작 가능 (접힘 상태에서도 헤더는 살아 있음)
+            Button {
+                FloatingGraphController.shared.toggleCollapsed(id: win.id)
+            } label: {
+                Image(systemName: win.collapsed ? "chevron.right" : "chevron.down")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(OPColor.inkDim)
+                    .frame(width: 18, height: 22)
+            }
+            .buttonStyle(.plain)
+            .help(L10n.string(win.collapsed ? "float.expand" : "float.collapse"))
             Circle()
                 .fill(device?.isOnline == true ? OPColor.ok : OPColor.inkDim)
                 .frame(width: 7, height: 7)
