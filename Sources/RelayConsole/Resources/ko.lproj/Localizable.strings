@@ -120,7 +120,7 @@
 "droid.appnet.col.up" = "업로드";
 "droid.appnet.empty" = "아직 트래픽 없음";
 "droid.appnet.emptyHint" = "기기에서 앱을 실행하면 앱별 속도가 약 15초 내에 표시됩니다.";
-"droid.appnet.hint" = "속도는 netstats 15초 샘플 기준 초당 증가량 · 누적은 부팅 이후 전체량";
+"droid.appnet.hint" = "합계는 인터페이스 실시간(adb 제외) · 앱별 속도는 netstats 60초 평균(adb 제외) · 누적은 부팅 이후 전체량";
 "droid.appnet.title" = "네트워크 사용량 — %@";
 "droid.appnet.titleShort" = "앱 네트워크";
 "droid.battery.current" = "전류";
@@ -142,6 +142,7 @@
 "droid.card.memory.pressure" = "압박 %@";
 "droid.card.memory.title" = "MEMORY";
 "droid.card.network.down" = "다운";
+"droid.card.network.note" = "합계 실시간 · adb 제외 · 앱별 60초 평균";
 "droid.card.network.title" = "NETWORK";
 "droid.card.network.up" = "업";
 "droid.card.network.wifiOff" = "Wi-Fi 꺼짐";
@@ -743,7 +744,7 @@
 "plugin.refresh" = "상태 확인";
 "plugin.request" = "IP 변경 요청";
 "plugin.checkResult" = "결과 확인";
-"plugin.pending" = "요청 보냄 %@ — 결과는 기기 로그로만 온다. 결과 확인을 눌러줘.";
+"plugin.pending" = "요청 보냄 %@ — 기기 응답을 자동 확인 중. 오래 걸리면 결과 확인을 눌러줘.";
 "plugin.noDevice" = "연결된 기기가 없다";
 "plugin.offline" = "기기 오프라인 — 마지막 스냅샷이 아니라 살아 있는 기기에서만 동작한다";
 "plugin.notInstalled" = "%@ 미설치";

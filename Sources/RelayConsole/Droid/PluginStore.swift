@@ -238,18 +238,70 @@ final class PluginStore: ObservableObject {
             lastErrorByKey[k] = L10n.string("plugin.error.needInput")
             return
         }
+        // 기준선: 발송 전 마지막 [REMOTE] — 발송 후 덤프 replay를 새 응답으로 착각하지 않게
+        let dumpArgs = PluginDiscoveryLogic.logcatDumpArgs(
+            serial: serial, logTags: PluginRegistry.plugins.map(\.logTag)
+        )
+        let baseline = (try? await run(adb, dumpArgs)).flatMap {
+            PluginDiscoveryLogic.parseRemoteOutput($0)[plugin.logTag]
+        }
         busyKeys.insert(k)
         lastErrorByKey.removeValue(forKey: k)
         defer { busyKeys.remove(k) }
         do {
             _ = try await run(adb, args)
+            let requestedAt = Date()
             var st = resultState(serial: serial, plugin: plugin)
-            st.pendingSince = Date()
+            st.pendingSince = requestedAt
             resultByKey[k] = st
-            lastMessageByKey[k] = L10n.format("plugin.pending", Self.timeFmt.string(from: Date()))
+            lastMessageByKey[k] = L10n.format("plugin.pending", Self.timeFmt.string(from: requestedAt))
+            scheduleAutoFetch(serial: serial, plugin: plugin, baseline: baseline, requestedAt: requestedAt)
         } catch {
             lastErrorByKey[k] = cause(error)
         }
+    }
+
+    /// 액션 후 자동 재확인 — 발송 3초·12초 뒤 최대 2회 덤프, 새 응답만 귀속 (무응답이면 조용히 pending 유지).
+    /// 상시 폴링이 아니라 사용자 액션에 딸린 유한 추적. 수동 "결과 확인"은 그대로 둔다.
+    private func scheduleAutoFetch(
+        serial: String,
+        plugin: PluginDescriptor,
+        baseline: PluginDiscoveryLogic.RemoteResult?,
+        requestedAt: Date
+    ) {
+        Task {
+            for delay in [UInt64(3_000_000_000), UInt64(12_000_000_000)] {
+                try? await Task.sleep(nanoseconds: delay)
+                await self.autoFetch(
+                    serial: serial, plugin: plugin, baseline: baseline, requestedAt: requestedAt
+                )
+            }
+        }
+    }
+
+    private func autoFetch(
+        serial: String,
+        plugin: PluginDescriptor,
+        baseline: PluginDiscoveryLogic.RemoteResult?,
+        requestedAt: Date
+    ) async {
+        let k = key(serial: serial, plugin: plugin)
+        // 이미 해소됐거나 더 새 요청의 pending이면 손대지 않음
+        guard let pend = resultByKey[k]?.pendingSince, pend == requestedAt else { return }
+        guard !busySerials.contains(serial) else { return }
+        guard let adb = DeviceMonitor.adbPathNow() else { return }
+        let dumpArgs = PluginDiscoveryLogic.logcatDumpArgs(
+            serial: serial, logTags: PluginRegistry.plugins.map(\.logTag)
+        )
+        guard let dump = try? await run(adb, dumpArgs) else { return }
+        let found = PluginDiscoveryLogic.parseRemoteOutput(dump)[plugin.logTag]
+        guard PluginDiscoveryLogic.isFreshRemote(found: found, baseline: baseline) else { return }
+        var st = resultState(serial: serial, plugin: plugin)
+        st.result = found
+        st.fetchedAt = Date()
+        st.pendingSince = nil
+        resultByKey[k] = st
+        lastMessageByKey.removeValue(forKey: k)
     }
 
     func clearPending(serial: String, plugin: PluginDescriptor) {

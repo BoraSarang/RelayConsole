@@ -1,7 +1,8 @@
 import SwiftUI
 import AppKit
 
-/// 앱(패키지)별 네트워크 사용량 목록 — `dumpsys netstats detail` delta (MB/s)
+/// 앱(패키지)별 네트워크 사용량 목록 — `dumpsys netstats detail` 60초 윈도우 delta (MB/s).
+/// 합계는 인터페이스 실시간에서 adb 제외, 앱별 행도 adb(shell) 제외. 누적은 버킷 합이라 정확.
 /// 메뉴바/플로팅에서 열리는 독립 창 · 대시보드에서는 시트로도 사용
 struct AppNetworkContent: View {
     @ObservedObject var store: ConsoleStore

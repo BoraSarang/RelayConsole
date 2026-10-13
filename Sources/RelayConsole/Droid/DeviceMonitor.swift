@@ -77,9 +77,13 @@ actor DeviceMonitor {
         var memAvailablePct: Double?
         /// 포그라운드 앱 패키지 (15s)
         var cacheForegroundPackage: String?
-        /// uid별 앱 네트워크 누적량 이전 샘플 (15s delta)
-        var prevAppNet: [AppNetStat]?
-        var prevAppNetAt: Date?
+        /// uid별 앱 네트워크 누적량 샘플 링 (오래된 순, 최대 5개 = 약 60초).
+        /// netstats 버킷이 15초마다 갱신되지 않아(flush 시점에 밀린 양이 한 번에 떨어짐)
+        /// 15초 델타는 뻥튀기됨 → 45초 이상 지난 가장 오래된 샘플과 델타 (PLAN_net_truespeed).
+        var appNetHistory: [(at: Date, rows: [AppNetStat])] = []
+        /// shell(uid 2000) 속도 스무딩값 — 합계(live)에서 뺄 adb(내부 폴링) 기여분
+        var cacheShellUp: Double = 0
+        var cacheShellDown: Double = 0
         /// uid → 패키지명 (1회 조회 후 캐시)
         var packageUids: [Int: String]?
         /// 15s 앱 네트워크 속도 캐시 (5s 틱이 상속)
@@ -534,13 +538,19 @@ actor DeviceMonitor {
                 state.prevNet = curr
                 state.prevNetAt = Date()
                 if let r = upDown {
-                    state.cacheNetUp = r.up
-                    state.cacheNetDown = r.down
-                    state.cacheNetworkInfo = AdbClient.formatNetRatePair(up: r.up, down: r.down)
+                    // 합계는 live지만 우리 폴링(adb) 트래픽이 섞여 있음 —
+                    // 직전 틱의 스무딩된 shell 기여분을 뺀다 (내부용이므로 표시에서 제외)
+                    let clean = AdbClient.excludeShell(
+                        up: r.up, down: r.down,
+                        shellUp: state.cacheShellUp, shellDown: state.cacheShellDown
+                    )
+                    state.cacheNetUp = clean.up
+                    state.cacheNetDown = clean.down
+                    state.cacheNetworkInfo = AdbClient.formatNetRatePair(up: clean.up, down: clean.down)
                 }
             }
 
-            // ── 앱(UID) 네트워크 사용량 — 15s, 추가 셸 최대 2회 (netstats + pm list)
+            // ── 앱(UID) 네트워크 사용량 — 60s 윈도우, shell 제외 (PLAN_net_truespeed)
             if let statsText = batch[.netstats] {
                 let parsed = AdbClient.parseUidNetStats(statsText)
                 if !parsed.isEmpty {
@@ -549,7 +559,7 @@ actor DeviceMonitor {
                         state.packageUids = AdbClient.parsePackageUids(pkgText)
                     }
                     let uidToPkg = state.packageUids ?? [:]
-                    let rows: [AppNetStat] = parsed.map {
+                    let allRows: [AppNetStat] = parsed.map {
                         AppNetStat(
                             uid: $0.uid,
                             packageName: uidToPkg[$0.uid],
@@ -557,17 +567,40 @@ actor DeviceMonitor {
                             txBytes: $0.txBytes
                         )
                     }
-                    snap.appNetStats = rows
-                    if let prev = state.prevAppNet, let at = state.prevAppNetAt {
-                        let secs = Date().timeIntervalSince(at)
-                        let rates = AdbClient.appNetRates(prev: prev, curr: rows, seconds: secs)
+                    let now = Date()
+                    let ages = state.appNetHistory.map { now.timeIntervalSince($0.at) }
+                    let baseRows: [AppNetStat]
+                    let secs: Double
+                    if let idx = AdbClient.appNetBaselineIndex(ages: ages) {
+                        baseRows = state.appNetHistory[idx].rows
+                        secs = now.timeIntervalSince(state.appNetHistory[idx].at)
+                    } else if let last = state.appNetHistory.last {
+                        // 기동 후 첫 1분 — 직전 샘플 폴백 (종전 15초 동작)
+                        baseRows = last.rows
+                        secs = now.timeIntervalSince(last.at)
+                    } else {
+                        baseRows = []
+                        secs = 0
+                    }
+                    if secs > 0 {
+                        let sh = AdbClient.shellRate(prev: baseRows, curr: allRows, seconds: secs)
+                        state.cacheShellUp = sh.up
+                        state.cacheShellDown = sh.down
+                        let rates = AdbClient.appNetRates(
+                            prev: baseRows, curr: allRows, seconds: secs,
+                            excluding: [AdbClient.shellUid]
+                        )
                         if !rates.isEmpty {
                             snap.appNetRates = rates
                             state.cacheAppNetRates = rates
                         }
                     }
-                    state.prevAppNet = rows
-                    state.prevAppNetAt = Date()
+                    // 표시·누적용은 shell 제외 (합계 차감분은 위에서 따로 계산)
+                    snap.appNetStats = allRows.filter { $0.uid != AdbClient.shellUid }
+                    state.appNetHistory.append((at: now, rows: allRows))
+                    if state.appNetHistory.count > 5 {
+                        state.appNetHistory.removeFirst(state.appNetHistory.count - 5)
+                    }
                 }
             }
             if snap.appNetRates == nil { snap.appNetRates = state.cacheAppNetRates }

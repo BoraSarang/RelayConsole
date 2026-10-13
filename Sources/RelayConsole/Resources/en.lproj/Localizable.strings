@@ -120,7 +120,7 @@
 "droid.appnet.col.up" = "Up";
 "droid.appnet.empty" = "No traffic yet";
 "droid.appnet.emptyHint" = "Use an app on the device — per-app rates appear within ~15 s.";
-"droid.appnet.hint" = "Rates are per-second deltas from netstats (15 s sampling). Cumulative = since boot.";
+"droid.appnet.hint" = "Totals are live interface rates (excl. adb) · per-app rates are netstats 60-sec avg (excl. adb) · cumulative = since boot.";
 "droid.appnet.title" = "Network usage — %@";
 "droid.appnet.titleShort" = "App network";
 "droid.battery.current" = "Current";
@@ -142,6 +142,7 @@
 "droid.card.memory.pressure" = "Pressure %@";
 "droid.card.memory.title" = "MEMORY";
 "droid.card.network.down" = "Down";
+"droid.card.network.note" = "Live totals · excl. adb · per-app 60-sec avg";
 "droid.card.network.title" = "NETWORK";
 "droid.card.network.up" = "Up";
 "droid.card.network.wifiOff" = "Wi-Fi Off";
@@ -743,7 +744,7 @@
 "plugin.refresh" = "Check status";
 "plugin.request" = "Request IP change";
 "plugin.checkResult" = "Check result";
-"plugin.pending" = "Requested %@ — result arrives via device log only. Tap Check result.";
+"plugin.pending" = "Requested %@ — auto-checking the device log. Tap Check result if it takes long.";
 "plugin.noDevice" = "No connected device";
 "plugin.offline" = "Device offline — works only on a live device, not a snapshot";
 "plugin.notInstalled" = "%@ is not installed";

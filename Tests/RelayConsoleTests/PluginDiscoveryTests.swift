@@ -275,4 +275,29 @@ struct PluginDiscoveryTests {
         #expect(u1 != nil && u2 != nil && u1 != u2)
         #expect(u1?.lastPathComponent.contains("com.x") == true)
     }
+
+    // MARK: - 자동 재확인 신선도 (발송 전 기준선 vs 발송 후 덤프)
+
+    @Test func freshRemoteNeedsFound() {
+        #expect(PluginDiscoveryLogic.isFreshRemote(found: nil, baseline: nil) == false)
+    }
+
+    @Test func freshRemoteRejectsBaselineReplay() {
+        // 같은 줄 replay (덤프를 다시 긁어도 시각까지 동일) — 옛 결과라 pending 유지
+        let line = "10-08 13:51:33.878 22873 22873 I DroidRelay: [REMOTE] action=server_status ok=true running=true ip=10.0.0.1 port=3000 version=0.50.0"
+        let a = PluginDiscoveryLogic.parseRemoteLine(line)
+        let b = PluginDiscoveryLogic.parseRemoteLine(line)
+        #expect(PluginDiscoveryLogic.isFreshRemote(found: a, baseline: b) == false)
+    }
+
+    @Test func freshRemoteAcceptsNewEmission() {
+        let old = PluginDiscoveryLogic.parseRemoteLine("10-08 13:51:33.878 1 1 I DroidRelay: [REMOTE] action=server_status ok=true running=true")
+        let new = PluginDiscoveryLogic.parseRemoteLine("10-08 13:52:01.111 1 1 I DroidRelay: [REMOTE] action=server_status ok=false errorCode=E-AND-PLG-0003 note=boom")
+        #expect(PluginDiscoveryLogic.isFreshRemote(found: new, baseline: old) == true)
+    }
+
+    @Test func freshRemoteAcceptsFirstEver() {
+        let r = PluginDiscoveryLogic.parseRemoteLine("[REMOTE] 거부됨 (연동 OFF)")
+        #expect(PluginDiscoveryLogic.isFreshRemote(found: r, baseline: nil) == true)
+    }
 }

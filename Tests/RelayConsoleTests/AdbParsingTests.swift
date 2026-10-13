@@ -972,6 +972,56 @@ struct AdbParsingTests {
         #expect(abs(rates[0].downMBps - 2.0) < 0.001)
     }
 
+    @Test func appNetRatesExcludesShellUid() {
+        // shell(uid 2000)은 내부 폴링 귀속 — 아무리 커도 행으로 나오면 안 됨
+        let prev = [
+            AppNetStat(uid: 2000, rxBytes: 0, txBytes: 0),
+            AppNetStat(uid: 1000, rxBytes: 0, txBytes: 0)
+        ]
+        let curr = [
+            AppNetStat(uid: 2000, rxBytes: 100_000_000, txBytes: 100_000_000),
+            AppNetStat(uid: 1000, rxBytes: 2_097_152, txBytes: 0)
+        ]
+        let rates = AdbClient.appNetRates(
+            prev: prev, curr: curr, seconds: 1, excluding: [AdbClient.shellUid]
+        )
+        #expect(rates.map(\.uid) == [1000])
+    }
+
+    @Test func shellRateComputesDelta() {
+        let prev = [AppNetStat(uid: 2000, rxBytes: 1_048_576, txBytes: 2_097_152)]
+        let curr = [AppNetStat(uid: 2000, rxBytes: 2_097_152, txBytes: 4_194_304)]
+        let sh = AdbClient.shellRate(prev: prev, curr: curr, seconds: 1)
+        #expect(abs(sh.down - 1.0) < 0.001)
+        #expect(abs(sh.up - 2.0) < 0.001)
+    }
+
+    @Test func shellRateZeroWhenAbsent() {
+        let rows = [AppNetStat(uid: 1000, rxBytes: 5, txBytes: 5)]
+        let sh = AdbClient.shellRate(prev: rows, curr: rows, seconds: 1)
+        #expect(sh.up == 0 && sh.down == 0)
+    }
+
+    @Test func excludeShellClampsNegative() {
+        // 과차감은 음수 대신 0 — 음수 속도는 거짓말
+        let c = AdbClient.excludeShell(up: 5, down: 1, shellUp: 8, shellDown: 0.5)
+        #expect(c.up == 0)
+        #expect(abs(c.down - 0.5) < 0.000001)
+        let n = AdbClient.excludeShell(up: 10, down: 10, shellUp: 3, shellDown: 4)
+        #expect(abs(n.up - 7.0) < 0.000001 && abs(n.down - 6.0) < 0.000001)
+    }
+
+    @Test func appNetBaselineIndexPicksOldestMature() {
+        // 오래된 순 [70, 55, 40, 20, 5] → 70초 전 (인덱스 0)
+        #expect(AdbClient.appNetBaselineIndex(ages: [70, 55, 40, 20, 5]) == 0)
+        // 45초 넘은 게 없으면 nil → 직전 샘플 폴백
+        #expect(AdbClient.appNetBaselineIndex(ages: [30, 15]) == nil)
+        #expect(AdbClient.appNetBaselineIndex(ages: []) == nil)
+        // 경계: 45초는 채택, 44.9초는 폴백
+        #expect(AdbClient.appNetBaselineIndex(ages: [45]) == 0)
+        #expect(AdbClient.appNetBaselineIndex(ages: [44.9]) == nil)
+    }
+
     @Test func formatBytesUnits() {
         #expect(AdbClient.formatBytes(0) == "0 B")
         #expect(AdbClient.formatBytes(1_536) == "1.5 KB")
