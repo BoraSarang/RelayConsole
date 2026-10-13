@@ -307,6 +307,18 @@ enum AdbClient {
         return (String(format: fmt, kbps), "KB/s")
     }
 
+    /// 메뉴바 속도 표기 — 단위를 항상 붙인다 (DroidRelay compact와 의도적 차이).
+    /// 9pt tiny 렌더에서 단위 없는 `124`·`—`는 깨져 보이므로, 1KB 미만은 `124B`, 0은 `0K`.
+    /// nil(미측정)은 호출자가 "—"로 (0과 값 없음 구분 유지).
+    static func menuRateAlways(_ mbps: Double) -> String {
+        let b = mbps * 1_048_576.0
+        guard b > 0, b.isFinite else { return "0K" }
+        if b >= 1_073_741_824 { return "\(Int((b / 1_073_741_824).rounded()))G" }
+        if b >= 1_048_576 { return "\(Int((b / 1_048_576).rounded()))M" }
+        if b >= 1024 { return "\(Int((b / 1024).rounded()))K" }
+        return "\(Int(b.rounded()))B"
+    }
+
     /// ↑↓ 한 줄 — 방향 단위가 다르면 각각 단위를 붙임
     static func formatNetRatePair(up: Double, down: Double) -> String {
         let u = formatNetRate(up)

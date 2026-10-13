@@ -5,6 +5,31 @@
 
 ## 완료 (2026-10-13)
 
+- [x] **T-2026-10-13-5 메뉴바 AppKit 전환 (NSStatusItem)** — `docs/plans/PLAN_menubar_nsstatusitem.md`
+  - A안(문자열 정렬) 한계 실측 확정 → B안으로 구조 교체. DroidRelay `StatusItemController`/`MenuBarSpeedView` 이식
+  - `RelayMenuBarView`(고정폭 필드 4개·우측정렬·화살표 11pt·열폭 `"1023M"`) + `StatusItemController`(install/adopt/update/팝오버/우클릭)
+    + `MenuBarExtra` 삭제 + 팝오버 `onClose` 주입. `menuSpeedLines` → `menuSpeedCells` 순수 배열로 교체
+  - **검증 [HARD]**: `swift test` **XCTest 180/0 + Swift Testing 652/0** · `./scripts/build-macos.sh debug` **EXIT=0**
+    · L10n **777키 en/ko 1:1** · 한자 0건
+  - **캡처 판독**: 2열 우측정렬 일치 · 1열 축소(기기 1대) · 오프라인 시 아이콘만 — A안 어긋남 재발 없음
+  - **육안** → `docs/MANUAL_VERIFY.md` 41·42번 ✅ **사용자 확인** (2026-10-13)
+
+- [x] **T-2026-10-13-4 메뉴바 기기별 열 + 플로팅 접기(숫자 유지)** — `docs/plans/PLAN_menubar_devices.md`
+  - **메뉴바**: 온라인 기기 serial 정렬 최대 2열 (1대면 1열, 없으면 아이콘만) ·
+    식별은 팝오버 기기행 "n열" 범례 (같은 picked 순서) · 점 색=최대 심각도(warn 포함) ·
+    `relay.menubarAll` off면 선택 기기만.
+    **라벨은 단일 Text만** — 중첩 스택·이미지·도형은 MenuBarExtra에서 일부 소실됨 (61K 1개만 뜨는 실측).
+    행 문자열 조립은 순수 함수로 분리해 테스트로 고정 · 값은 compact 이식분 재사용
+  - **플로팅 접기**: 창별 collapsed (위치 유지·재기동 복원·구버전 JSON 호환) ·
+    접힘=network창은 업·다운 숫자까지, 나머지 지표는 한 줄 값 · 헤더 셰브론 항시 조작
+  - **검증 [HARD]**: `swift test` **652 / 0 failed + XCTest 전수 통과** (신규 13건: 항상단위 1·심각도 6·열 6) ·
+    `./scripts/build-macos.sh debug` **EXIT=0** · L10n **777키 en/ko 1:1** (신규 5키 양쪽 동시) · 한자 0건 ·
+    **메뉴바 스크린샷 직접 판독 8회** (최종 `↑ 8K 258K` / `↓ 125B 745K` 2열·단위·정렬·크기 일치 확인).
+    교훈 3건: ① MenuBarExtra 라벨은 단일 Text만 온전히 그림 (중첩 스택 소실 61K·↑ 실측 2건) ·
+    ② `.monospaced()` 수식어는 라벨에서 무시됨 — `NSFont` 직접 지정해야 고정폭 적용
+    (전 글리프 동일 advance 5.56 실측) · ③ 값 표기는 단위 항상 (tiny `124`·`—`는 깨져 보임).
+  - **육안 대기** → `docs/MANUAL_VERIFY.md` 39·40번 (범례 일치 + 접기 확인)
+
 - [x] **T-2026-10-13-3 네트워크 진짜 속도 (합계 live·adb제외 + uid행 60초)** — `docs/plans/PLAN_net_truespeed.md` · 사용자 실측 보고로 착수
   - **관측**: ① S22는 Router 테더가 아니라 Home AP에 붙어 있었음 (기기 간 비교 자체가 성립 안 했음) ·
     ② Router 카드 안 모순은 진짜 결함 — 합계 ↓6.4 (live) vs `uid -5` ↓250 (버킷 flush 뻥튀기, `rb` 동일 실측으로 확정) ·
@@ -108,6 +133,7 @@
     L10n **721키 en/ko 1:1** · U+FFFD 0건
 
 ## 진행 중 (bd ready)
+- **PR #57** `chore/macos-cjk-hook` — 한자 커밋 훅 + 육안 목록 문서화 (검토 대기)
 - **PR #57** `chore/macos-cjk-hook` — 한자 커밋 훅 + 육안 목록 문서화 (검토 대기)
 - **착수 준비** S3 Rules as Code — `docs/plans/PLAN_rules_yaml.md` (조사 완료 · 구현 착수 지점 명시)
 - bd 이슈: (0건 — 이번 작업은 TODO T-번호로 관리)

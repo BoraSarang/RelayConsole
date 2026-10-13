@@ -15,6 +15,9 @@ struct MenuBarPopoverView: View {
     var openLogs: () -> Void = {}
     var openAppNetwork: () -> Void = {}
     var openFiles: () -> Void = {}
+    /// 팝오버 자체를 닫는다 — NSHostingController+NSPopover 에서 SwiftUI `dismiss` 는 보장되지 않으므로
+    /// (StatusItemController 가 NSPopover.performClose 로 연결)
+    var onClose: () -> Void = {}
 
     @State private var showDeviceDetail = false
     @State private var showEvents = false
@@ -22,6 +25,8 @@ struct MenuBarPopoverView: View {
     /// 상단 감시 배너 TTL — 해제/충전 등 일회성 이벤트는 5분 후 자동 제거
     @State private var now = Date()
     @AppStorage("relay.menubarMetrics") private var menubarMetrics = true
+    @AppStorage("relay.menubarSpeed") private var menubarSpeed = true
+    @AppStorage("relay.menubarAll") private var menubarAll = true
     @AppStorage("relay.briefing.enabled") private var briefingEnabled = true
     /// 팝오버 카드 표시 모드 — 상세 리스트 ↔ 6타일 그리드 (기본 상세, 기존 UI 유지)
     @AppStorage("relay.popoverCardsMode") private var cardsMode = "list"
@@ -340,6 +345,20 @@ struct MenuBarPopoverView: View {
             openConsole()
         } label: {
             HStack(spacing: 8) {
+                // 메뉴바 열 범례 — 같은 순서의 열을 가리킴 (표시 중인 열만 번호)
+                if menubarSpeed,
+                   let n = BriefingLogic.menuColumnIndex(
+                       devices: devices, selectedSerial: store.selectedSerial,
+                       showAll: menubarAll, serial: d.serial) {
+                    Text(L10n.format("menubar.column", n))
+                        .font(OPFont.number(9))
+                        .foregroundStyle(OPColor.inkDim)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 1)
+                        .background(
+                            RoundedRectangle(cornerRadius: 4).fill(OPColor.card)
+                        )
+                }
                 StatusDot(state: d.isOnline ? (isSelected ? .ok : .ok) : .bad)
                 Text(d.displayName)
                     .font(OPFont.body(12))
@@ -656,6 +675,9 @@ struct MenuBarPopoverView: View {
                 Spacer()
                 Button {
                     FloatingGraphController.shared.toggle()
+                    // 토글 자체는 팝오버를 닫지 못함 (dismissMenuBarPanels는 NSPanel만) —
+                    // 여기서 직접 닫아야 아이콘 하이라이트가 남지 않음
+                    onClose()
                 } label: {
                     Label(
                         L10n.string("float.toggle"),

@@ -75,4 +75,80 @@ enum BriefingLogic {
         }
         return active.count
     }
+
+    /// 지문당 미해소 **최대** 심각도 — clear가 지표를 지우고, enter가 켠다 (위와 동일 규칙).
+    /// 메뉴바 ambient 신호용: critical > warning > info. nil = 미해소 없음.
+    /// serial 지정 시 그 기기만 (열별 판정), nil이면 전 기기 (점 색 판정).
+    static func maxUnresolvedSeverity(
+        _ events: [WatchEvent],
+        serial: String? = nil
+    ) -> WatchSeverity? {
+        var active: [String: WatchSeverity] = [:]
+        for e in events.sorted(by: { $0.at < $1.at }) {
+            guard serial == nil || e.serial == serial else { continue }
+            if e.isClear {
+                active.removeValue(forKey: e.fingerprint)
+            } else if let prev = active[e.fingerprint] {
+                active[e.fingerprint] = max(prev, e.severity)
+            } else {
+                active[e.fingerprint] = e.severity
+            }
+        }
+        return active.values.max()
+    }
+
+    /// 메뉴바 표시 열 — 온라인만, serial 정렬, 최대 2열. 설정 off면 선택 기기만.
+    static func menuPickedColumns(
+        devices: [DeviceSnapshot],
+        selectedSerial: String?,
+        showAll: Bool
+    ) -> [DeviceSnapshot] {
+        let online = devices.filter(\.isOnline).sorted { $0.serial < $1.serial }
+        guard !online.isEmpty else { return [] }
+        if showAll { return Array(online.prefix(2)) }
+        if let sel = selectedSerial, let d = online.first(where: { $0.serial == sel }) {
+            return [d]
+        }
+        return Array(online.prefix(1))
+    }
+
+    /// 메뉴바 열별 셀 값 — `menuPickedColumns` 순서 그대로의 배열 (필드 단위 렌더용).
+    /// nil = 그릴 것 없음 (아이콘만).
+    ///
+    /// ## 왜 문자열을 합치지 않는가 (B안, 2026-10-13)
+    /// 구 `menuSpeedLines` 는 한 줄 문자열로 합쳐 공백으로 열을 흉내 냈으나,
+    /// SF 폰트에서 공백·단위 글리프 pt 폭이 달라 열이 어긋났다 (A안 실측 폐기).
+    /// `RelayMenuBarView` 의 고정폭 `NSTextField` + 우측 정렬이 열을 못박으므로
+    /// 여기서 패딩·구분자를 넣지 않는다. 미측정은 "—" (0과 구분 [표시②]).
+    static func menuSpeedCells(
+        devices: [DeviceSnapshot],
+        selectedSerial: String?,
+        showAll: Bool
+    ) -> (up: [String], down: [String])? {
+        let picked = menuPickedColumns(
+            devices: devices, selectedSerial: selectedSerial, showAll: showAll
+        )
+        guard !picked.isEmpty else { return nil }
+        func cell(_ mbps: Double?) -> String {
+            mbps.map(AdbClient.menuRateAlways) ?? "—"
+        }
+        return (
+            up: picked.map { cell($0.netUpMBps) },
+            down: picked.map { cell($0.netDownMBps) }
+        )
+    }
+
+    /// 팝오버 범례용 열 번호 (1-based) — 메뉴바 열과 동일 순서. 표시 안 되면 nil.
+    static func menuColumnIndex(
+        devices: [DeviceSnapshot],
+        selectedSerial: String?,
+        showAll: Bool,
+        serial: String
+    ) -> Int? {
+        let picked = menuPickedColumns(
+            devices: devices, selectedSerial: selectedSerial, showAll: showAll
+        )
+        guard let i = picked.firstIndex(where: { $0.serial == serial }) else { return nil }
+        return i + 1
+    }
 }

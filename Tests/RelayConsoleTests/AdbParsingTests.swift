@@ -1029,6 +1029,18 @@ struct AdbParsingTests {
         #expect(AdbClient.formatBytes(150 * 1024 * 1024) == "150 MB")
     }
 
+    @Test func menuCompactMatchesDroidRelaySpec() {
+        // 단위 항상 표기 — 9pt에서 단위 없는 숫자·대시는 깨져 보임 (DroidRelay와 의도적 차이)
+        #expect(AdbClient.menuRateAlways(0) == "0K")
+        #expect(AdbClient.menuRateAlways(-1) == "0K")
+        #expect(AdbClient.menuRateAlways(124 / 1_048_576.0) == "124B")
+        #expect(AdbClient.menuRateAlways(438 / 1024.0) == "438K")
+        #expect(AdbClient.menuRateAlways(23 / 1024.0) == "23K")
+        #expect(AdbClient.menuRateAlways(1.2) == "1M")
+        #expect(AdbClient.menuRateAlways(150) == "150M")
+        #expect(AdbClient.menuRateAlways(2048) == "2G")
+    }
+
     @Test func inventoryMergePreservesSignalAndAppNet() {
         var inv = DeviceInventory()
         var a = DeviceSnapshot(serial: "SER2", model: "SM", isOnline: true)

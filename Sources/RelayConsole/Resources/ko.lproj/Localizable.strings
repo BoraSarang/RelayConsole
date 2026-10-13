@@ -289,6 +289,8 @@
 "files.transfer.cancel" = "전송 취소";
 "files.transfer.cancelled" = "전송을 취소했습니다";
 "float.close" = "닫기";
+"float.collapse" = "접기";
+"float.expand" = "펴기";
 "float.console" = "대시보드 열기";
 "float.empty" = "연결된 Android 기기가 없습니다";
 "float.limit" = "창은 최대 6개까지 열 수 있습니다";
@@ -387,6 +389,7 @@
 "kind.signalDrop" = "신호 급락";
 "kind.throttling" = "스로틀링";
 "menubar.alert.thermal" = "발열 주의 %@°C";
+"menubar.column" = "%d열";
 "menubar.alert.throttling" = "스로틀링";
 "menubar.battery.cycle" = "cycle %d";
 "menubar.button.debug" = "디버그";
@@ -525,6 +528,8 @@
 "settings.mcp.help" = "relay-mcp 실행 파일로 Claude 등 MCP 클라이언트에 읽기 전용 도구를 노출합니다 (stdio).";
 "settings.mcp.section" = "로컬 MCP";
 "settings.menubarMetrics" = "메뉴바 기기 수 표시";
+"settings.menubarSpeed" = "메뉴바 속도 표시";
+"settings.menubarAll" = "전 기기 표시 (끄면 선택 기기만)";
 "settings.notify.hint" = "이벤트 발생 시 지정한 채널로 HTTP 발송합니다. 토큰·웹훅은 기기에만 저장됩니다.";
 "settings.notify.minSeverity" = "최소 심각도";
 "settings.notify.ntfy" = "ntfy";

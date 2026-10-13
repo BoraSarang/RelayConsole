@@ -18,6 +18,8 @@ enum FloatingGraphLogic {
         var metric: Metric
         var serial: String
         var frame: String
+        /// 접힘 상태 — true면 헤더+핵심 숫자만 (위치 유지, 재기동에도 복원)
+        var collapsed: Bool = false
     }
 
     /// 동시에 띄울 수 있는 최대 창 수
@@ -108,6 +110,12 @@ enum FloatingGraphLogic {
     static func setFrame(id: UUID, frame: String, wins: inout [FloatWin]) {
         guard let i = indexOf(id: id, wins: wins) else { return }
         wins[i].frame = frame
+    }
+
+    /// 접기/펴기 토글 — id·frame 유지, 위치 보존
+    static func toggleCollapsed(id: UUID, wins: inout [FloatWin]) {
+        guard let i = indexOf(id: id, wins: wins) else { return }
+        wins[i].collapsed.toggle()
     }
 
     // MARK: - 위치
@@ -273,6 +281,19 @@ enum FloatingGraphLogic {
 
     static func storedOpacity(_ defaults: UserDefaults = .standard) -> Double {
         clampOpacity(defaults.object(forKey: opacityKey) as? Double ?? defaultOpacity)
+    }
+}
+
+/// 구버전 JSON(접기 키 없음) 하위호환 — collapsed 없으면 펼침.
+/// memberwise init 유지를 위해 extension에 둠 (구조체 본문에 init을 넣으면 memberwise가 사라져 호출부가 깨짐).
+extension FloatingGraphLogic.FloatWin {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        metric = try c.decode(FloatingGraphLogic.Metric.self, forKey: .metric)
+        serial = try c.decode(String.self, forKey: .serial)
+        frame = try c.decode(String.self, forKey: .frame)
+        collapsed = try c.decodeIfPresent(Bool.self, forKey: .collapsed) ?? false
     }
 }
 
@@ -508,6 +529,16 @@ final class FloatingGraphController: ObservableObject {
         syncPanels()
     }
 
+    /// 접기/펴기 — 위치 유지, 펼침 복원도 저장됨
+    func toggleCollapsed(id: UUID) {
+        var list = wins
+        FloatingGraphLogic.toggleCollapsed(id: id, wins: &list)
+        guard list != wins else { return }
+        wins = list
+        persistWins()
+        syncPanels()
+    }
+
     /// 세로 정렬 — wins 프레임 갱신 후 패널에 반영
     func arrange() {
         var list = wins
@@ -573,6 +604,7 @@ final class FloatingGraphController: ObservableObject {
             if let panel = panels[win.id] {
                 let contentChanged = hosted[win.id].map {
                     $0.metric != win.metric || $0.serial != win.serial
+                        || $0.collapsed != win.collapsed
                 } ?? true
                 if contentChanged {
                     // 지표/기기 전환 — 호스팅만 교체(위치·패널 유지)
@@ -696,8 +728,10 @@ final class FloatingGraphController: ObservableObject {
         hosting.view.layoutSubtreeIfNeeded()
         h = hosting.view.fittingSize.height
         guard h > 0, h.isFinite else { return }
-        // 한 창 = 한 카드 — 상한은 카드 1장 + 여유로 설정
-        h = min(max(h, 80), 560)
+        // 한 창 = 한 카드 — 상한은 카드 1장 + 여유로 설정.
+        // 접힘 상태는 헤더+핵심 숫자만이라 하한을 낮춤.
+        let collapsed = wins.first(where: { $0.id == id })?.collapsed == true
+        h = min(max(h, collapsed ? 40 : 80), 560)
         guard abs(h - panel.frame.height) > 0.5 else { return }
         let screenFrame = (panel.screen ?? NSScreen.main)?.visibleFrame ?? panel.frame
         var origin = panel.frame.origin
