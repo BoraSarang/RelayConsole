@@ -12,88 +12,138 @@ struct ScrcpyHeaderButton: View {
     @State private var showError = false
     @State private var tick = Date()
 
+    @ViewBuilder
     var body: some View {
-        Button(action: tap) {
-            HStack(spacing: 4) {
+        if compact {
+            // 플로팅 헤더용: 이웃 아이콘(macwindow/slider/half-circle/xmark)과 동일 규격.
+            // pill 배경(.background/.overlay)을 쓰면 불투명 사각형으로 떠서
+            // 창의 ultraThinMaterial + 투명도 조절이 안 먹어 보이는 문제.
+            Button(action: tap) {
                 if scrcpy.isInstalling {
                     ProgressView()
                         .controlSize(.mini)
-                        .padding(.trailing, 2)
+                        .frame(width: 22, height: 22)
                 } else {
                     Image(systemName: state == .running ? "rectangle.fill.on.rectangle.fill" : "rectangle.on.rectangle")
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(.system(size: 11))
+                        .foregroundStyle(foreground)
+                        .frame(width: 22, height: 22)
                 }
-                if !compact {
+            }
+            .buttonStyle(.plain)
+            .disabled(!serial.isEmpty && scrcpy.isInstalling)
+            .help(help)
+            .onAppear { scrcpy.refresh() }
+            .onReceive(ScrcpyController.shared.objectWillChange) { _ in
+                tick = Date()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .scrcpyInstalled)) { _ in
+                scrcpy.refresh()
+            }
+            .onChange(of: scrcpy.lastError) { _, err in
+                guard let err, !err.isEmpty,
+                      !scrcpy.isInstalling,
+                      !showInstall else { return }
+                showError = true
+            }
+            // borderless NSPanel(.nonactivating)에선 .sheet가 붙지 않음 — 팝오버로 통일
+            .popover(isPresented: $showInstall, arrowEdge: .bottom) {
+                ScrcpyInstallSheet(onDone: {
+                    showInstall = false
+                    scrcpy.refresh()
+                    if scrcpy.binaryPath != nil, !serial.isEmpty {
+                        scrcpy.launch(serial: serial)
+                    }
+                })
+            }
+            .popover(isPresented: $showError, arrowEdge: .bottom) {
+                errorPopover
+            }
+        } else {
+            Button(action: tap) {
+                HStack(spacing: 4) {
+                    if scrcpy.isInstalling {
+                        ProgressView()
+                            .controlSize(.mini)
+                            .padding(.trailing, 2)
+                    } else {
+                        Image(systemName: state == .running ? "rectangle.fill.on.rectangle.fill" : "rectangle.on.rectangle")
+                            .font(.system(size: 10, weight: .semibold))
+                    }
                     Text(label)
                         .font(OPFont.number(10))
                         .lineLimit(1)
                 }
+                .foregroundStyle(foreground)
+                .padding(.horizontal, 7)
+                .padding(.vertical, 4)
+                .background(background, in: RoundedRectangle(cornerRadius: 6))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6)
+                        .stroke(border, lineWidth: 1)
+                )
+                .contentShape(Rectangle())
             }
-            .foregroundStyle(foreground)
-            .padding(.horizontal, compact ? 5 : 7)
-            .padding(.vertical, 4)
-            .background(background, in: RoundedRectangle(cornerRadius: 6))
-            .overlay(
-                RoundedRectangle(cornerRadius: 6)
-                    .stroke(border, lineWidth: 1)
-            )
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .disabled(!serial.isEmpty && scrcpy.isInstalling)
-        .help(help)
-        .onAppear { scrcpy.refresh() }
-        .onReceive(ScrcpyController.shared.objectWillChange) { _ in
-            tick = Date()
-        }
-        // borderless NSPanel(.nonactivating)에선 .sheet가 붙지 않음 — 팝오버로 통일
-        .popover(isPresented: $showInstall, arrowEdge: .bottom) {
-            ScrcpyInstallSheet(onDone: {
-                showInstall = false
+            .buttonStyle(.plain)
+            .disabled(!serial.isEmpty && scrcpy.isInstalling)
+            .help(help)
+            .onAppear { scrcpy.refresh() }
+            .onReceive(ScrcpyController.shared.objectWillChange) { _ in
+                tick = Date()
+            }
+            // borderless NSPanel(.nonactivating)에선 .sheet가 붙지 않음 — 팝오버로 통일
+            .popover(isPresented: $showInstall, arrowEdge: .bottom) {
+                ScrcpyInstallSheet(onDone: {
+                    showInstall = false
+                    scrcpy.refresh()
+                    if scrcpy.binaryPath != nil, !serial.isEmpty {
+                        scrcpy.launch(serial: serial)
+                    }
+                })
+            }
+            .popover(isPresented: $showError, arrowEdge: .bottom) {
+                errorPopover
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .scrcpyInstalled)) { _ in
                 scrcpy.refresh()
-                if scrcpy.binaryPath != nil, !serial.isEmpty {
-                    scrcpy.launch(serial: serial)
-                }
-            })
-        }
-        .popover(isPresented: $showError, arrowEdge: .bottom) {
-            VStack(alignment: .leading, spacing: 10) {
-                Text(L10n.string("scrcpy.error.title"))
-                    .font(OPFont.body(12))
-                    .foregroundStyle(OPColor.ink)
-                Text(scrcpy.lastError ?? "")
-                    .font(OPFont.body(11))
-                    .foregroundStyle(OPColor.bad)
-                    .fixedSize(horizontal: false, vertical: true)
-                Button(L10n.string("scrcpy.error.dismiss")) {
-                    scrcpy.clearError()
-                    showError = false
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(OPColor.cta)
             }
-            .padding(14)
-            .frame(width: 260, alignment: .leading)
-            .background(OPColor.popBG)
-            .preferredColorScheme(ThemeManager.shared.mode.preferred)
-            .onDisappear { scrcpy.clearError() }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .scrcpyInstalled)) { _ in
-            scrcpy.refresh()
-        }
-        .onChange(of: scrcpy.isInstalling) { _, installing in
-            if !installing, scrcpy.binaryPath != nil, showInstall {
-                showInstall = false
-                if !serial.isEmpty { scrcpy.launch(serial: serial) }
+            .onChange(of: scrcpy.isInstalling) { _, installing in
+                if !installing, scrcpy.binaryPath != nil, showInstall {
+                    showInstall = false
+                    if !serial.isEmpty { scrcpy.launch(serial: serial) }
+                }
+            }
+            // launch/toggle 실패(미설치·프로세스 기동 실패) 시 오류를 그대로 방치하지 않음
+            .onChange(of: scrcpy.lastError) { _, err in
+                guard let err, !err.isEmpty,
+                      !scrcpy.isInstalling,
+                      !showInstall else { return }
+                showError = true
             }
         }
-        // launch/toggle 실패(미설치·프로세스 기동 실패) 시 오류를 그대로 방치하지 않음
-        .onChange(of: scrcpy.lastError) { _, err in
-            guard let err, !err.isEmpty,
-                  !scrcpy.isInstalling,
-                  !showInstall else { return }
-            showError = true
+    }
+
+    private var errorPopover: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(L10n.string("scrcpy.error.title"))
+                .font(OPFont.body(12))
+                .foregroundStyle(OPColor.ink)
+            Text(scrcpy.lastError ?? "")
+                .font(OPFont.body(11))
+                .foregroundStyle(OPColor.bad)
+                .fixedSize(horizontal: false, vertical: true)
+            Button(L10n.string("scrcpy.error.dismiss")) {
+                scrcpy.clearError()
+                showError = false
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(OPColor.cta)
         }
+        .padding(14)
+        .frame(width: 260, alignment: .leading)
+        .background(OPColor.popBG)
+        .preferredColorScheme(ThemeManager.shared.mode.preferred)
+        .onDisappear { scrcpy.clearError() }
     }
 
     private var state: ScrcpyButtonState {

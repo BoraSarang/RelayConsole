@@ -3,6 +3,15 @@
 > **육안 검증 대기는 `docs/MANUAL_VERIFY.md` 한 곳에 모았다** (2026-09-28) —
 > 여러 세션에 흩어져 있어 "남은 게 뭐였지" 를 한 번에 볼 수 없었다.
 
+## 완료 (2026-10-13)
+
+- [x] **T-2026-10-13-1 플로팅 미러링 아이콘 불투명** — 사용자 스크린샷 보고로 착수
+  - **원인**: `ScrcpyHeaderButton` compact 분기가 `OPColor.card`(alpha 1.0) pill 배경을 그대로 사용 —
+    플로팅창(`ultraThinMaterial` + 투명도 슬라이더) 위에서 검은 사각형으로 떠 보임. 이웃 헤더 아이콘 4종은 배경 없이 아이콘만이라 투명 정상
+  - **수정**: `Sources/RelayConsole/Views/ScrcpyControls.swift` — compact는 pill 배경/테두리 제거, 이웃과 동일 규격(22x22, size 11 아이콘만). 심볼 상태색 유지(ready=cta, running=ok, missing=warn). 일반(대시보드/팝오버) 버튼은 그대로
+  - **검증 [HARD]**: `swift test` **642 / 0 failed** · `./scripts/build-macos.sh debug` **EXIT=0** (서명 검증 통과 · 앱 재시작)
+  - **육안 대기** → `docs/MANUAL_VERIFY.md` 36번
+
 ## 완료 (2026-10-10 · 미커밋 — 리뷰 후 PR)
 
 - [x] **T-2026-10-10-1 Wi-Fi ADB 재부팅 루프 3종** — 실기+로그 실측 (IssueLog 17:53~18:21)
