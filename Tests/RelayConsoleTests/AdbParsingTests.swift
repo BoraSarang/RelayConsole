@@ -302,6 +302,88 @@ struct AdbParsingTests {
         let net = AdbClient.parseNetDev(sample)
         #expect(net.rxBytes == 12000)
         #expect(net.txBytes == 5000)
+        #expect(net.wifiRxBytes == 5000)
+        #expect(net.wifiTxBytes == 3000)
+        #expect(net.cellRxBytes == 7000)
+        #expect(net.cellTxBytes == 2000)
+    }
+
+    // MARK: - Network ipa 중복 제외 + 경로 그룹 (T-2026-10-13-6)
+
+    @Test func parseNetDevDropsIpaWhenDataBearersActive() {
+        // Router(.8) 실측 발췌 — ipa0와 data2가 같은 패킷 (10초 델타 +4.17MB vs +4.01MB)
+        let sample = """
+        Inter-|   Receive                                                |  Transmit
+         face |bytes    packets errs drop fifo frame compressed multicast|bytes    packets errs drop fifo colls carrier compressed
+        rmnet_ipa0: 41417947029  100    0    0    0     0          0         0 10917042837     50    0    0    0     0       0          0
+        rmnet_data2: 18251725249   80    0    0    0     0          0         0 1682041046     20    0    0    0     0       0          0
+        swlan0: 10925832144   60    0    0    0     0          0         0 76088061694     90    0    0    0     0       0          0
+             lo: 1000       10    0    0    0     0          0         0     1000      10    0    0    0     0       0          0
+        """
+        let net = AdbClient.parseNetDev(sample)
+        // 합계에서 ipa 제외 — data2 + swlan0만
+        #expect(net.rxBytes == 18251725249 + 10925832144)
+        #expect(net.txBytes == 1682041046 + 76088061694)
+        // 셀룰러 = data2만 (ipa 아님)
+        #expect(net.cellRxBytes == 18251725249)
+        #expect(net.cellTxBytes == 1682041046)
+        // Wi-Fi = swlan0
+        #expect(net.wifiRxBytes == 10925832144)
+        #expect(net.wifiTxBytes == 76088061694)
+    }
+
+    @Test func parseNetDevKeepsIpaWhenSoleCellularSource() {
+        // ipa 단독 기기 가드 — data bearer가 전무하면 ipa를 유지 (0으로 만들지 않음)
+        let sample = """
+        rmnet_ipa0: 5000       10    0    0    0     0          0         0     3000      15    0    0    0     0       0          0
+           swlan0: 7000       20    0    0    0     0          0         0     1000       5    0    0    0     0       0          0
+        """
+        let net = AdbClient.parseNetDev(sample)
+        #expect(net.rxBytes == 12000)
+        #expect(net.txBytes == 4000)
+        #expect(net.cellRxBytes == 5000)
+        #expect(net.cellTxBytes == 3000)
+    }
+
+    @Test func parseNetDevNoCellularMeansNilCell() {
+        // rmnet 자체가 없으면 cell은 nil (숨김 판정용 — 0과 구분)
+        let sample = """
+        wlan0: 5000       20    0    0    0     0          0         0     3000      15    0    0    0     0       0          0
+        """
+        let net = AdbClient.parseNetDev(sample)
+        #expect(net.cellRxBytes == nil)
+        #expect(net.cellTxBytes == nil)
+        #expect(net.wifiRxBytes == 5000)
+    }
+
+    @Test func netRatesTripleGroups() {
+        let a = AdbClient.NetSample(
+            rxBytes: 10 * 1024 * 1024, txBytes: 10 * 1024 * 1024,
+            cellRxBytes: 6 * 1024 * 1024, cellTxBytes: 6 * 1024 * 1024,
+            wifiRxBytes: 4 * 1024 * 1024, wifiTxBytes: 4 * 1024 * 1024)
+        let b = AdbClient.NetSample(
+            rxBytes: 13 * 1024 * 1024, txBytes: 14 * 1024 * 1024,
+            cellRxBytes: 8 * 1024 * 1024, cellTxBytes: 9 * 1024 * 1024,
+            wifiRxBytes: 5 * 1024 * 1024, wifiTxBytes: 5 * 1024 * 1024)
+        let r = AdbClient.netRatesMBps(prev: a, curr: b, seconds: 1)
+        #expect(r != nil)
+        #expect(abs(r!.down - 3.0) < 0.01)
+        #expect(abs(r!.up - 4.0) < 0.01)
+        #expect(abs((r!.cellDown ?? -1) - 2.0) < 0.01)
+        #expect(abs((r!.cellUp ?? -1) - 3.0) < 0.01)
+        #expect(abs((r!.wifiDown ?? -1) - 1.0) < 0.01)
+        #expect(abs((r!.wifiUp ?? -1) - 1.0) < 0.01)
+    }
+
+    @Test func netRatesGroupNilWhenUnmeasured() {
+        // 그룹 한쪽이라도 미측정이면 그 쌍은 nil (0을 지어내지 않음)
+        let a = AdbClient.NetSample(rxBytes: 1024 * 1024, txBytes: 1024 * 1024)
+        let b = AdbClient.NetSample(rxBytes: 2 * 1024 * 1024, txBytes: 2 * 1024 * 1024,
+                                    wifiRxBytes: 100, wifiTxBytes: 100)
+        let r = AdbClient.netRatesMBps(prev: a, curr: b, seconds: 1)
+        #expect(r != nil)
+        #expect(r!.cellDown == nil)
+        #expect(r!.wifiDown == nil) // prev에 wifi 없음 → nil
     }
 
     @Test func netRateFromDelta() {

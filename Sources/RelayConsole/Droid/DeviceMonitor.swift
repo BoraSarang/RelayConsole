@@ -45,6 +45,12 @@ actor DeviceMonitor {
         var cacheNetworkInfo: String?
         var cacheNetUp: Double?
         var cacheNetDown: Double?
+        /// 셀룰러 경로 속도 (외부 후보 ① — Router) — shell 제외 후
+        var cacheCellNetUp: Double?
+        var cacheCellNetDown: Double?
+        /// Wi-Fi 경로 속도 (외부 후보 ② — 테더 클라이언트) — shell 제외 후
+        var cacheWifiNetUp: Double?
+        var cacheWifiNetDown: Double?
         var cacheNetworkType: String?
         var cacheCPU: Double?
         var cacheAndroidVersion: String?
@@ -527,7 +533,7 @@ actor DeviceMonitor {
 
             if let netText = batch[.netdev] {
                 let curr = AdbClient.parseNetDev(netText)
-                var upDown: (up: Double, down: Double)?
+                var upDown: AdbClient.NetRates?
                 if let at = state.prevNetAt {
                     upDown = AdbClient.netRatesMBps(
                         prev: state.prevNet,
@@ -547,6 +553,22 @@ actor DeviceMonitor {
                     state.cacheNetUp = clean.up
                     state.cacheNetDown = clean.down
                     state.cacheNetworkInfo = AdbClient.formatNetRatePair(up: clean.up, down: clean.down)
+                    // 경로별도 같은 shell 기여분을 뺀다 (대칭 — 각 쌍이 독립적으로 정직).
+                    // shell이 타는 경로는 알 수 없으므로 양쪽에서 빼고 0 클램프 (과차감 방지).
+                    func cleanGroup(_ up: Double?, _ down: Double?) -> (Double?, Double?) {
+                        guard let up, let down else { return (nil, nil) }
+                        let c = AdbClient.excludeShell(
+                            up: up, down: down,
+                            shellUp: state.cacheShellUp, shellDown: state.cacheShellDown
+                        )
+                        return (c.up, c.down)
+                    }
+                    let cleanCell = cleanGroup(r.cellUp, r.cellDown)
+                    state.cacheCellNetUp = cleanCell.0
+                    state.cacheCellNetDown = cleanCell.1
+                    let cleanWifi = cleanGroup(r.wifiUp, r.wifiDown)
+                    state.cacheWifiNetUp = cleanWifi.0
+                    state.cacheWifiNetDown = cleanWifi.1
                 }
             }
 
@@ -756,6 +778,10 @@ actor DeviceMonitor {
         snap.networkInfo = snap.networkInfo ?? state.cacheNetworkInfo
         snap.netUpMBps = snap.netUpMBps ?? state.cacheNetUp
         snap.netDownMBps = snap.netDownMBps ?? state.cacheNetDown
+        snap.netCellUpMBps = snap.netCellUpMBps ?? state.cacheCellNetUp
+        snap.netCellDownMBps = snap.netCellDownMBps ?? state.cacheCellNetDown
+        snap.netWifiUpMBps = snap.netWifiUpMBps ?? state.cacheWifiNetUp
+        snap.netWifiDownMBps = snap.netWifiDownMBps ?? state.cacheWifiNetDown
         snap.networkType = snap.networkType ?? state.cacheNetworkType
         snap.androidVersion = snap.androidVersion ?? state.cacheAndroidVersion
         snap.sdkInt = snap.sdkInt ?? state.cacheSDK

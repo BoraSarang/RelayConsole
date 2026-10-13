@@ -453,6 +453,21 @@ enum DroidCards {
             }
             // 접힘 상태는 업·다운 숫자까지만 — 행·설명·그래프·더보기는 펼쳤을 때
             if !headlineOnly {
+                // 외부(인터넷) 경로 — 활성 기본 경로 기준 (Router=셀룰러, 테더=Wi-Fi).
+                // 해석 불가면 행 없음 ([표시②] — 0을 지어내지 않음)
+                if let device, let ext = BriefingLogic.externalNetRates(device) {
+                    HStack(spacing: 6) {
+                        Text(L10n.string("droid.card.network.external"))
+                            .font(OPFont.number(10))
+                            .foregroundStyle(OPColor.ink.opacity(0.75))
+                        Spacer(minLength: 0)
+                        Text(AdbClient.formatNetRatePair(up: ext.up, down: ext.down))
+                            .font(OPFont.number(10))
+                            .foregroundStyle(OPColor.inkDim)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.85)
+                    }
+                }
                 if let sub = networkSubline(device) {
                     Text(sub)
                         .font(OPFont.number(11))

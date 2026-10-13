@@ -142,6 +142,7 @@
 "droid.card.memory.pressure" = "Pressure %@";
 "droid.card.memory.title" = "MEMORY";
 "droid.card.network.down" = "Down";
+"droid.card.network.external" = "External";
 "droid.card.network.note" = "Live totals · excl. adb · per-app 60-sec avg";
 "droid.card.network.title" = "NETWORK";
 "droid.card.network.up" = "Up";
