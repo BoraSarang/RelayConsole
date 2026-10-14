@@ -24,6 +24,8 @@ struct MenuBarPopoverView: View {
     @State private var showQuitConfirm = false
     /// 상단 감시 배너 TTL — 해제/충전 등 일회성 이벤트는 5분 후 자동 제거
     @State private var now = Date()
+    /// 15초 tick 게이트 — 닫힌 뒤 tick 무시 (호스팅 1회 유지 대응)
+    @State private var timerActive = false
     @AppStorage("relay.menubarMetrics") private var menubarMetrics = true
     @AppStorage("relay.briefing.enabled") private var briefingEnabled = true
     /// 팝오버 카드 표시 모드 — 상세 리스트 ↔ 6타일 그리드 (기본 상세, 기존 UI 유지)
@@ -103,6 +105,7 @@ struct MenuBarPopoverView: View {
         .onAppear {
             // LSUIElement — 팝오버 열림 시 앱 활성화 누락 → 다른 창이 뒤로 내려감
             WindowFocus.menuBarPopoverDidOpen()
+            timerActive = true
             // 기기가 하나면 기기 상세/카드 자동 펼침
             if devices.count == 1 {
                 showDeviceDetail = true
@@ -114,9 +117,12 @@ struct MenuBarPopoverView: View {
             }
         }
         .onDisappear {
+            timerActive = false
             WindowFocus.menuBarPopoverDidClose()
         }
         .onReceive(Timer.publish(every: 15, on: .main, in: .common).autoconnect()) { t in
+            // 호스팅 1회 유지라 닫힌 뒤도 tick이 온다 — body 재평가(makeBriefing 정렬) 차단
+            guard timerActive else { return }
             now = t
         }
     }

@@ -724,14 +724,12 @@ final class FloatingGraphController: ObservableObject {
         guard !isDragging, let panel = panels[id], panel.isVisible,
               let hosting = panel.contentViewController else { return }
         hosting.view.layoutSubtreeIfNeeded()
-        var h = hosting.view.fittingSize.height
-        hosting.view.layoutSubtreeIfNeeded()
-        h = hosting.view.fittingSize.height
-        guard h > 0, h.isFinite else { return }
+        let measured = hosting.view.fittingSize.height
+        guard measured > 0, measured.isFinite else { return }
         // 한 창 = 한 카드 — 상한은 카드 1장 + 여유로 설정.
         // 접힘 상태는 헤더+핵심 숫자만이라 하한을 낮춤.
         let collapsed = wins.first(where: { $0.id == id })?.collapsed == true
-        h = min(max(h, collapsed ? 40 : 80), 560)
+        let h = min(max(measured, collapsed ? 40 : 80), 560)
         guard abs(h - panel.frame.height) > 0.5 else { return }
         let screenFrame = (panel.screen ?? NSScreen.main)?.visibleFrame ?? panel.frame
         var origin = panel.frame.origin
