@@ -113,12 +113,14 @@ struct RelayConsoleApp: App {
             }
         }
 
+#if DEBUG
         debugScenes
+#endif
     }
 
+#if DEBUG
     @SceneBuilder
     private var debugScenes: some Scene {
-#if DEBUG
         Window(L10n.string("ui.debug.title"), id: "debug") {
             DebugPanelView()
                 .frame(minWidth: 560, minHeight: 400)
@@ -132,10 +134,8 @@ struct RelayConsoleApp: App {
                     .keyboardShortcut("d", modifiers: [.command, .shift])
             }
         }
-#else
-        EmptyScene()
-#endif
     }
+#endif
 
     private func openConsole() {
         ConsoleLaunchGate.userOpened = true
@@ -197,16 +197,5 @@ struct RelayConsoleApp: App {
         }
         openWindow(id: "files")
         WindowFocus.present(sceneID: "files")
-    }
-}
-
-struct EmptyScene: Scene {
-    var body: some Scene {
-        WindowGroup {
-            EmptyView()
-        }
-        .windowStyle(.hiddenTitleBar)
-        .defaultSize(width: 1, height: 1)
-        .windowResizability(.contentMinSize)
     }
 }

@@ -60,6 +60,11 @@ struct FileBrowserContent: View {
         .onChange(of: ctl.path) {
             selection = []
         }
+        .onDisappear {
+            // 창이 닫히면 삭제 확인 상태를 버린다 — 싱글턴에 남으면 재오픈 시
+            // 다이얼로그가 부활한다. 진행 중 전송은 일부러 두둔다 (Finder식 백그라운드 완료).
+            ctl.cancelDelete()
+        }
         .confirmationDialog(
             L10n.format("files.delete.title", ctl.pendingDelete?.count ?? 0),
             isPresented: Binding(
