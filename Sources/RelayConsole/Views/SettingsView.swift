@@ -185,12 +185,12 @@ struct SettingsView: View {
             Toggle(L10n.string("settings.launch.headless"), isOn: $headless)
             Text(L10n.string("settings.launch.headless.help"))
                 .font(OPFont.body(10))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(OPColor.inkDim)
                 .lineLimit(2)
             Toggle(L10n.string("settings.launch.console"), isOn: $consoleAtLaunch)
             Text(L10n.string("settings.launch.console.help"))
                 .font(OPFont.body(10))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(OPColor.inkDim)
                 .lineLimit(2)
             if let key = login.messageKey {
                 Text(loginMessage(key))
@@ -201,7 +201,7 @@ struct SettingsView: View {
             } else {
                 Text(L10n.string(login.statusKey))
                     .font(OPFont.body(11))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(OPColor.inkDim)
                     .lineLimit(2)
             }
         }
@@ -230,7 +230,7 @@ struct SettingsView: View {
             Toggle(L10n.string("settings.float.summary"), isOn: metricBinding(.summary))
             Text(L10n.string("float.limit"))
                 .font(OPFont.body(10))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(OPColor.inkDim)
                 .lineLimit(2)
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
@@ -238,7 +238,7 @@ struct SettingsView: View {
                     Spacer()
                     Text("\(Int(FloatingGraphLogic.clampOpacity(floatOpacity) * 100))%")
                         .font(OPFont.number(11))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(OPColor.inkDim)
                         .monospacedDigit()
                 }
                 Slider(value: $floatOpacity, in: FloatingGraphLogic.minOpacity...FloatingGraphLogic.maxOpacity)
@@ -248,7 +248,7 @@ struct SettingsView: View {
             }
             Text(L10n.string("settings.float.hint"))
                 .font(OPFont.body(10))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(OPColor.inkDim)
                 .lineLimit(2)
         }
     }
@@ -289,7 +289,7 @@ struct SettingsView: View {
                 Toggle(L10n.string("settings.incident.auto"), isOn: $store.incidentAuto)
                 Text(L10n.string("settings.incident.auto.help"))
                     .font(OPFont.body(10))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(OPColor.inkDim)
                     .lineLimit(2)
             }
         }
@@ -434,7 +434,7 @@ struct SettingsView: View {
             }
             Text(L10n.string("settings.notify.hint"))
                 .font(OPFont.body(10))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(OPColor.inkDim)
                 .lineLimit(2)
         }
     }
@@ -447,7 +447,7 @@ struct SettingsView: View {
                 : L10n.string("settings.apple.toolsMissing"))
             Text(L10n.string("apple.tools.policy"))
                 .font(OPFont.body(11))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(OPColor.inkDim)
                 .lineLimit(2)
         }
     }
@@ -464,7 +464,7 @@ struct SettingsView: View {
         Section(L10n.string("settings.section.droid")) {
             Text(L10n.string("settings.keyPrefix"))
                 .font(OPFont.body(12))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(OPColor.inkDim)
                 .lineLimit(1)
                 .truncationMode(.tail)
         }
@@ -488,7 +488,7 @@ struct SettingsView: View {
                         .foregroundStyle(OPColor.inkDim)
                     Text("com.borasarang.relayconsole")
                         .font(OPFont.number(10))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(OPColor.inkDim)
                 }
                 Spacer(minLength: 0)
             }
@@ -502,7 +502,7 @@ struct SettingsView: View {
         Section(L10n.string("settings.mcp.section")) {
             Text(L10n.string("settings.mcp.help"))
                 .font(OPFont.body(11))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(OPColor.inkDim)
                 .lineLimit(3)
             Text(L10n.string("settings.mcp.command"))
                 .font(OPFont.number(11))

@@ -199,6 +199,7 @@ struct FloatingGraphView: View {
             }
             .buttonStyle(.plain)
             .help(L10n.string(win.collapsed ? "float.expand" : "float.collapse"))
+            .accessibilityLabel(L10n.string(win.collapsed ? "float.expand" : "float.collapse"))
             Circle()
                 .fill(device?.isOnline == true ? OPColor.ok : OPColor.inkDim)
                 .frame(width: 7, height: 7)
@@ -243,6 +244,7 @@ struct FloatingGraphView: View {
                 }
                 .buttonStyle(.plain)
                 .help(L10n.string("float.console"))
+                .accessibilityLabel(L10n.string("float.console"))
 
                 // 창 추가 · 지표 전환 · 정렬 — Menu 안 Slider는 macOS에서 깨짐(투명도는 전용 팝오버)
                 Menu {
@@ -292,6 +294,7 @@ struct FloatingGraphView: View {
                 .fixedSize()
                 .frame(width: 22, height: 22)
                 .help(L10n.string("float.menu.help"))
+                .accessibilityLabel(L10n.string("float.menu.help"))
 
                 Button {
                     showOpacityPopover = true
@@ -303,6 +306,7 @@ struct FloatingGraphView: View {
                 }
                 .buttonStyle(.plain)
                 .help(L10n.string("float.opacity.help"))
+                .accessibilityLabel(L10n.string("float.opacity.help"))
                 .popover(isPresented: $showOpacityPopover, arrowEdge: .bottom) {
                     VStack(alignment: .leading, spacing: 8) {
                         Text(L10n.string("float.opacity"))
@@ -334,6 +338,7 @@ struct FloatingGraphView: View {
                 }
                 .buttonStyle(.plain)
                 .help(L10n.string("float.close"))
+                .accessibilityLabel(L10n.string("float.close"))
             }
             .fixedSize()
             .opacity(isHovering ? 1 : 0)
