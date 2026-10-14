@@ -62,10 +62,17 @@ final class StatusItemController: NSObject {
 
         // 갱신 트리거 — 팝오버와 무관하게 메뉴바를 갱신한다 (DroidRelay 교훈:
         // 갱신을 팝오버에 묶으면 앱 시작 시점에 `—` 로 고착된다).
-        ConsoleStore.shared.objectWillChange
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in self?.update() }
-            .store(in: &cancellables)
+        // `objectWillChange` 전량이 아니라 메뉴바가 읽는 3개만 구독 + debounce —
+        // 57개 @Published 중 무관한 변경(선택·카드 토글 등)이 메뉴바 레이아웃을 때리던 것을 차단.
+        Publishers.Merge(
+            ConsoleStore.shared.$inventory.map { _ in () },
+            ConsoleStore.shared.$selectedSerial.map { _ in () }
+        )
+        .merge(with: ConsoleStore.shared.$recentWatchEvents.map { _ in () })
+        .receive(on: DispatchQueue.main)
+        .debounce(for: .milliseconds(300), scheduler: DispatchQueue.main)
+        .sink { [weak self] _ in self?.update() }
+        .store(in: &cancellables)
         // 설정 토글(`relay.menubarSpeed/All`) — AppStorage 은 UserDefaults 에 기록
         NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)
             .receive(on: DispatchQueue.main)
@@ -101,6 +108,9 @@ final class StatusItemController: NSObject {
 
     // MARK: - 갱신
 
+    /// 마지막 적용 서명 — 같은 값이면 apply(레이아웃) 생략
+    private var lastMenuSig = ""
+
     func update() {
         guard let v = speedView else { return }
         let store = ConsoleStore.shared
@@ -120,6 +130,10 @@ final class StatusItemController: NSObject {
         case .warning: dot = NSColor(OPColor.warn)
         default: dot = nil
         }
+        let online = store.inventory.devices.contains { $0.isOnline }
+        let sig = "\(cells?.up ?? [])|\(cells?.down ?? [])|\(severity)|\(speedOn)|\(online)"
+        guard sig != lastMenuSig else { return }
+        lastMenuSig = sig
         v.apply(
             icon: statusIcon,
             dotColor: dot,

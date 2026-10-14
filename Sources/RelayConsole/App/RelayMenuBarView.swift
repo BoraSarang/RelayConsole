@@ -48,11 +48,12 @@ final class RelayMenuBarView: NSView {
     private static let gap: CGFloat = 2
     private static let dotSize: CGFloat = 7
 
-    /// 열 폭을 정하는 샘플 — **값과 무관하게 고정.** `menuRateAlways` 상한 5자(`1023M`).
-    private static let widthSample = "1023M"
-    private static var colWidth: CGFloat {
-        ceil(NSString(string: widthSample).size(withAttributes: [.font: valueFont]).width) + 2
-    }
+    /// 열 폭을 정하는 샘플(`1023M` = `menuRateAlways` 상한 5자) — **값과 무관하게 고정.**
+    /// layout()마다 재측정 금지 — 폰트 고정이라 상수다.
+    private static let colWidth: CGFloat = {
+        let w = NSString(string: "1023M").size(withAttributes: [.font: valueFont]).width
+        return ceil(w) + 2
+    }()
 
     // MARK: - 초기화
 
