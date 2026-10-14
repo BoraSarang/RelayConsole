@@ -151,18 +151,9 @@ final class StatusItemController: NSObject {
         p.behavior = .transient          // 바깥 클릭 시 닫힘
         p.animates = true
         p.contentSize = NSSize(width: 360, height: 560)
-        popover = p
-        return p
-    }
-
-    private func togglePopover() {
-        let p = ensurePopover()
-        if p.isShown {
-            p.performClose(nil)
-            return
-        }
-        // **매 열기마다 rootView 를 새로 만든다** — 테마(ThemeManager) 최신 반영 +
-        // SwiftUI @State 리셋(기기 1대면 자동 펼침 등 onAppear 동작이 매번 일어난다).
+        // 호스팅은 1회만 만든다 — 매 열기마다 교체하면 닫힌 뒤에도 이전
+        // NSHostingController 가 해제되지 않고 쌓인다 (DroidRelay 동일식).
+        // 내용은 공유 싱글턴(ConsoleStore 등)이므로 재생성 없이도 최신이다.
         p.contentViewController = NSHostingController(
             rootView: MenuBarPopoverView(
                 store: ConsoleStore.shared,
@@ -176,6 +167,16 @@ final class StatusItemController: NSObject {
                 onClose: { [weak self] in self?.popover?.performClose(nil) }
             )
         )
+        popover = p
+        return p
+    }
+
+    private func togglePopover() {
+        let p = ensurePopover()
+        if p.isShown {
+            p.performClose(nil)
+            return
+        }
         guard let v = speedView else { return }
         p.show(relativeTo: v.bounds, of: v, preferredEdge: .minY)
         // 팝오버 안 컨트롤이 키보드를 받을 수 있게 활성화 (LSUIElement)
