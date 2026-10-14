@@ -530,7 +530,8 @@ struct FileBrowserContent: View {
         return s
     }
 
-    private func fileIcon(_ item: FileBrowserLogic.Item) -> String {        switch (item.name as NSString).pathExtension.lowercased() {
+    private func fileIcon(_ item: FileBrowserLogic.Item) -> String {
+        switch (item.name as NSString).pathExtension.lowercased() {
         case "jpg", "jpeg", "png", "gif", "heic", "webp": return "photo.fill"
         case "mp4", "mkv", "mov", "avi": return "film.fill"
         case "mp3", "wav", "flac", "m4a": return "music.note"
