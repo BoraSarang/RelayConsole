@@ -18,6 +18,8 @@ struct DebugPanelView: View {
             Divider().overlay(OPColor.border)
 
                 // 합성 감시 이벤트 주입 — DoD 육안 검증 (release 미사용)
+                // 주입 대상 store 메서드가 #if DEBUG 라 섹션째로 게이트 (release 컴파일 보장)
+                #if DEBUG
                 VStack(alignment: .leading, spacing: OPSpace.sm) {
                     Text(L10n.string("ui.debug.inject.title"))
                         .font(OPFont.body(12))
@@ -218,6 +220,7 @@ struct DebugPanelView: View {
                 }
                 .padding(OPSpace.md)
                 Divider().overlay(OPColor.border)
+                #endif
 
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 2) {
