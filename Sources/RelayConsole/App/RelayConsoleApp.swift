@@ -137,65 +137,63 @@ struct RelayConsoleApp: App {
     }
 #endif
 
-    private func openConsole() {
-        ConsoleLaunchGate.userOpened = true
+    /// 창 열기 공통 — 팝오버 정상 close → 활성화 → 메뉴 패널 정리 → open → 전면화.
+    /// 7개 open*의 반복 패턴을 한 곳으로 묶는다 (호출 순서·동작 동일 유지).
+    private func openScene(setup: () -> Void, present: () -> Void) {
         StatusItemController.shared.closePopover()
         NSApp.activate(ignoringOtherApps: true)
         WindowFocus.dismissMenuBarPanels()
-        openWindow(id: "console")
-        WindowFocus.present(sceneID: "console")
+        setup()
+        present()
+    }
+
+    private func openConsole() {
+        ConsoleLaunchGate.userOpened = true
+        openScene(setup: { openWindow(id: "console") }) {
+            WindowFocus.present(sceneID: "console")
+        }
     }
 
     private func openDebug() {
 #if DEBUG
-        StatusItemController.shared.closePopover()
-        NSApp.activate(ignoringOtherApps: true)
-        WindowFocus.dismissMenuBarPanels()
-        openWindow(id: "debug")
-        WindowFocus.present(sceneID: "debug")
+        openScene(setup: { openWindow(id: "debug") }) {
+            WindowFocus.present(sceneID: "debug")
+        }
 #endif
     }
 
     private func openSettingsWindow() {
-        StatusItemController.shared.closePopover()
-        NSApp.activate(ignoringOtherApps: true)
-        WindowFocus.dismissMenuBarPanels()
-        openSettings()
-        WindowFocus.presentSettings()
+        openScene(setup: { openSettings() }) {
+            WindowFocus.presentSettings()
+        }
     }
 
     private func openProcesses() {
-        StatusItemController.shared.closePopover()
-        NSApp.activate(ignoringOtherApps: true)
-        WindowFocus.dismissMenuBarPanels()
-        openWindow(id: "processes")
-        WindowFocus.present(sceneID: "processes")
+        openScene(setup: { openWindow(id: "processes") }) {
+            WindowFocus.present(sceneID: "processes")
+        }
     }
 
     private func openLogs() {
-        StatusItemController.shared.closePopover()
-        NSApp.activate(ignoringOtherApps: true)
-        WindowFocus.dismissMenuBarPanels()
-        openWindow(id: "logs")
-        WindowFocus.present(sceneID: "logs")
+        openScene(setup: { openWindow(id: "logs") }) {
+            WindowFocus.present(sceneID: "logs")
+        }
     }
 
     private func openAppNetwork() {
-        StatusItemController.shared.closePopover()
-        NSApp.activate(ignoringOtherApps: true)
-        WindowFocus.dismissMenuBarPanels()
-        openWindow(id: "appnetwork")
-        WindowFocus.present(sceneID: "appnetwork")
+        openScene(setup: { openWindow(id: "appnetwork") }) {
+            WindowFocus.present(sceneID: "appnetwork")
+        }
     }
 
     private func openFiles() {
-        StatusItemController.shared.closePopover()
-        NSApp.activate(ignoringOtherApps: true)
-        WindowFocus.dismissMenuBarPanels()
-        if let serial = store.selectedSerial {
-            FileBrowserController.shared.open(serial: serial)
+        openScene(setup: {
+            if let serial = store.selectedSerial {
+                FileBrowserController.shared.open(serial: serial)
+            }
+            openWindow(id: "files")
+        }) {
+            WindowFocus.present(sceneID: "files")
         }
-        openWindow(id: "files")
-        WindowFocus.present(sceneID: "files")
     }
 }

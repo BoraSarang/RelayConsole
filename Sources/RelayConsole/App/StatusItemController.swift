@@ -100,7 +100,9 @@ final class StatusItemController: NSObject {
     }
 
     /// 팝오버에서 다른 창을 열 때 — 팝오버를 먼저 정상 close한 뒤 액션 실행.
-    /// footer/deviceRow/배너의 `open*`가 전부 이 경로를 탄다.
+    /// footer의 `open*`가 전부 이 경로를 탄다. 액션(`RelayConsoleApp.open*`)도
+    /// 진입 시 closePopover를 호출하므로 이중 close가 되지만, 닫힌 팝오버에 대한
+    /// close()는 no-op이라 무해하다 (방어 중복).
     private func dismissAndOpen(_ action: (Actions) -> Void) {
         popover?.close()
         action(actions)
