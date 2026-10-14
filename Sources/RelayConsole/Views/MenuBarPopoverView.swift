@@ -25,8 +25,6 @@ struct MenuBarPopoverView: View {
     /// 상단 감시 배너 TTL — 해제/충전 등 일회성 이벤트는 5분 후 자동 제거
     @State private var now = Date()
     @AppStorage("relay.menubarMetrics") private var menubarMetrics = true
-    @AppStorage("relay.menubarSpeed") private var menubarSpeed = true
-    @AppStorage("relay.menubarAll") private var menubarAll = true
     @AppStorage("relay.briefing.enabled") private var briefingEnabled = true
     /// 팝오버 카드 표시 모드 — 상세 리스트 ↔ 6타일 그리드 (기본 상세, 기존 UI 유지)
     @AppStorage("relay.popoverCardsMode") private var cardsMode = "list"
@@ -159,12 +157,8 @@ struct MenuBarPopoverView: View {
 
             HStack(spacing: 8) {
                 if let d = device {
-                    // 기기 이름 (deviceName > model)
-                    Text(d.displayName)
-                        .font(OPFont.body(12))
-                        .foregroundStyle(OPColor.ink)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
+                    // 기기 선택 — 플로팅/파일 탐색기와 같은 Menu (하단 목록 대신 헤더에서 전환)
+                    devicePicker(d)
                     // 연결 종류: USB | IP:5555
                     connectionBadge(d)
                     autoWifiFailBadge(for: d)
@@ -189,9 +183,8 @@ struct MenuBarPopoverView: View {
                             .background(OPColor.card, in: RoundedRectangle(cornerRadius: 6))
                     }
                     .buttonStyle(.plain)
-                    .help(multiDevice
-                        ? L10n.string("menubar.device.list")
-                        : L10n.string("menubar.device.detail"))
+                    .help(L10n.string("menubar.device.detail"))
+                    .accessibilityLabel(L10n.string("menubar.device.detail"))
                 }
             }
 
@@ -283,29 +276,54 @@ struct MenuBarPopoverView: View {
 
     // MARK: - Device list / detail expand
 
-    /// 헤더 ⌄ 펼침 — 다중: 기기 목록 / 단일: 상세 3줄
-    private var deviceExpandSection: some View {
+    /// 헤더 기기 선택 — 다중일 때만 Menu, 단일이면 고정 텍스트 (플로팅과 동일 문법)
+    /// 하단 목록 섹션을 없애고 헤더에서 전환 (공간 절약 + 알림 아래 문제 해소)
+    private func devicePicker(_ d: DeviceSnapshot) -> some View {
         Group {
             if multiDevice {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(L10n.string("menubar.device.list"))
-                        .font(OPFont.body(10))
-                        .foregroundStyle(OPColor.inkDim)
-                    ForEach(devices, id: \.serial) { d in
-                        deviceRow(d)
+                Menu {
+                    ForEach(devices, id: \.serial) { c in
+                        Button {
+                            store.select(c.serial)
+                        } label: {
+                            if c.serial == store.selectedSerial {
+                                Label(c.pickerLabel, systemImage: "checkmark")
+                            } else {
+                                Label(c.pickerLabel, systemImage: c.isOnline ? "iphone" : "iphone.slash")
+                            }
+                        }
+                        .disabled(c.serial == store.selectedSerial)
                     }
+                } label: {
+                    HStack(spacing: 3) {
+                        Text(d.displayName)
+                            .font(OPFont.body(12))
+                            .foregroundStyle(OPColor.ink)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 8, weight: .semibold))
+                            .foregroundStyle(OPColor.inkDim)
+                    }
+                    .contentShape(Rectangle())
                 }
-                .padding(OPSpace.md)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(OPColor.card)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(OPColor.border, lineWidth: 1)
-                )
-            } else if let d = device {
+                .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
+                .help(L10n.string("droid.header.picker"))
+            } else {
+                Text(d.displayName)
+                    .font(OPFont.body(12))
+                    .foregroundStyle(OPColor.ink)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
+        }
+    }
+
+    /// 헤더 ⌄ 펼침 — 단일 기기 상세 3줄 (다중 목록은 헤더 Menu로 이동)
+    private var deviceExpandSection: some View {
+        Group {
+            if let d = device, !multiDevice {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(L10n.string("menubar.device.detail"))
                         .font(OPFont.body(10))
@@ -335,65 +353,6 @@ struct MenuBarPopoverView: View {
                 )
             }
         }
-    }
-
-    /// 기기 행 클릭 → 선택만 변경 (대시보드는 열지 않음)
-    private func deviceRow(_ d: DeviceSnapshot) -> some View {
-        let isSelected = d.serial == store.selectedSerial
-        return Button {
-            store.select(d.serial)
-        } label: {
-            HStack(spacing: 8) {
-                // 메뉴바 열 범례 — 같은 순서의 열을 가리킴 (표시 중인 열만 번호)
-                if menubarSpeed,
-                   let n = BriefingLogic.menuColumnIndex(
-                       devices: devices, selectedSerial: store.selectedSerial,
-                       showAll: menubarAll, serial: d.serial) {
-                    Text(L10n.format("menubar.column", n))
-                        .font(OPFont.number(9))
-                        .foregroundStyle(OPColor.inkDim)
-                        .padding(.horizontal, 5)
-                        .padding(.vertical, 1)
-                        .background(
-                            RoundedRectangle(cornerRadius: 4).fill(OPColor.card)
-                        )
-                }
-                StatusDot(state: d.isOnline ? (isSelected ? .ok : .ok) : .bad)
-                Text(d.displayName)
-                    .font(OPFont.body(12))
-                    .foregroundStyle(OPColor.ink)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                Text(d.connectionLabel ?? L10n.na)
-                    .font(OPFont.number(9))
-                    .foregroundStyle(OPColor.inkDim)
-                    .lineLimit(1)
-                Spacer(minLength: 4)
-                if let level = d.batteryLevel {
-                    Text("\(level)%")
-                        .font(OPFont.number(11))
-                        .foregroundStyle(OPColor.inkDim)
-                }
-                if let t = d.deviceTempC ?? d.batteryTempC {
-                    Text(String(format: "%.0f°", t))
-                        .font(OPFont.number(11))
-                        .foregroundStyle(OPColor.thermal)
-                }
-                if isSelected {
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 9, weight: .bold))
-                        .foregroundStyle(OPColor.cta)
-                }
-            }
-            .padding(.vertical, 4)
-            .padding(.horizontal, 6)
-            .background(
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(isSelected ? OPColor.cta.opacity(0.12) : Color.clear)
-            )
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
     }
 
     private func adbValue(_ d: DeviceSnapshot) -> String {
@@ -985,6 +944,7 @@ struct MenuBarPopoverView: View {
             }
             .buttonStyle(.plain)
             .help(L10n.string("menubar.button.quit"))
+            .accessibilityLabel(L10n.string("menubar.button.quit"))
             .alert(
                 L10n.string("menubar.quit.title"),
                 isPresented: $showQuitConfirm
@@ -1018,5 +978,6 @@ struct MenuBarPopoverView: View {
         }
         .buttonStyle(.plain)
         .help(help)
+        .accessibilityLabel(help)
     }
 }

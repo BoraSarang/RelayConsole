@@ -149,6 +149,7 @@ struct FileBrowserContent: View {
             }
             .buttonStyle(.plain)
             .help(L10n.string("files.action.delete"))
+            .accessibilityLabel(L10n.string("files.action.delete"))
             .disabled(selection.isEmpty || ctl.busy || ctl.loading)
         }
         .padding(.horizontal, OPSpace.md)
@@ -280,6 +281,7 @@ struct FileBrowserContent: View {
         }
         .buttonStyle(.plain)
         .help(help)
+        .accessibilityLabel(help)
         .disabled(disabled)
     }
 
@@ -575,6 +577,7 @@ struct FileBrowserContent: View {
                 }
                 .buttonStyle(.plain)
                 .help(L10n.string("files.transfer.cancel"))
+                .accessibilityLabel(L10n.string("files.transfer.cancel"))
             } else if ctl.loading || ctl.busy {
                 ProgressView()
                     .controlSize(.mini)
