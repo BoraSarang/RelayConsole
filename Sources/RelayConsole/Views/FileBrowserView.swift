@@ -49,6 +49,14 @@ struct FileBrowserContent: View {
                 ctl.open(serial: serial)
             }
         }
+        .onChange(of: store.selectedSerial) { _, serial in
+            if ctl.serial.isEmpty, let serial {
+                ctl.open(serial: serial)
+            }
+        }
+        .onChange(of: ctl.serial) {
+            selection = []
+        }
         .onChange(of: ctl.path) {
             selection = []
         }
@@ -74,6 +82,12 @@ struct FileBrowserContent: View {
         }
     }
 
+    private var devices: [DeviceSnapshot] { store.inventory.devices }
+
+    private var currentDevice: DeviceSnapshot? {
+        store.device(for: ctl.serial) ?? store.selectedDevice
+    }
+
     // MARK: 툴바 — [표시①] 기기 ident · 가져오기 폴더 · 가져오기 실행
 
     private var toolbar: some View {
@@ -81,14 +95,7 @@ struct FileBrowserContent: View {
             Text(L10n.string("files.title"))
                 .font(OPFont.title(14))
                 .foregroundStyle(OPColor.ink)
-            if let d = store.selectedDevice {
-                Text(d.identLabel)
-                    .font(OPFont.number(10))
-                    .foregroundStyle(OPColor.inkDim)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                    .textSelection(.enabled)
-            }
+            deviceSelector
             if ctl.serial.isEmpty {
                 Text(L10n.string("droid.empty.noDevice"))
                     .font(OPFont.number(10))
@@ -141,6 +148,57 @@ struct FileBrowserContent: View {
         }
         .padding(.horizontal, OPSpace.md)
         .padding(.vertical, 8)
+    }
+
+    /// 플로팅 창과 같은 기기 선택 — Menu + 온라인 점 + chevron. 전환 시 전역 선택도 함께 갱신
+    /// 기기가 1대여도 Menu로 보여 선택 가능함을 드러낸다
+    private var deviceSelector: some View {
+        Group {
+            if devices.isEmpty {
+                EmptyView()
+            } else {
+                Menu {
+                    ForEach(devices, id: \.serial) { d in
+                        Button {
+                            selectDevice(d.serial)
+                        } label: {
+                            if d.serial == ctl.serial {
+                                Label(d.pickerLabel, systemImage: "checkmark")
+                            } else {
+                                Label(d.pickerLabel, systemImage: d.isOnline ? "iphone" : "iphone.slash")
+                            }
+                        }
+                        .disabled(d.serial == ctl.serial)
+                    }
+                } label: {
+                    HStack(spacing: 5) {
+                        Circle()
+                            .fill(currentDevice?.isOnline == true ? OPColor.ok : OPColor.inkDim)
+                            .frame(width: 7, height: 7)
+                        Text(currentDevice?.pickerLabel ?? L10n.string("droid.empty.noDevice"))
+                            .font(OPFont.number(10))
+                            .foregroundStyle(OPColor.inkDim)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 8, weight: .semibold))
+                            .foregroundStyle(OPColor.inkDim)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
+                .help(currentDevice?.pickerLabel ?? L10n.string("droid.header.picker"))
+                .disabled(ctl.busy || ctl.loading)
+            }
+        }
+    }
+
+    private func selectDevice(_ serial: String) {
+        guard !serial.isEmpty, serial != ctl.serial else { return }
+        selection = []
+        store.select(serial)
+        ctl.open(serial: serial)
     }
 
     // MARK: 경로 입력 · 검색 · 새로고침

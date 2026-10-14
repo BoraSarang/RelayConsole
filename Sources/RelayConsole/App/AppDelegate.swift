@@ -19,6 +19,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         WidgetSnapshotSync.shared.attach(ConsoleStore.shared)
         // 플로팅 창 복원 — 재기동 후 설정 ON이면 저장된 창 리스트 전체 재생성 (이슈 5)
         FloatingGraphController.shared.restoreAll()
+        // 실행 시 대시보드 자동 표시 억제 — SwiftUI 첫 Window 씬 자동 표시 대응.
+        // 설정 꺼짐(기본)이면 진입 직후 닫고 메뉴바만 상주. 사용자가 직접 연 창은 보호.
+        let consoleAtLaunch = UserDefaults.standard.object(forKey: LoginItemLogic.consoleAtLaunchKey) as? Bool ?? false
+        if !consoleAtLaunch {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                guard !ConsoleLaunchGate.userOpened else { return }
+                for w in NSApp.windows
+                    where w.identifier?.rawValue.contains("console") == true && !(w is NSPanel) {
+                    w.close()
+                }
+            }
+        }
         // 감시 알림 권한 (PLAN_v0.5) — 최초 1회
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
     }
