@@ -540,12 +540,6 @@ final class ConsoleStore: ObservableObject {
         return serial
     }
 
-    /// 기기 선택 후 콘솔 열기 — openConsole 콜백이 App 측 주입
-    func openConsoleAfterSelect(serial: String, open: () -> Void) {
-        select(serial)
-        open()
-    }
-
     func metrics(for serial: String) -> DroidMetrics {
         metricsHistory[serial] ?? DroidMetrics()
     }

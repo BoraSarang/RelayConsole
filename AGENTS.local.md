@@ -26,7 +26,7 @@ swift test
 
 ## 1. 프로젝트 정보
 - **프로젝트명**: RelayConsole / 앱 이름 **Relay Console** (구 Outpost → 브랜드 이관, 코드 신규)
-- **플랫폼**: macOS 확정 — SwiftUI MenuBarExtra, macOS 26.0+ 상주
+- **플랫폼**: macOS 확정 — AppKit NSStatusItem 메뉴바 (구 SwiftUI MenuBarExtra, PLAN_menubar_nsstatusitem), macOS 26.0+ 상주
 - **기술 스택**: SwiftPM + SwiftUI MenuBarExtra + AppKit + 시스템 ADB 외부 호출 (GRDB는 범위 밖 · **외부 scrcpy 호출은 허용**, 내장 미러링은 범위 밖) · `RelayMcpCore`(읽기 전용 로컬 MCP 프로토콜·데이터) + `relay-mcp` 바이너리 — 감시 경로에서 쓰기 금지
 - **구조**: `Sources/RelayConsole/`(App/Droid/Apple/Incident/Models/Views/DesignSystem/Utils, `RelayWidgetCore`에만 의존) · `Sources/RelayWidgetCore`(위젯 공유 — SPM 등록) · `Sources/RelayWidget`(SPM 미등록 — §4 위젯 참조) · `Sources/RelayMcpCore`+`Sources/RelayMcp` · `Tests/RelayConsoleTests/`
 - **서버 없음 · 로컬 전용** — 외부 전송은 사용자가 연결한 ntfy/Slack 채널에만
@@ -74,4 +74,4 @@ swift test
 
 ## 6. 커밋 훅 · UI 프로브
 - 훅: `scripts/git-hooks/pre-commit` (한자 혼입·U+FFFD·충돌 마커, 스테이징 파일만). `core.hooksPath`는 로컬 git 설정이라 fresh clone에서 사라짐
-- UI 계측: `swift scripts/ax-dump.swift "Relay Console" --window=<이름> --buttons/--click`. `MenuBarExtra` 상태 항목은 AX 미노출 — 물리 클릭+육안만 가능 (`docs/MANUAL_VERIFY.md` §11)
+- UI 계측: `swift scripts/ax-dump.swift "Relay Console" --window=<이름> --buttons/--click`. 메뉴바는 NSStatusItem 커스텀뷰(구 `MenuBarExtra`) — AX 노출 여부 재측정 필요 (`docs/MANUAL_VERIFY.md` §11은 MenuBarExtra 기준 서술)

@@ -57,7 +57,12 @@ func refresh()
 func setLaunchAtLogin(Bool)
 ```
 
-`AppDelegate.applicationDidFinishLaunching`: `headless=false`이면 콘솔 창 오픈 (기본 headless=true → 창 없음).
+> **정정 (2026-10-14):** `shouldOpenConsole(headless:)`는 미구현으로 확정 삭제한다 — 코드에 존재하지 않음.
+> 실행 시 콘솔 표시 여부는 **`relay.console.atLaunch`(기본 false)** 가 담당
+> (`AppDelegate` 진입 0.5s 후 자동 열린 console만 닫음, 사용자 요청은 `ConsoleLaunchGate`로 보호).
+> `headless`는 activation 정책(accessory)만 결정한다.
+
+`AppDelegate.applicationDidFinishLaunching`: ~~`headless=false`이면 콘솔 창 오픈 (기본 headless=true → 창 없음)~~ → `relay.console.atLaunch=true`일 때만 자동 열린 창을 유지 (기본 false → 닫고 메뉴바 상주).
 
 ---
 

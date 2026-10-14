@@ -54,6 +54,10 @@ FloatingGraphController.shared  (NSPanel · 신규)
 
 **WindowFocus 주의:** `dismissMenuBarPanels()`가 `.statusBar` 레벨 NSPanel을 닫음 → 플로팅 그래프 패널은 **제외 목록**에 `floatingGraphWindowID` 추가 (AlertBanner 패턴).
 
+> **추가 (PR #93):** NSPopover 창(`_NSPopoverWindow`)도 `NSPanel` 서브클래스(`.popUpMenu`)라 제외 대상에
+> 추가됐다 (클래스명 판별). `orderOut`으로 닫으면 `isShown`이 stale true로 남아 토글이 영구 먹통이 되므로,
+> 팝오버는 반드시 `StatusItemController.closePopover()` 정상 경로로만 닫는다.
+
 ---
 
 ## 3. 설정키 (`relay.float.*`)
