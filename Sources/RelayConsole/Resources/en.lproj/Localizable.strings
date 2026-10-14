@@ -515,6 +515,8 @@
 "settings.language.system" = "Follow system";
 "settings.launch.headless" = "Start headless (menu bar only, no windows)";
 "settings.launch.headless.help" = "When on, app starts without opening the console window and stays in the menu bar";
+"settings.launch.console" = "Open dashboard at launch";
+"settings.launch.console.help" = "When off, the dashboard window stays closed at launch and the app lives in the menu bar";
 "settings.login.error" = "Could not change login item";
 "settings.login.launch" = "Start at login";
 "settings.login.off" = "Start at login is off";

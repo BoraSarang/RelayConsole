@@ -337,12 +337,11 @@ struct MenuBarPopoverView: View {
         }
     }
 
-    /// 기기 행 클릭 → 선택 + 콘솔 대시보드 (PLAN_v0.3)
+    /// 기기 행 클릭 → 선택만 변경 (대시보드는 열지 않음)
     private func deviceRow(_ d: DeviceSnapshot) -> some View {
         let isSelected = d.serial == store.selectedSerial
         return Button {
             store.select(d.serial)
-            openConsole()
         } label: {
             HStack(spacing: 8) {
                 // 메뉴바 열 범례 — 같은 순서의 열을 가리킴 (표시 중인 열만 번호)

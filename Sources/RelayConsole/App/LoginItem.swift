@@ -6,6 +6,8 @@ import ServiceManagement
 enum LoginItemLogic {
     static let launchAtLoginKey = "relay.login.launchAtLogin"
     static let headlessKey = "relay.launch.headless"
+    /// 앱 실행 시 대시보드 자동 표시 — 기본 false (메뉴바 상주)
+    static let consoleAtLaunchKey = "relay.console.atLaunch"
 
     /// SMAppService.Status → i18n 키
     static func statusKey(for status: SMAppService.Status) -> String {

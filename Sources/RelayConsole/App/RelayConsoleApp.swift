@@ -1,6 +1,25 @@
 import SwiftUI
 import AppKit
 
+/// 실행 시 자동 열린 대시보드와 사용자 요청 구분 — SwiftUI는 첫 Window 씬을 자동 표시하므로,
+/// 설정이 꺼져 있으면 진입 직후 닫는다. 위젯 딥링크·사용자 클릭은 전부 `openConsole()`을
+/// 경유하므로 플래그로 보호한다 (딥링크로 열린 창을 닫는 사고 방지).
+enum ConsoleLaunchGate {
+    /// 가변 전역(Swift 6 금지) 대신 불변 박스 + 잠금 — 메인 스레드에서만 접근
+    private static let box = LaunchFlagBox()
+    static var userOpened: Bool {
+        get { box.get() }
+        set { box.set(newValue) }
+    }
+}
+
+private final class LaunchFlagBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value = false
+    func get() -> Bool { lock.withLock { value } }
+    func set(_ v: Bool) { lock.withLock { value = v } }
+}
+
 @main
 struct RelayConsoleApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
@@ -17,7 +36,7 @@ struct RelayConsoleApp: App {
             actions: StatusItemController.Actions(
                 openConsole: { openConsole() },
                 openDebug: { openDebug() },
-                openSettings: { openSettings() },
+                openSettings: { openSettingsWindow() },
                 openProcesses: { openProcesses() },
                 openLogs: { openLogs() },
                 openAppNetwork: { openAppNetwork() },
@@ -119,6 +138,8 @@ struct RelayConsoleApp: App {
     }
 
     private func openConsole() {
+        ConsoleLaunchGate.userOpened = true
+        StatusItemController.shared.closePopover()
         NSApp.activate(ignoringOtherApps: true)
         WindowFocus.dismissMenuBarPanels()
         openWindow(id: "console")
@@ -127,6 +148,7 @@ struct RelayConsoleApp: App {
 
     private func openDebug() {
 #if DEBUG
+        StatusItemController.shared.closePopover()
         NSApp.activate(ignoringOtherApps: true)
         WindowFocus.dismissMenuBarPanels()
         openWindow(id: "debug")
@@ -135,6 +157,7 @@ struct RelayConsoleApp: App {
     }
 
     private func openSettingsWindow() {
+        StatusItemController.shared.closePopover()
         NSApp.activate(ignoringOtherApps: true)
         WindowFocus.dismissMenuBarPanels()
         openSettings()
@@ -142,6 +165,7 @@ struct RelayConsoleApp: App {
     }
 
     private func openProcesses() {
+        StatusItemController.shared.closePopover()
         NSApp.activate(ignoringOtherApps: true)
         WindowFocus.dismissMenuBarPanels()
         openWindow(id: "processes")
@@ -149,6 +173,7 @@ struct RelayConsoleApp: App {
     }
 
     private func openLogs() {
+        StatusItemController.shared.closePopover()
         NSApp.activate(ignoringOtherApps: true)
         WindowFocus.dismissMenuBarPanels()
         openWindow(id: "logs")
@@ -156,6 +181,7 @@ struct RelayConsoleApp: App {
     }
 
     private func openAppNetwork() {
+        StatusItemController.shared.closePopover()
         NSApp.activate(ignoringOtherApps: true)
         WindowFocus.dismissMenuBarPanels()
         openWindow(id: "appnetwork")
@@ -163,6 +189,7 @@ struct RelayConsoleApp: App {
     }
 
     private func openFiles() {
+        StatusItemController.shared.closePopover()
         NSApp.activate(ignoringOtherApps: true)
         WindowFocus.dismissMenuBarPanels()
         if let serial = store.selectedSerial {

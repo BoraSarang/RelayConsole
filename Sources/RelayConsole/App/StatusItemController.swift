@@ -82,6 +82,23 @@ final class StatusItemController: NSObject {
         bootstrap()
     }
 
+    /// 팝오버를 정상 경로(`NSPopover.close()`)로 닫는다 — `isShown` 갱신 보장.
+    /// `WindowFocus.dismissMenuBarPanels()`는 팝오버 창을 건드리지 않으므로(의도적 제외),
+    /// 다른 창을 열기 전에는 반드시 여기로 닫는다. 이미 닫혀 있으면 no-op.
+    func closePopover() {
+        if popover?.isShown == true {
+            DebugLogger.shared.action("MenuBar", "팝오버 닫음 (open* 진입)")
+        }
+        popover?.close()
+    }
+
+    /// 팝오버에서 다른 창을 열 때 — 팝오버를 먼저 정상 close한 뒤 액션 실행.
+    /// footer/deviceRow/배너의 `open*`가 전부 이 경로를 탄다.
+    private func dismissAndOpen(_ action: (Actions) -> Void) {
+        popover?.close()
+        action(actions)
+    }
+
     // MARK: - 갱신
 
     func update() {
@@ -157,13 +174,13 @@ final class StatusItemController: NSObject {
         p.contentViewController = NSHostingController(
             rootView: MenuBarPopoverView(
                 store: ConsoleStore.shared,
-                openConsole: { [weak self] in self?.actions.openConsole() },
-                openDebug: { [weak self] in self?.actions.openDebug() },
-                openSettings: { [weak self] in self?.actions.openSettings() },
-                openProcesses: { [weak self] in self?.actions.openProcesses() },
-                openLogs: { [weak self] in self?.actions.openLogs() },
-                openAppNetwork: { [weak self] in self?.actions.openAppNetwork() },
-                openFiles: { [weak self] in self?.actions.openFiles() },
+                openConsole: { [weak self] in self?.dismissAndOpen { $0.openConsole() } },
+                openDebug: { [weak self] in self?.dismissAndOpen { $0.openDebug() } },
+                openSettings: { [weak self] in self?.dismissAndOpen { $0.openSettings() } },
+                openProcesses: { [weak self] in self?.dismissAndOpen { $0.openProcesses() } },
+                openLogs: { [weak self] in self?.dismissAndOpen { $0.openLogs() } },
+                openAppNetwork: { [weak self] in self?.dismissAndOpen { $0.openAppNetwork() } },
+                openFiles: { [weak self] in self?.dismissAndOpen { $0.openFiles() } },
                 onClose: { [weak self] in self?.popover?.performClose(nil) }
             )
         )
@@ -174,11 +191,15 @@ final class StatusItemController: NSObject {
     private func togglePopover() {
         let p = ensurePopover()
         if p.isShown {
-            p.performClose(nil)
+            // stale 복구 포함 — close()는 숨겨진 유령 상태에서도 isShown을 false로 되돌린다.
+            // (performClose는 이미 숨은 창에 무반응일 수 있어 영구 먹통으로 이어진다)
+            p.close()
+            DebugLogger.shared.action("MenuBar", "팝오버 닫음 (토글)")
             return
         }
         guard let v = speedView else { return }
         p.show(relativeTo: v.bounds, of: v, preferredEdge: .minY)
+        DebugLogger.shared.action("MenuBar", "팝오버 열음")
         // 팝오버 안 컨트롤이 키보드를 받을 수 있게 활성화 (LSUIElement)
         NSApp.activate(ignoringOtherApps: true)
     }

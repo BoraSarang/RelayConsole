@@ -515,6 +515,8 @@
 "settings.language.system" = "시스템 설정 따름";
 "settings.launch.headless" = "헤드리스로 시작 (창 없이 메뉴바만)";
 "settings.launch.headless.help" = "켜져 있으면 시작 시 콘솔 창을 열지 않고 메뉴바에서만 상주합니다";
+"settings.launch.console" = "앱 실행 시 대시보드 열기";
+"settings.launch.console.help" = "꺼져 있으면 시작 시 대시보드 창을 열지 않고 메뉴바에서만 상주합니다";
 "settings.login.error" = "로그인 항목 변경에 실패했습니다";
 "settings.login.launch" = "로그인 시 자동 시작";
 "settings.login.off" = "로그인 시 자동 시작이 꺼졌습니다";

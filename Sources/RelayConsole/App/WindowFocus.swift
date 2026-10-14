@@ -12,8 +12,13 @@ enum WindowFocus {
     private static var popoverWasOpen = false
 
     /// 메뉴바 팝오버 패널(상태바 레벨) 닫기 — 알림 배너·플로팅 그래프는 제외
+    /// NSPopover 창도 제외 — `_NSPopoverWindow`는 `NSPanel` 서브클래스(`level == .popUpMenu`)라
+    /// 이 필터에 걸리지만, `orderOut`으로 닫으면 `NSPopover.isShown`이 `true`로 stale하게 남아
+    /// 이후 토글이 유령 `performClose`로 소모된다 (좌클릭 씹힘 + 우클릭 정상 + 종료까지 지속)
     static func dismissMenuBarPanels() {
         for window in NSApp.windows {
+            // 클래스명으로 판별 — _NSPopoverWindow는 비공개 클래스라 타입 직접 참조 불가
+            if NSStringFromClass(type(of: window)).contains("Popover") { continue }
             guard let panel = window as? NSPanel else { continue }
             if panel.identifier?.rawValue == alertBannerWindowID { continue }
             // 플로팅은 창 id별 복수 — "RelayFloatingGraph.<uuid>" 접두로 전체 제외

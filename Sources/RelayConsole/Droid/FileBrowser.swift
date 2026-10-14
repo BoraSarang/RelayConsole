@@ -571,6 +571,9 @@ final class FileBrowserController: ObservableObject {
             }
             await MainActor.run {
                 self.loading = false
+                // 로드 중 기기가 바뀌었으면 옛 결과를 버린다 — 새 기기 화면에 옛 목록 덮어쓰기 방지.
+                // loading 플래그는 항상 되돌린다 (안 그러면 다음 load() 가드가 영구 차단됨).
+                guard self.serial == serial, self.path == dir else { return }
                 self.items = result
                 if let errorText {
                     self.statusMessage = errorText.isEmpty

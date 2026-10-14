@@ -197,6 +197,12 @@ final class RelayMenuBarView: NSView {
     // MARK: - 클릭
 
     /// `statusItem.view` 로 쓰면 **버튼이 없어서** 클릭을 직접 받는다 (DroidRelay 동일).
+    /// 서브뷰가 전부 비인터랙티브 라벨(아이콘·숫자)이라 hitTest를 self로 고정 —
+    /// `NSControl` 서브뷰가 좌클릭을 삼키면 메뉴바 클릭이 영구 먹통이 된다 (우클릭은 버블링되어 생존).
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        bounds.contains(point) ? self : nil
+    }
+
     override func mouseDown(with event: NSEvent) { onClick?() }
     override func rightMouseDown(with event: NSEvent) { onRightClick?() }
 

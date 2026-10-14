@@ -39,6 +39,7 @@ struct SettingsView: View {
     /// On/Off·창 리스트 단일 진실원천 — FloatingGraphController (AppStorage 분리 기록 금지)
     @ObservedObject private var float = FloatingGraphController.shared
     @AppStorage(LoginItemLogic.headlessKey) private var headless = LoginItemLogic.defaultHeadless()
+    @AppStorage(LoginItemLogic.consoleAtLaunchKey) private var consoleAtLaunch = false
     /// USB 연결 시 자동 Wi-Fi ADB — 기본 ON (사용자 확정)
     @AppStorage(WifiAdbLogic.autoModeKey) private var wifiAuto = true
     @ObservedObject private var login = LoginItemController.shared
@@ -183,6 +184,11 @@ struct SettingsView: View {
             .disabled(login.busy)
             Toggle(L10n.string("settings.launch.headless"), isOn: $headless)
             Text(L10n.string("settings.launch.headless.help"))
+                .font(OPFont.body(10))
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
+            Toggle(L10n.string("settings.launch.console"), isOn: $consoleAtLaunch)
+            Text(L10n.string("settings.launch.console.help"))
                 .font(OPFont.body(10))
                 .foregroundStyle(.secondary)
                 .lineLimit(2)
