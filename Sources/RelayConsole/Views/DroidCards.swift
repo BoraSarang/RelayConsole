@@ -494,7 +494,10 @@ enum DroidCards {
                             }
                         }
                     }
-                    Text(L10n.string("droid.card.network.note"))
+                    // 과차감으로 합계가 adb 우세면 각주를 바꾼다 — 값이 "adb 제외" 가 아닌 순간이다
+                    Text(L10n.string(device?.netAdbDominant == true
+                        ? "droid.card.network.note.adb"
+                        : "droid.card.network.note"))
                         .font(OPFont.number(9))
                         .foregroundStyle(OPColor.inkDim.opacity(0.8))
                         .lineLimit(1)

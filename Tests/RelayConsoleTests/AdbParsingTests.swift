@@ -1093,6 +1093,33 @@ struct AdbParsingTests {
         #expect(abs(n.up - 7.0) < 0.000001 && abs(n.down - 6.0) < 0.000001)
     }
 
+    @Test func netTotalKeepsMeasuredWhenSubtractionWipesIt() {
+        // 과차감 0 클램프는 "트래픽 없음"이 아니다 — 실측을 그대로 표시한다.
+        // 실측 재현(2026-10-17): droidrelay ↓285 KB/s 진행 중 `adb push` 100MB 1회
+        // → 약 60초 동안 카드 합계가 0.0 KB/s (같은 순간 앱별 행은 285 KB/s).
+        let c = AdbClient.netTotal(up: 0.01, down: 0.28, shellUp: 0.05, shellDown: 1.7)
+        #expect(abs(c.down - 0.28) < 0.000001)
+        #expect(abs(c.up - 0.01) < 0.000001, "0 클램프 대신 그 순간의 실측을 보여준다")
+        #expect(c.adbDominant, "차감이 실측을 지운 방향이 있으면 각주를 바꿔야 한다")
+        // 정상 차감은 그대로 — adb 기여분만 빠진다
+        let n = AdbClient.netTotal(up: 0.06, down: 0.40, shellUp: 0.02, shellDown: 0.01)
+        #expect(abs(n.up - 0.04) < 0.000001 && abs(n.down - 0.39) < 0.000001)
+        #expect(!n.adbDominant)
+        // 실측이 0이면 0 그대로 (0을 지어내지도, 지우지도 않는다)
+        let z = AdbClient.netTotal(up: 0, down: 0, shellUp: 1, shellDown: 1)
+        #expect(z.up == 0 && z.down == 0 && !z.adbDominant)
+    }
+
+    @Test func steadyShellRateTakesMinimumOfTickEstimates() {
+        // 버스트 1회(가운데 틱)는 상시 오버헤드가 아니다 — 최소값만 차감에 쓴다
+        let ring = [(up: 0.02, down: 0.005), (up: 1.7, down: 1.9), (up: 0.03, down: 0.006)]
+        let s = AdbClient.steadyShellRate(from: ring)
+        #expect(abs(s.up - 0.02) < 0.000001 && abs(s.down - 0.005) < 0.000001)
+        // 빈 링 = 차감 없음 (기기 연결 직후)
+        let e = AdbClient.steadyShellRate(from: [])
+        #expect(e.up == 0 && e.down == 0)
+    }
+
     @Test func appNetBaselineIndexPicksOldestMature() {
         // 오래된 순 [70, 55, 40, 20, 5] → 70초 전 (인덱스 0)
         #expect(AdbClient.appNetBaselineIndex(ages: [70, 55, 40, 20, 5]) == 0)
