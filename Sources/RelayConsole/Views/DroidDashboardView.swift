@@ -450,33 +450,52 @@ struct DroidDashboardView: View {
             Text(L10n.string("droid.header.picker"))
                 .font(OPFont.body(10))
                 .foregroundStyle(OPColor.inkDim)
-            ForEach(devices, id: \.serial) { d in
+            ForEach(groups) { g in
+                let active = g.contains(store.selectedSerial ?? "")
                 Button {
-                    store.select(d.serial)
+                    // 이 묶음이 이미 활성이면 전송을 바꾸지 않는다 —
+                    // 화면만 보고 눌렀는데 미러링 대상 전송이 바뀌면 그 창이 죽는다(실측)
+                    if !active { store.select(g.primary.serial) }
                 } label: {
-                    Text(d.pickerLabel)
+                    Text(chipLabel(g))
                         .font(OPFont.number(10))
-                        .foregroundStyle(d.serial == store.selectedSerial ? OPColor.ink : OPColor.inkDim)
+                        .foregroundStyle(active ? OPColor.ink : OPColor.inkDim)
                         .lineLimit(1)
                         .truncationMode(.middle)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
                         .background(
                             RoundedRectangle(cornerRadius: 6)
-                                .fill(d.serial == store.selectedSerial
-                                    ? OPColor.cta.opacity(0.25)
-                                    : OPColor.card)
+                                .fill(active ? OPColor.cta.opacity(0.25) : OPColor.card)
                         )
                         .overlay(
                             RoundedRectangle(cornerRadius: 6)
-                                .stroke(d.serial == store.selectedSerial
-                                    ? OPColor.cta
-                                    : OPColor.border, lineWidth: 1)
+                                .stroke(active ? OPColor.cta : OPColor.border, lineWidth: 1)
                         )
                 }
                 .buttonStyle(.plain)
+                .help(chipHelp(g))
             }
         }
+    }
+
+    /// 화면용 묶음 — 같은 폰의 여러 전송(USB·무선·5555)을 **한 줄**로 (T-2026-10-17-10)
+    private var groups: [DeviceInventory.DeviceGroup] {
+        DeviceInventory.group(devices, selected: store.selectedSerial)
+    }
+
+    /// 칩 문구 — 대표 전송 배지 · 다른 전송이 있으면 개수
+    private func chipLabel(_ g: DeviceInventory.DeviceGroup) -> String {
+        let badge = g.primary.transportBadge
+        let base = badge.isEmpty ? g.primary.displayName : "\(g.primary.displayName) · \(badge)"
+        return g.hasMultipleTransports ? "\(base) +\(g.others.count)" : base
+    }
+
+    /// 칩 툴팁 — 이 묶음의 전송을 전부 밝힌다(고를 때 근거가 된다)
+    private func chipHelp(_ g: DeviceInventory.DeviceGroup) -> String {
+        ([g.primary] + g.others)
+            .map { "\($0.connShort) · \($0.transportHelp)" }
+            .joined(separator: "\n")
     }
 
     private func thermalBanner(device d: DeviceSnapshot) -> some View {

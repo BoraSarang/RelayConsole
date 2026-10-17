@@ -41,11 +41,15 @@ struct MenuBarPopoverView: View {
     private let topBannerTTL: TimeInterval = 300
 
     private var devices: [DeviceSnapshot] { store.inventory.devices }
+    /// 화면용 묶음 — 같은 폰의 여러 전송(USB·무선·5555)을 **한 줄**로 (T-2026-10-17-10)
+    private var groups: [DeviceInventory.DeviceGroup] {
+        DeviceInventory.group(devices, selected: store.selectedSerial)
+    }
     private var device: DeviceSnapshot? { store.selectedDevice }
     private var metrics: DroidMetrics? {
         device.map { store.metrics(for: $0.serial) }
     }
-    private var multiDevice: Bool { devices.count > 1 }
+    private var multiDevice: Bool { groups.count > 1 }
     /// 최신 5분 내 이벤트만 상단 배너 — 오래된 건 이력(최신 이벤트)에만 남김
     private var freshWatchEvent: WatchEvent? {
         store.recentWatchEvents.first { now.timeIntervalSince($0.at) < topBannerTTL }
@@ -257,11 +261,11 @@ struct MenuBarPopoverView: View {
     /// 자동 Wi-Fi ADB 실패 배지 — 사용자가 아무것도 안 했는데 실패했으므로
     /// 조용히 사라지면 "설치만 하면 된다" 는 잘못된 믿음이 남는다 ([표시②])
     private func autoWifiFailBadge(for d: DeviceSnapshot) -> some View {
-        // USB 로 꽂혀 있고, 그 기기가 TCP 로도 열려 있지 않을 때만 (안 열렸는데 실패한 것)
+        // USB 로 꽂혀 있고, **같은 폰**이 TCP 로도 잡혀 있지 않을 때만 (안 열렸는데 실패한 것)
+        // — 같은 폰 판정은 묶음으로 한다. 종전엔 "네트워크 기기가 하나라도 있으면" 이라
+        //   Router 가 Wi-Fi 로 붙어 있으면 S22 의 배지가 사라졌다 (T-2026-10-17-10)
         let usbDevice = d.connectionKind == .usb
-        let hasNetworkTwin = store.inventory.devices.contains {
-            $0.serial != d.serial && $0.connectionKind == .network
-        }
+        let hasNetworkTwin = groups.first { $0.contains(d.serial) }?.hasMultipleTransports == true
         if !usbDevice || hasNetworkTwin || !wifi.autoFailed { return AnyView(EmptyView()) }
         return AnyView(
             Text(L10n.string("wifi.badge.autoFailed"))
@@ -287,17 +291,10 @@ struct MenuBarPopoverView: View {
         Group {
             if multiDevice {
                 Menu {
-                    ForEach(devices, id: \.serial) { c in
-                        Button {
-                            store.select(c.serial)
-                        } label: {
-                            if c.serial == store.selectedSerial {
-                                Label(c.pickerLabel, systemImage: "checkmark")
-                            } else {
-                                Label(c.pickerLabel, systemImage: c.isOnline ? "iphone" : "iphone.slash")
-                            }
+                    ForEach(groups) { g in
+                        DeviceTransportMenuItems(group: g, selected: store.selectedSerial) { serial in
+                            store.select(serial)
                         }
-                        .disabled(c.serial == store.selectedSerial)
                     }
                 } label: {
                     HStack(spacing: 3) {

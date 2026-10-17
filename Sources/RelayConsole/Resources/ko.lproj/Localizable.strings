@@ -166,6 +166,13 @@
 "droid.empty.noDeviceHint" = "네트워크 기기: adb connect IP:PORT";
 "droid.header.health" = "건강";
 "droid.header.picker" = "기기 선택";
+"device.transport.usb" = "USB";
+"device.transport.wireless" = "무선";
+"device.transport.legacy" = "5555 레거시";
+"device.transport.usb.help" = "USB 연결 — 가장 안정적이지만 케이블이 필요합니다";
+"device.transport.wireless.help" = "Android 11+ 무선 디버깅 — 폰을 재부팅해도 mDNS 광고로 다시 찾습니다";
+"device.transport.legacy.help" = "adb tcpip 5555 — 폰을 재부팅하면 닫히고 USB로 다시 켜야 합니다";
+"device.transport.others" = "다른 연결 %d개";
 "droid.header.title" = "Relay Console · 외부 관제 콘솔";
 "droid.lastError" = "오류: %@";
 "droid.lastSample.at" = "마지막 측정 %@";

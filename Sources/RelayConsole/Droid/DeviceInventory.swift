@@ -244,6 +244,52 @@ struct DeviceSnapshot: Sendable, Equatable {
         "\(displayName) · \(connShort)"
     }
 
+    // MARK: - 전송 표기 (2026-10-17 · T-2026-10-17-10)
+
+    /// 레거시 tcpip 전송인가 — `adb tcpip` 로 연 기본 포트(5555)
+    ///
+    /// 무선 디버깅(Android 11+) connect 포트는 **매번 다른 포트**라서 이 둘은 구분된다.
+    /// 재부팅 내구성이 정반대다: 5555 는 재부팅하면 닫히고 USB 로 다시 켜야 하지만,
+    /// 무선 디버깅 포트는 mDNS 광고로 다시 찾을 수 있다(PLAN_wifi_pairing).
+    var isLegacyTcpipEndpoint: Bool {
+        guard connectionKind == .network,
+              let hp = WifiAdbLogic.splitHostPort(serial) else { return false }
+        return hp.port == WifiAdbLogic.defaultPort
+    }
+
+    /// 전송 배지 — 한 줄로 합친 목록에서 어느 경로인지 보여준다
+    var transportBadge: String {
+        switch connectionKind {
+        case .usb: return L10n.string("device.transport.usb")
+        case .network:
+            return isLegacyTcpipEndpoint
+                ? L10n.string("device.transport.legacy")
+                : L10n.string("device.transport.wireless")
+        default: return ""
+        }
+    }
+
+    /// 전송 설명 — 툴팁·선택 목록 보조
+    var transportHelp: String {
+        switch connectionKind {
+        case .usb: return L10n.string("device.transport.usb.help")
+        case .network:
+            return isLegacyTcpipEndpoint
+                ? L10n.string("device.transport.legacy.help")
+                : L10n.string("device.transport.wireless.help")
+        default: return ""
+        }
+    }
+
+    /// 대표 전송 우선순위 — 작을수록 대표 (USB > 무선 디버깅 > 레거시 tcpip)
+    var transportRank: Int {
+        switch connectionKind {
+        case .usb: return 0
+        case .network: return isLegacyTcpipEndpoint ? 2 : 1
+        default: return 3
+        }
+    }
+
     /// 기기 식별 라벨 — 화면·알림·내보내기 공통 진입점 (마스킹 금지 · AGENTS.local §4)
     /// network → `IP:PORT`, USB → `기기명 또는 모델 · 시리얼 원문`
     var identLabel: String {
@@ -414,5 +460,65 @@ struct DeviceInventory: Equatable {
         return devices.first {
             $0.serial != selected && $0.isOnline && $0.physicalId == pid
         }?.serial
+    }
+
+    // MARK: - 화면용 묶음 (2026-10-17 · T-2026-10-17-10)
+
+    /// 표시용 기기 묶음 — **한 폰이 여러 전송으로 잡혀도 한 줄**로 보여준다
+    ///
+    /// 실측(2026-10-17): S22 하나가 `192.168.86.49:5555`(레거시 tcpip)와
+    /// `192.168.86.49:45325`(무선 디버깅)로 **동시에** `device` 였고, USB 까지 꽂으면 세 줄이 된다.
+    /// adb 의 기기 키는 전송이라 그대로 그리면 같은 폰이 여러 줄이 되고, 사용자는 어느 줄을
+    /// 눌러야 하는지 알 수 없다. 묶음은 **표시만** 합친다 — 연결은 하나도 끊지 않는다
+    /// (전송을 끊으면 그 전송으로 도는 미러링·파일 전송이 죽는다 · 실측).
+    struct DeviceGroup: Identifiable {
+        /// 물리 기기 id (모르면 대표 시리얼) — 화면 정체성
+        let id: String
+        /// 대표 전송 — 선택된 전송이 있으면 그것, 없으면 온라인 · 우선순위 순
+        let primary: DeviceSnapshot
+        /// 같은 폰의 나머지 전송 — 사용자가 명시적으로 고를 수 있게 남긴다
+        let others: [DeviceSnapshot]
+
+        var hasMultipleTransports: Bool { !others.isEmpty }
+        /// 이 묶음이 그 시리얼을 품고 있는가 — 선택 표시용
+        func contains(_ serial: String) -> Bool {
+            primary.serial == serial || others.contains { $0.serial == serial }
+        }
+    }
+
+    /// 물리 기기 단위로 묶는다. `physicalId` 를 모르면 **묶지 않는다** (추측 금지)
+    ///
+    /// - selected: 선택된 시리얼이 이 묶음에 있으면 그걸 대표로 삼는다 — 목록의 선택 표시와 어긋나지 않게.
+    static func group(_ devices: [DeviceSnapshot], selected: String? = nil) -> [DeviceGroup] {
+        var order: [String] = []
+        var buckets: [String: [DeviceSnapshot]] = [:]
+        for d in devices {
+            let key = groupKey(d)
+            if buckets[key] == nil { order.append(key) }
+            buckets[key, default: []].append(d)
+        }
+        return order.compactMap { key in
+            guard let members = buckets[key], !members.isEmpty else { return nil }
+            let sorted = members.sorted(by: preferredGroupMember)
+            let chosen = selected.flatMap { s in sorted.first { $0.serial == s } } ?? sorted[0]
+            return DeviceGroup(
+                id: key,
+                primary: chosen,
+                others: sorted.filter { $0.serial != chosen.serial }
+            )
+        }
+    }
+
+    /// 묶음 키 — 물리 고유값. 없으면 시리얼 자체(묶이지 않는다)
+    static func groupKey(_ d: DeviceSnapshot) -> String {
+        if let pid = d.physicalId, !pid.isEmpty { return "pid:\(pid)" }
+        return "serial:\(d.serial)"
+    }
+
+    /// 대표 순서 — ①온라인 ②USB > 무선 디버깅 > 레거시 tcpip ③시리얼(순서 고정)
+    static func preferredGroupMember(_ a: DeviceSnapshot, _ b: DeviceSnapshot) -> Bool {
+        if a.isOnline != b.isOnline { return a.isOnline }
+        if a.transportRank != b.transportRank { return a.transportRank < b.transportRank }
+        return a.serial < b.serial
     }
 }

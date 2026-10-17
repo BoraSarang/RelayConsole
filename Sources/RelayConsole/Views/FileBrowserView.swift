@@ -89,6 +89,18 @@ struct FileBrowserContent: View {
 
     private var devices: [DeviceSnapshot] { store.inventory.devices }
 
+    /// 화면용 묶음 — 같은 폰의 여러 전송(USB·무선·5555)을 **한 줄**로 (T-2026-10-17-10)
+    private var groups: [DeviceInventory.DeviceGroup] {
+        DeviceInventory.group(devices, selected: ctl.serial)
+    }
+
+    /// 이 창이 쓰는 기기의 전송 배지 — 지금 어느 경로로 붙어 있는지
+    private var currentDeviceLabel: String {
+        guard let d = currentDevice else { return L10n.string("droid.empty.noDevice") }
+        let badge = d.transportBadge
+        return badge.isEmpty ? d.pickerLabel : "\(d.displayName) · \(badge)"
+    }
+
     private var currentDevice: DeviceSnapshot? {
         store.device(for: ctl.serial) ?? store.selectedDevice
     }
@@ -164,24 +176,17 @@ struct FileBrowserContent: View {
                 EmptyView()
             } else {
                 Menu {
-                    ForEach(devices, id: \.serial) { d in
-                        Button {
-                            selectDevice(d.serial)
-                        } label: {
-                            if d.serial == ctl.serial {
-                                Label(d.pickerLabel, systemImage: "checkmark")
-                            } else {
-                                Label(d.pickerLabel, systemImage: d.isOnline ? "iphone" : "iphone.slash")
-                            }
+                    ForEach(groups) { g in
+                        DeviceTransportMenuItems(group: g, selected: ctl.serial) { serial in
+                            selectDevice(serial)
                         }
-                        .disabled(d.serial == ctl.serial)
                     }
                 } label: {
                     HStack(spacing: 5) {
                         Circle()
                             .fill(currentDevice?.isOnline == true ? OPColor.ok : OPColor.inkDim)
                             .frame(width: 7, height: 7)
-                        Text(currentDevice?.pickerLabel ?? L10n.string("droid.empty.noDevice"))
+                        Text(currentDeviceLabel)
                             .font(OPFont.number(10))
                             .foregroundStyle(OPColor.inkDim)
                             .lineLimit(1)
@@ -194,7 +199,7 @@ struct FileBrowserContent: View {
                 }
                 .menuStyle(.borderlessButton)
                 .menuIndicator(.hidden)
-                .help(currentDevice?.pickerLabel ?? L10n.string("droid.header.picker"))
+                .help(currentDeviceLabel)
                 .disabled(ctl.busy || ctl.loading)
             }
         }
