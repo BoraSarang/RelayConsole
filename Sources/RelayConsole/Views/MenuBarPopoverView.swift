@@ -19,7 +19,11 @@ struct MenuBarPopoverView: View {
     /// (StatusItemController 가 NSPopover.performClose 로 연결)
     var onClose: () -> Void = {}
 
-    @State private var showDeviceDetail = false
+    /// 기기 상세(대시보드 카드) 펼침 — **기본 펼침** (사용자 요청 2026-10-17).
+    /// 종전엔 기본 접힘이었고 기기가 1대일 때만 자동으로 펼쳐서, 2대 이상이면 매번
+    /// "기기 상세를 눌러 대시보드 보기" 안내를 한 번 더 눌러야 했다.
+    /// 접으면 헤더 ⌄ / 안내 화면으로 되돌아가고 그 선택은 앱이 살아있는 동안 유지된다.
+    @State private var showDeviceDetail = true
     @State private var showEvents = false
     @State private var showQuitConfirm = false
     /// 상단 감시 배너 TTL — 해제/충전 등 일회성 이벤트는 5분 후 자동 제거
@@ -106,15 +110,6 @@ struct MenuBarPopoverView: View {
             // LSUIElement — 팝오버 열림 시 앱 활성화 누락 → 다른 창이 뒤로 내려감
             WindowFocus.menuBarPopoverDidOpen()
             timerActive = true
-            // 기기가 하나면 기기 상세/카드 자동 펼침
-            if devices.count == 1 {
-                showDeviceDetail = true
-            }
-        }
-        .onChange(of: devices.count) { _, count in
-            if count == 1 {
-                showDeviceDetail = true
-            }
         }
         .onDisappear {
             timerActive = false
