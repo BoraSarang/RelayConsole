@@ -66,40 +66,66 @@ struct WifiOnboardingSheet: View {
         store.inventory.devices.filter { $0.connectionKind == .network }
     }
 
+    /// 이 시트가 **무선 기기에서** 열렸는가 — USB→Wi-Fi 섹션은 "이미 Wi-Fi" 안내만 보여준다
+    ///
+    /// (`adb tcpip 5555` 는 adbd 를 재시작해서 무선 연결을 끊을 수 있다 — 2026-10-18)
+    private var presetIsNetworkDevice: Bool {
+        guard let p = presetSerial else { return false }
+        guard let d = store.inventory.devices.first(where: { $0.serial == p }) else {
+            return connectionKind == .network
+        }
+        return d.connectionKind == .network
+    }
+
+    /// USB 로 붙어 있는(또는 아직 종류를 모르는) 기기인가 — 시트 1번 섹션 대상 판정
+    private func isUsbDevice(_ serial: String) -> Bool {
+        guard let d = store.inventory.devices.first(where: { $0.serial == serial }) else { return false }
+        return WifiAdbLogic.canEnableTcpip(connectionKind: d.connectionKind)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: OPSpace.lg) {
             Text(L10n.string("wifi.sheet.title"))
                 .font(OPFont.title(16))
                 .foregroundStyle(OPColor.ink)
 
-            // 1) USB → Wi-Fi 원클릭
+            // 1) USB → Wi-Fi 원클릭 — **대상은 USB 기기만** (2026-10-18 수정)
+            //
+            //   이 버튼은 `adb tcpip 5555` = adbd 재시작이라, 무선 기기에 눌리면 **지금 붙어 있는
+            //   무선 연결을 끊는다**. 종전엔 시트를 무선 기기에서 열면 그 기기가 대상으로 보였다.
             sectionCard(L10n.string("wifi.section.enable")) {
-                if usbDevices.isEmpty && presetSerial == nil {
-                    Text(L10n.string("wifi.enable.noUsb"))
+                if usbDevices.isEmpty {
+                    Text(L10n.string(presetIsNetworkDevice ? "wifi.enable.alreadyNetwork" : "wifi.enable.noUsb"))
                         .font(OPFont.body(12))
                         .foregroundStyle(OPColor.inkDim)
+                        .fixedSize(horizontal: false, vertical: true)
                 } else {
-                    if usbDevices.count > 1 || presetSerial == nil {
+                    if usbDevices.count > 1 {
                         Picker(L10n.string("wifi.field.device"), selection: $selectedUsbSerial) {
                             ForEach(usbDevices, id: \.serial) { d in
                                 Text(displayName(d)).tag(d.serial)
                             }
-                            if let p = presetSerial, !usbDevices.contains(where: { $0.serial == p }) {
+                            // 인벤토리 반영이 늦을 때의 폴백 — **USB 기기일 때만** 올린다
+                            // (무선 기기를 여기 올리면 adb tcpip 5555 로 무선 연결을 끊을 수 있다)
+                            if let p = presetSerial, isUsbDevice(p),
+                               !usbDevices.contains(where: { $0.serial == p }) {
                                 Text(store.identLabel(for: p)).tag(p)
                             }
                         }
                         .labelsHidden()
-                    } else if let p = presetSerial {
-                        Text(displayNameById(p))
+                    } else if let only = usbDevices.first {
+                        Text(displayName(only))
                             .font(OPFont.body(12))
                             .foregroundStyle(OPColor.ink)
                     }
                     OPPrimaryButton(title: L10n.string("wifi.enable.action")) {
-                        let target = selectedUsbSerial.isEmpty ? (presetSerial ?? "") : selectedUsbSerial
+                        let target = selectedUsbSerial.isEmpty
+                            ? (usbDevices.first?.serial ?? "")
+                            : selectedUsbSerial
                         guard !target.isEmpty else { return }
                         wifi.enableWifi(serial: target)
                     }
-                    .disabled(wifi.busy || (selectedUsbSerial.isEmpty && presetSerial == nil))
+                    .disabled(wifi.busy || (selectedUsbSerial.isEmpty && usbDevices.isEmpty))
                 }
             }
 
@@ -294,7 +320,8 @@ struct WifiOnboardingSheet: View {
                 if let p = presetSerial, usbDevices.contains(where: { $0.serial == p }) {
                     selectedUsbSerial = p
                 } else {
-                    selectedUsbSerial = usbDevices.first?.serial ?? presetSerial ?? ""
+                    // **무선 기기를 대상으로 삼지 않는다** — 이 섹션은 USB 기기 전용 (2026-10-18)
+                    selectedUsbSerial = usbDevices.first?.serial ?? ""
                 }
             }
             if let kind = connectionKind, kind == .network, let p = presetSerial {

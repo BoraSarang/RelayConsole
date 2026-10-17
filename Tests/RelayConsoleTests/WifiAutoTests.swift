@@ -528,6 +528,14 @@ struct WifiReconnectTests {
         #expect(WifiAdbLogic.lostStatusKey(autoEnabled: false) == "wifi.lost.autoOff")
     }
 
+    @Test func tcpipEnableTargetsUsbOnly() {
+        // [USB → Wi-Fi 전환] 은 `adb tcpip 5555` = adbd 재시작 — 무선 기기에 누르면
+        // 지금 붙어 있는 무선 연결이 끊긴다. 그래서 대상은 USB 기기(또는 종류 미상)뿐이다 (2026-10-18)
+        #expect(WifiAdbLogic.canEnableTcpip(connectionKind: .usb))
+        #expect(WifiAdbLogic.canEnableTcpip(connectionKind: nil))
+        #expect(!WifiAdbLogic.canEnableTcpip(connectionKind: .network))
+    }
+
     @Test func physicalIdForEndpointReverseLookup() {
         let map = ["pidRouter": "192.168.84.79:5555"]
         #expect(WifiAdbLogic.physicalIdForEndpoint("192.168.84.79:5555", in: map) == "pidRouter")

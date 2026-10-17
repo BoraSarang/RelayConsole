@@ -249,6 +249,15 @@ enum WifiAdbLogic {
         serial.contains(":")
     }
 
+    /// [USB → Wi-Fi 전환] 의 대상이 될 수 있는가 — **USB 로 붙은 기기만** (판정만 · 테스트 고정)
+    ///
+    /// 이 버튼은 `adb tcpip 5555` 를 실행한다 = **adbd 재시작**. 무선 기기에 눌리면
+    /// 지금 붙어 있는 무선 연결을 끊는다. 종전엔 시트를 무선 기기에서 열면 그 기기가
+    /// 이 섹션의 대상으로 보였다(2026-10-18) — 종류를 모르는(`nil`) USB 기기는 허용한다.
+    static func canEnableTcpip(connectionKind: ConnectionKind?) -> Bool {
+        connectionKind == .usb || connectionKind == nil
+    }
+
     /// stale 판정 — **물리 고유값이 같은데 엔드포인트가 다른** TCP 항목을 찾는다.
     ///
     /// - Parameters:

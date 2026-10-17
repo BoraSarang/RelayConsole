@@ -659,6 +659,7 @@
 "wifi.disconnect.action" = "끊기";
 "wifi.enable.action" = "USB→Wi-Fi 전환";
 "wifi.enable.noUsb" = "USB 기기가 없습니다. 케이블로 연결한 뒤 다시 시도하세요.";
+"wifi.enable.alreadyNetwork" = "이미 Wi-Fi 로 연결되어 있습니다 — USB 전환은 필요 없습니다.";
 "wifi.endpoint.placeholder" = "예: 192.168.0.5:5555";
 "wifi.manual.last" = "최근: %@";
 "wifi.manual.pairHint" = "Android 11+ 무선 디버깅은 별도 페어링 포트 사용 — 기기에서 먼저 페어링하세요.";

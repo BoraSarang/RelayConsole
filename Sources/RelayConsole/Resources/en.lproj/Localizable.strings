@@ -659,6 +659,7 @@
 "wifi.disconnect.action" = "Disconnect";
 "wifi.enable.action" = "Switch USB→Wi-Fi";
 "wifi.enable.noUsb" = "No USB device. Connect a cable and try again.";
+"wifi.enable.alreadyNetwork" = "Already connected over Wi-Fi — no USB conversion needed.";
 "wifi.endpoint.placeholder" = "e.g. 192.168.0.5:5555";
 "wifi.manual.last" = "Last: %@";
 "wifi.manual.pairHint" = "Android 11+ wireless debugging uses a separate pairing port — pair on the device first.";
