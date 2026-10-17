@@ -5,7 +5,7 @@ import Foundation
 /// ## 왜 store 를 스냅숏으로 떼는가
 /// `ConsoleStore` 는 `@MainActor` 이고 창·기기·네트워크를 끌어다 쓴다.
 /// 그대로 쓰면 지표 텍스트를 **눈으로 확인**해야만 한다(그러면 테스트가 못 한다).
-/// 순수 스냅숏을 받으면 `Rule`·`RelayWidgetCore`·`ThresholdGate` 처럼
+/// 순수 스냅숏을 받으면 `Rule`·`ThresholdGate` 처럼
 /// **값이 틀리면 테스트가 죽는** 구조가 된다.
 struct MetricsSnapshot: Equatable, Sendable {
     struct Device: Equatable, Sendable {

@@ -1,6 +1,6 @@
 import Foundation
 
-/// 콘솔 사이드바 섹션 — ConsoleView 선택 + 위젯 딥링크 공용 진입점
+/// 콘솔 사이드바 섹션 — ConsoleView 선택
 enum ConsoleSection: String, CaseIterable, Identifiable {
     case devices, alerts, insights, plugins
     var id: String { rawValue }

@@ -1,7 +1,7 @@
 # Relay Console 경쟁 앱 조사 · 비교 보고서 (v2)
 
 > 조사일: **2026-10-17** · 모드: deep(병렬 수집 + 교차검증) · 출처: 57건 (모두 URL 명시)
-> 대상 제품: **Relay Console 1.16.0** (macOS 26+ 메뉴바 상주 안드로이드·Apple 기기 관제탑)
+> 대상 제품: **Relay Console 1.17.0** (macOS 26+ 메뉴바 상주 안드로이드·Apple 기기 관제탑)
 > 이전 문서: 이 저장소 `docs/research/RESEARCH_competitive_v1.md` (2026-09-24) — 본 보고서가 **KDE Connect 축과 Windows 축을 신규로 추가**하고, Sites/Jobs 삭제 이후 포지션을 재정의한다.
 > 미검증 항목은 본문에 **미검증**으로 표시했고 §6에 모아 두었다.
 > 동반 문서: `docs/research/RESEARCH_windows_equivalents.md` (Windows 진영 심화 조사 — §F2·F3의 원자료)
@@ -34,7 +34,7 @@ Relay Console의 차별점은 **폰에 앱을 설치하지 않고(adb만) 다기
 
 ### 1.3 전제
 
-비교 기준은 **Relay Console 1.16.0**의 현재 기능이다. 저장소 README와 소스 기준으로: 메뉴바 상주·배지, 팝오버(브리핑·발열 배너·권장 조치), 위젯 3종, 안드로이드 8카드(CPU·GPU·MEM·SENSORS·BATTERY·NETWORK·THERMAL·STORAGE) + 5분 스파크라인, 감시 18종(hysteresis·쿨다운), Alerts 3탭 + ack/mute/note, 외부 채널 ntfy·Slack, scrcpy 원클릭 미러링, 파일 탐색기, logcat 뷰어, 프로세스 목록, 앱 네트워크 허브, 인시던트 번들(ANR·크래시), Health Score, 로컬 MCP 서버(읽기 전용), 플러그인 SDK, Apple Phase1(libimobiledevice Trust). **Sites·Jobs(사이트·작업 감시)는 2026-10-05 제거**되어 포지션이 "기기 관제탑"으로 좁혀졌다 [자체].
+비교 기준은 **Relay Console 1.17.0**의 현재 기능이다. 저장소 README와 소스 기준으로: 메뉴바 상주·배지, 팝오버(브리핑·발열 배너·권장 조치), 안드로이드 8카드(CPU·GPU·MEM·SENSORS·BATTERY·NETWORK·THERMAL·STORAGE) + 5분 스파크라인, 감시 18종(hysteresis·쿨다운), Alerts 3탭 + ack/mute/note, 외부 채널 ntfy·Slack, scrcpy 원클릭 미러링, 파일 탐색기, logcat 뷰어, 프로세스 목록, 앱 네트워크 허브, 인시던트 번들(ANR·크래시), Health Score, 로컬 MCP 서버(읽기 전용), 플러그인 SDK, Apple Phase1(libimobiledevice Trust). **Sites·Jobs(사이트·작업 감시)는 2026-10-05 제거**되어 포지션이 "기기 관제탑"으로 좁혀졌다 [자체].
 
 ### 1.4 용어
 
@@ -214,7 +214,7 @@ Relay Console은 **L3에서 로컬·무계정·무서버로 서는 유일한 제
 | M2 | **18종 감시 + hysteresis + ack/mute/note** | 경쟁 제품은 임계 알림이 없거나(AirDroid Business 예외, 클라우드·유료) 단순 임계만 있음 [21] |
 | M3 | **인시던트 번들(ANR·크래시 자동 캡처)** | **Droidective의 크래시 브라우저가 가장 근접**(ANR 포함·watch 모드·Slack/Jira 포맷팅)하나 **임계 자동 캡처·번들 묶음·번들 export는 없음**. ACRA/Crashlytics/Sentry는 SDK 삽입 또는 SaaS [51][52][53] |
 | M4 | **로컬 읽기 전용 MCP 서버** | mobile-mcp 계열은 제어 자동화용 [30][31]. 텔레메트리·이벤트 MCP는 드묾 |
-| M5 | **메뉴바 상주 + 위젯 + 브리핑 + Health Score** | 메뉴바 상주 자체는 AndroLaunch(88★)·Droidective(62★)·AndroidDeviceManager(3★)도 제공. **브리핑·위젯·Health Score·감시 이벤트 연동은 우리뿐** [37][38] |
+| M5 | **메뉴바 상주 + 브리핑 + Health Score** | 메뉴바 상주 자체는 AndroLaunch(88★)·Droidective(62★)·AndroidDeviceManager(3★)도 제공. **브리핑·Health Score·감시 이벤트 연동은 우리뿐** [37][38] (위젯 3종은 2026-10-17 제거 — DECISIONS D2) |
 | M8 | **임계 감시 + 이벤트 이력 + 채널 전송(3축 결합)** | Droidective(차트+크래시)와 AndroLaunch(토글+QR)를 합쳐도 이 3축은 성립하지 않음 → **§3 위협 ①에 대한 실질 방어선** |
 | M6 | **ntfy·Slack 채널 + 시스템 알림 동일 필터** | KDE Connect/Phone Link/Sefirah/CoveLink 모두 외부 채널 없음 [5][15][25][26] |
 | M7 | **Android + Apple 한 창** | KDE Connect는 iOS 제약(알림·SMS·가상 디스플레이 없음) [5][9] |
@@ -470,7 +470,7 @@ Relay Console은 **L3에서 로컬·무계정·무서버로 서는 유일한 제
 ### 8.1 수행 절차
 
 1. **범위 분해** — 질문을 4축(KDE Connect / Windows / GitHub 오픈소스 / 폰측 도구)으로 나눴다.
-2. **자체 인벤터리** — 저장소에서 현재 기능(카드 8종, 감시 18종, 채널, MCP, 파일·logcat·프로세스, 위젯·브리핑, Apple Phase1)과 삭제된 기능(Sites·Jobs, 2026-10-05)을 확인해 비교 기준을 고정했다.
+2. **자체 인벤터리** — 저장소에서 현재 기능(카드 8종, 감시 18종, 채널, MCP, 파일·logcat·프로세스, 브리핑, Apple Phase1)과 삭제된 기능(Sites·Jobs, 2026-10-05 · 위젯 3종, 2026-10-17)을 확인해 비교 기준을 고정했다.
 3. **병렬 수집** — 4개 조사 에이전트로 축별 수집. 각자 URL을 요구했고, GitHub 수치는 `api.github.com/repos/...` 실제 응답값만 쓰도록 지시했다.
 4. **교차검증** — 핵심 제품(Sefirah, Vysor, Intel Unison, Samsung DeX/Flow, KDE Connect 릴리스)을 독립적으로 다시 확인.
 5. **URL 실측** — 참고문헌 56건에 대해 HTTP 상태를 일괄 확인(전건 200, Vysor 가격 페이지 404 → 루트로 교체).

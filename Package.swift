@@ -16,7 +16,6 @@ let package = Package(
     targets: [
         .executableTarget(
             name: "RelayConsole",
-            dependencies: ["RelayWidgetCore"],
             path: "Sources/RelayConsole",
             resources: [
                 .process("Resources")
@@ -27,18 +26,12 @@ let package = Package(
             linkerSettings: [
                 .linkedFramework("AppKit"),
                 .linkedFramework("SwiftUI"),
-                .linkedFramework("UserNotifications"),
-                .linkedFramework("WidgetKit")
+                .linkedFramework("UserNotifications")
             ]
         ),
         .target(
             name: "RelayMcpCore",
             path: "Sources/RelayMcpCore"
-        ),
-        // 위젯 공유 — 모델·App Group 저장소만 (앱·위젯 양쪽에서 각각 컴파일 · PLAN_widget)
-        .target(
-            name: "RelayWidgetCore",
-            path: "Sources/RelayWidgetCore"
         ),
         .executableTarget(
             name: "RelayMcp",
@@ -47,7 +40,7 @@ let package = Package(
         ),
         .testTarget(
             name: "RelayConsoleTests",
-            dependencies: ["RelayConsole", "RelayMcpCore", "RelayWidgetCore"],
+            dependencies: ["RelayConsole", "RelayMcpCore"],
             path: "Tests/RelayConsoleTests"
         )
     ]

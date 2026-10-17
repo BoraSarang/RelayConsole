@@ -2,10 +2,6 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<!-- 앱은 비샌드박스 유지 (adb·scrcpy 외부 호출) · App Group만 공유 (PLAN_widget) -->
-	<key>com.apple.security.application-groups</key>
-	<array>
-		<string>6GPJQ7BQC9.com.borasarang.relayconsole</string>
-	</array>
+	<!-- 앱은 비샌드박스 유지 (adb·scrcpy 외부 호출) — 위젯 제거로 App Group 불필요 (DECISIONS D2) -->
 </dict>
 </plist>

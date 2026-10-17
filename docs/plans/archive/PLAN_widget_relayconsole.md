@@ -1,5 +1,8 @@
 # PLAN — macOS 위젯 (WidgetKit) · v1.15.0
 
+> ⚠️ **2026-10-17 제거됨** — `docs/DECISIONS.md` D2 (위젯·xcodegen·App Group·딥링크 전부 제거, 빌드는 SwiftPM 단독).
+> 이 문서는 이력이다. 부활 재료는 git 히스토리: `git log -- Sources/RelayWidget WidgetXcode`
+
 > **수립일**: 2026-09-25 · **범위**: 3-family 전체 + Apple Development 서명 통일 + App Group(가이드 패턴)
 > **참조**: `/Users/lee/Documents/AGENTS/development/guide/macos-widget.md` (TubeKeep 검증 사례)
 
