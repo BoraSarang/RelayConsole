@@ -672,7 +672,7 @@
 "wifi.pair.discovered.help" = "무선 디버깅이 켜진 기기와 페어링 창이 열린 기기입니다";
 "wifi.pair.kind.pairing" = "페어링 창";
 "wifi.pair.kind.connect" = "무선 디버깅";
-"wifi.pair.hint" = "무선 디버깅을 켜두면 재부팅 뒤에도 USB 없이 다시 붙습니다 (Android 11 이상).";
+"wifi.pair.hint" = "무선 디버깅이 켜져 있으면 재부팅·주소 변경 뒤에도 USB 없이 다시 붙습니다 (Android 11 이상). 재부팅 후 토글이 꺼지는 기기는 다시 켜 주세요.";
 "wifi.pair.status.pairing" = "페어링 중…";
 "wifi.pair.status.done" = "무선 디버깅으로 연결됨 %@";
 "wifi.pair.error.code.format" = "페어링 코드는 6자리 숫자입니다";
