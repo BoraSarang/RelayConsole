@@ -704,7 +704,7 @@
 "wifi.sheet.title" = "Wi-Fi ADB onboarding";
 "wifi.status.connected" = "Connected %@";
 "wifi.status.connecting" = "Connecting…";
-"wifi.status.disconnected" = "Disconnected";
+"wifi.status.disconnected" = "Disconnected — removed from auto-reconnect · reconnect from Discovered devices above";
 "wifi.status.enabling" = "Switching to tcpip…";
 "droid.logs.search.placeholder" = "Search (ANR, FATAL, tag)";
 "droid.logs.search.clear" = "Clear";

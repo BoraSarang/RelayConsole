@@ -704,7 +704,7 @@
 "wifi.sheet.title" = "Wi-Fi ADB 온보딩";
 "wifi.status.connected" = "연결됨 %@";
 "wifi.status.connecting" = "연결 중…";
-"wifi.status.disconnected" = "연결 해제됨";
+"wifi.status.disconnected" = "연결 해제됨 — 자동 재연결에서 뺐습니다 · 위 [발견된 기기]에서 다시 연결하세요";
 "wifi.status.enabling" = "tcpip 전환 중…";
 "droid.logs.search.placeholder" = "검색 (ANR, FATAL, 태그)";
 "droid.logs.search.clear" = "지우기";
