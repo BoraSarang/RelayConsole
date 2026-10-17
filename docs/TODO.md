@@ -159,6 +159,16 @@
     L10n **721키 en/ko 1:1** · U+FFFD 0건
 
 ## 진행 중 (bd ready)
+- **T-2026-10-17-3 팝오버 기기 상세 기본값 = 펼침** (S급 UI · PLAN 없음)
+  - 요청: "메뉴바 팝오버에서 기기 상세는 기본값을 상세 보기로 해줘" (2026-10-17)
+  - 원인: `showDeviceDetail` 이 `@State = false` + **기기 1대일 때만** 자동 펼침 →
+    기기 2대(Router+S22)면 매번 "기기 상세를 눌러 대시보드 보기" 안내를 한 번 더 눌러야 했다
+  - 수정: 기본값 `true` · 중복이 된 "기기 1대 자동 펼침" 규칙(`onAppear`/`onChange`) 제거
+    → 이제 **수동 접기가 존중**된다(전에는 기기 수가 1대로 바뀌면 다시 펼쳐졌음)
+  - 영향: 다른 표면(콘솔·플로팅·위젯·메뉴바)·저장값·데이터 수집 **변화 없음** (팝오버 로컬 `@State`)
+    · 대가로 이벤트 목록이 카드 아래로 밀려 스크롤 필요(브리핑·감시 배너·권장 조치는 여전히 맨 위)
+  - **검증 [HARD]**: `swift test` **XCTest 184/0 + Swift Testing 659/0** · `swift build` 완료
+  - 육안 → `docs/MANUAL_VERIFY.md` 47번 ⬜
 - **T-2026-10-13-6 외부(인터넷) 트래픽 분리 표시** — `docs/plans/PLAN_net_external.md`
   - Router down 혼입 실측 (ipa 중복·전달분·LAN) → 기준=활성 기본 경로 (Router=rmnet, S22=wifi)
   - 구현 완료(미커밋): `parseNetDev` ipa 적응 제외 + cell/wifi 그룹 · `NetRates` 3종 ·
