@@ -659,6 +659,7 @@
 "wifi.disconnect.action" = "끊기";
 "wifi.enable.action" = "USB→Wi-Fi 전환";
 "wifi.enable.noUsb" = "USB 기기가 없습니다. 케이블로 연결한 뒤 다시 시도하세요.";
+"wifi.enable.alreadyNetwork" = "이미 Wi-Fi 로 연결되어 있습니다 — USB 전환은 필요 없습니다.";
 "wifi.endpoint.placeholder" = "예: 192.168.0.5:5555";
 "wifi.manual.last" = "최근: %@";
 "wifi.manual.pairHint" = "Android 11+ 무선 디버깅은 별도 페어링 포트 사용 — 기기에서 먼저 페어링하세요.";
@@ -672,7 +673,8 @@
 "wifi.pair.discovered.help" = "무선 디버깅이 켜진 기기와 페어링 창이 열린 기기입니다";
 "wifi.pair.kind.pairing" = "페어링 창";
 "wifi.pair.kind.connect" = "무선 디버깅";
-"wifi.pair.hint" = "무선 디버깅을 켜두면 재부팅 뒤에도 USB 없이 다시 붙습니다 (Android 11 이상).";
+"wifi.pair.hint" = "무선 디버깅이 켜져 있으면 재부팅·주소 변경 뒤에도 USB 없이 다시 붙습니다.";
+"wifi.pair.rebootNote" = "재부팅 뒤 무선 디버깅이 꺼지는 기기는 다시 켜 주세요.";
 "wifi.pair.status.pairing" = "페어링 중…";
 "wifi.pair.status.done" = "무선 디버깅으로 연결됨 %@";
 "wifi.pair.error.code.format" = "페어링 코드는 6자리 숫자입니다";
@@ -702,7 +704,7 @@
 "wifi.sheet.title" = "Wi-Fi ADB 온보딩";
 "wifi.status.connected" = "연결됨 %@";
 "wifi.status.connecting" = "연결 중…";
-"wifi.status.disconnected" = "연결 해제됨";
+"wifi.status.disconnected" = "연결 해제됨 — 자동 재연결에서 뺐습니다 · 위 [발견된 기기]에서 다시 연결하세요";
 "wifi.status.enabling" = "tcpip 전환 중…";
 "droid.logs.search.placeholder" = "검색 (ANR, FATAL, 태그)";
 "droid.logs.search.clear" = "지우기";
@@ -718,6 +720,8 @@
 "wifi.auto.alreadyOpen" = "이미 Wi-Fi 로 열려 있습니다 — %@";
 "wifi.badge.autoFailed" = "자동 연결 실패";
 "wifi.reconnect.done" = "네트워크가 바뀌어 %@ 로 다시 연결했습니다";
+"wifi.lost.searching" = "연결이 끊겼습니다 — 다시 찾는 중";
+"wifi.lost.autoOff" = "연결이 끊겼습니다 — 자동 재연결이 꺼져 있습니다";
 "wifi.reconnect.ipNotFound" = "기기 IP 를 찾지 못했습니다 — Wi-Fi 를 확인하세요";
 "wifi.reconnect.notReachable" = "%@ 에 닿지 않습니다 — 같은 Wi-Fi 에 있는지 확인하세요";
 "wifi.reconnect.failed" = "재연결 실패 — %@";

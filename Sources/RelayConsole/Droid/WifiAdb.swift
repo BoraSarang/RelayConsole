@@ -249,6 +249,15 @@ enum WifiAdbLogic {
         serial.contains(":")
     }
 
+    /// [USB → Wi-Fi 전환] 의 대상이 될 수 있는가 — **USB 로 붙은 기기만** (판정만 · 테스트 고정)
+    ///
+    /// 이 버튼은 `adb tcpip 5555` 를 실행한다 = **adbd 재시작**. 무선 기기에 눌리면
+    /// 지금 붙어 있는 무선 연결을 끊는다. 종전엔 시트를 무선 기기에서 열면 그 기기가
+    /// 이 섹션의 대상으로 보였다(2026-10-18) — 종류를 모르는(`nil`) USB 기기는 허용한다.
+    static func canEnableTcpip(connectionKind: ConnectionKind?) -> Bool {
+        connectionKind == .usb || connectionKind == nil
+    }
+
     /// stale 판정 — **물리 고유값이 같은데 엔드포인트가 다른** TCP 항목을 찾는다.
     ///
     /// - Parameters:
@@ -306,6 +315,33 @@ enum WifiAdbLogic {
         return true
     }
 
+    /// 유실을 알리는 문구 키 — **판정만** (IO 없음 · 테스트 고정)
+    ///
+    /// 끊긴 순간 상태 줄을 바꾸지 않으면 직전의 "다시 연결했습니다"(성공)가 그대로 남아
+    /// **"지금 연결됨"처럼 보인다** (2026-10-18 실측 — 사용자가 "안 없어지네").
+    /// 자동모드가 꺼져 있으면 "다시 찾는 중"은 거짓말이므로 다른 문구를 쓴다.
+    static func lostStatusKey(autoEnabled: Bool) -> String {
+        autoEnabled ? "wifi.lost.searching" : "wifi.lost.autoOff"
+    }
+
+    /// 새 mDNS 광고를 봤을 때 **쿨다운만** 건너뛸지 — 순수 판정 (IO 없음 · 테스트 고정)
+    ///
+    /// 재시도 백오프(60초→2분→4분→8분→15분)는 **정말 없는 기기**를 두드리지 않으려는 장치다.
+    /// 그런데 폰이 **돌아오는 순간**(재부팅·무선 디버깅 재토글)은 그 신호가 아니다 — 새 포트가
+    /// 광고되면 곧바로 붙어야 한다. 실측(2026-10-18): 폰을 10분 만에 다시 켜면 백오프 때문에
+    /// 최대 15분을 더 기다렸다(이번 사이클은 초기 단계라 51초).
+    ///
+    /// 광고가 **새로 보였을 때만** `true` 이므로 같은 광고로는 한 번만 건너뛴다 = 폭주하지 않는다.
+    static func bypassCooldownOnNewAdvertisement(discovered: [String], lastSeen: String?) -> Bool {
+        guard !discovered.isEmpty else { return false }
+        return advertisedKey(discovered) != lastSeen
+    }
+
+    /// 광고 묶음의 지문 — 순서에 흔들리지 않게 정렬해 고정한다
+    static func advertisedKey(_ discovered: [String]) -> String {
+        discovered.sorted().joined(separator: ",")
+    }
+
     /// adb connect 성공 판정 — 순수 함수 (테스트 고정)
     /// adb는 실패해도 exit 0을 반환하므로("failed to connect ..." + 0) 출력으로 판별한다.
     /// 스크립트의 `grep -qE "^(already )?connected to"` 와 동일 기준.
@@ -354,16 +390,28 @@ enum WifiAdbLogic {
         map.first { $0.value == endpoint }?.key
     }
 
-    /// 기기별 기억 시드 — 이미 발견된(found)·대기 중(pending)이 아닌 기억만 유실 목록에 올린다 (2026-10-11)
+    /// 기기별 기억 시드 — 이미 발견된(found)·대기 중(pending)·**사용자가 끊은** 기억은 올리지 않는다 (2026-10-11 · 2026-10-18)
     ///
     /// 종전 `seedLostEndpoint`는 "아무것도 안 보일 때"만 단일 슬롯을 살렸다.
     /// S22가 살아 있으면 Router 기억은 영원히 시드되지 않았다.
+    /// `userDisconnected` 가 없으면 **[끊기] 로 끊은 기기가 다음 틱에 되살아난다**(실측 결함).
     static func seedLostEndpoints(
         remembered: [String: String],
         found: Set<String>,
-        pending: Set<String>
+        pending: Set<String>,
+        userDisconnected: Set<String> = []
     ) -> [String] {
-        remembered.values.filter { !found.contains($0) && !pending.contains($0) }.sorted()
+        remembered.values.filter {
+            !found.contains($0) && !pending.contains($0) && !userDisconnected.contains($0)
+        }.sorted()
+    }
+
+    /// 기억에서 엔드포인트를 지운다 — **[끊기] 는 "다시 잇지 마" 라는 뜻**이다 (판정만: 새 맵 반환)
+    ///
+    /// 이 기억(`endpointsByDevice`)은 자동 재연결의 씨앗이라, 남겨 두면 사용자가 끊은 기기를
+    /// 앱이 1분 뒤 스스로 되살린다. 같은 물리 기기의 다른 엔드포인트는 그대로 둔다.
+    static func forgetEndpoint(_ endpoint: String, in remembered: [String: String]) -> [String: String] {
+        remembered.filter { $0.value != endpoint }
     }
 
     /// 시작 시 유실 후보 선등록 판정 — 순수 함수 (테스트 고정)
@@ -435,6 +483,17 @@ enum WifiAdbLogic {
 
     static func defaultEndpoint(ip: String, port: Int = defaultPort) -> String {
         "\(ip):\(port)"
+    }
+
+    /// 후보 엔드포인트를 확인할 때 **볼 포트** — 후보의 자기 포트(없으면 기본 5555)
+    ///
+    /// ★ 2026-10-17: 종전엔 재연결 게이트가 **5555 를 하드코딩**했다. 재부팅 뒤 폰은
+    ///   5555(레거시 tcpip)를 닫고 무선 디버깅 포트만 연다. 게다가 `mergeDiscovered` 가
+    ///   같은 호스트의 옛 5555 후보를 버리므로, 그 순간 후보는 무선 포트 **하나뿐**인데
+    ///   게이트가 5555 를 보며 **그 하나를 걸러냈다** — mDNS 로 찾아 놓고도 못 붙는 경로다.
+    ///   (49 실측 전 코드 검토에서 발견 · 실기기에서 재현하기 전에 고침)
+    static func probePort(forEndpoint endpoint: String) -> Int {
+        splitHostPort(endpoint)?.port ?? defaultPort
     }
 
     /// `host:port` 분리 — 포트 없으면 nil (기본 포트는 호출부에서 붙임)
@@ -695,6 +754,10 @@ final class WifiAdbController: ObservableObject {
     /// 유실 이벤트 때 1회만 시도하고 끝내면, 그 시도가 Wi-Fi 꺼진 구간에 소진된 뒤
     /// Wi-Fi 가 돌아와도 재시도 트리거가 없다. 매 틱 쿨다운 걸고 재시도한다.
     private var lostNetworkEndpoints: Set<String> = []
+    /// 마지막으로 본 mDNS 광고 (유실 시리얼 → 광고 지문) — **새 광고가 뜨면 쿨다운을 건너뛴다**
+    private var lastSeenAdvertisement: [String: String] = [:]
+    /// 사용자가 **[끊기]** 로 끊은 전송 — 되살리지도, "다시 찾는 중"이라고 말하지도 않는다 (2026-10-18)
+    private var userDisconnectedEndpoints: Set<String> = []
     /// 재연결 상태 — 쿨다운과 연속 실패 횟수
     private var reconnectLastAttemptAt: Date?
     private var reconnectFailures = 0
@@ -710,9 +773,20 @@ final class WifiAdbController: ObservableObject {
     // MARK: - 재연결 (2026-09-27 · PLAN_wifi_reconnect)
 
     /// 유실 기록 — tick 의 유실 이벤트에서 부른다 (TCP 만)
+    ///
+    /// 끊긴 **순간** 상태 줄을 바꾼다 — 직전 성공 문구("다시 연결했습니다")가 그대로 남으면
+    /// "지금 연결됨"처럼 보인다 (2026-10-18 사용자 신고: "안 없어지네").
+    /// 사용자가 [끊기] 로 끊은 건 알리지 않는다 — 되살리지도 않고, 한 일을 사건처럼 말하지도 않는다.
     func noteLostNetworkEndpoint(_ serial: String) {
         guard WifiAdbLogic.isNetworkEndpoint(serial) else { return }
+        guard !userDisconnectedEndpoints.contains(serial) else { return }
+        let isNew = !lostNetworkEndpoints.contains(serial)
         lostNetworkEndpoints.insert(serial)
+        guard isNew else { return }  // 틱마다 같은 문구를 새로 쓰지 않는다
+        let enabled = UserDefaults.standard.object(forKey: WifiAdbLogic.autoModeKey) as? Bool ?? true
+        statusIsError = true
+        statusMessage = L10n.string(WifiAdbLogic.lostStatusKey(autoEnabled: enabled))
+        DebugLogger.shared.warn("WifiAdb", "[WARN] [LOST] \(serial) — \(statusMessage ?? "")")
     }
 
     /// 매 틱 재시도 — 돌아온 기기는 빼고, 남은 건 쿨다운 걸고 `autoReconnect`
@@ -724,7 +798,8 @@ final class WifiAdbController: ObservableObject {
         // 기기별 기억 시드 — S22가 살아 있어도 Router 기억은 살린다 (단일 슬롯의 foundEmpty 게이트와 달리).
         // 죽은 기기 기억은 쿨다운+백오프로 소진되므로 폭주하지 않는다.
         for ep in WifiAdbLogic.seedLostEndpoints(
-            remembered: endpointsByDevice, found: found, pending: lostNetworkEndpoints
+            remembered: endpointsByDevice, found: found, pending: lostNetworkEndpoints,
+            userDisconnected: userDisconnectedEndpoints
         ) {
             lostNetworkEndpoints.insert(ep)
         }
@@ -739,8 +814,36 @@ final class WifiAdbController: ObservableObject {
            ) {
             lostNetworkEndpoints.insert(seed)
         }
+        // 사용자가 [끊기] 한 전송은 어떤 경로로도 되살리지 않는다 (기억 시드·구 단일 슬롯 포함)
+        lostNetworkEndpoints.subtract(userDisconnectedEndpoints)
+
+        // ★ 새 광고 감지 — 폰이 **돌아온 순간**은 "없는 기기"가 아니다 (2026-10-18)
+        //
+        //   재시도 백오프(60초→2분→…→15분)는 정말 없는 기기를 두드리지 않으려는 장치인데,
+        //   재부팅·토글 직후 **새 포트가 광고되는 순간**까지 기다리게 만들었다.
+        //   실측: 폰을 10분 만에 다시 켜면 최대 15분을 더 기다리게 된다.
+        //   → 광고가 **새로 보였을 때만** 그 기기의 쿨다운을 건너뛴다(같은 광고면 평소 백오프).
+        //   조회는 한 틱에 **한 번**만 한다(`adb mdns services` ≈20ms) — 잃어버린 기기가 있을 때만 돈다.
+        var services: [WifiAdbLogic.MdnsService] = []
+        if !lostNetworkEndpoints.isEmpty, let adb = DeviceMonitor.adbPathNow(),
+           let out = try? WifiAdbRunner.runMdnsServices(adb) {
+            services = WifiAdbLogic.parseMdnsServices(out)
+        }
+        let knownHosts = Set(endpointsByDevice.values.compactMap { WifiAdbLogic.host(ofEndpoint: $0) })
+
         for s in lostNetworkEndpoints {
-            await autoReconnect(lostSerial: s)
+            let discovered = WifiAdbLogic.matchingConnectEndpoints(
+                services: services,
+                physicalId: WifiAdbLogic.physicalIdForEndpoint(s, in: endpointsByDevice),
+                knownHosts: knownHosts
+            )
+            let bypass = WifiAdbLogic.bypassCooldownOnNewAdvertisement(
+                discovered: discovered, lastSeen: lastSeenAdvertisement[s]
+            )
+            lastSeenAdvertisement[s] = discovered.isEmpty
+                ? nil
+                : WifiAdbLogic.advertisedKey(discovered)
+            await autoReconnect(lostSerial: s, bypassCooldown: bypass)
         }
     }
 
@@ -751,14 +854,18 @@ final class WifiAdbController: ObservableObject {
     /// USB 를 다시 꽂지 않아도 앱이 스스로 새 IP 로 붙어야 한다.
     ///
     /// 실패해도 조용히 지나가지 않는다 — 사유를 상태로 남긴다 ([표시②])
-    func autoReconnect(lostSerial: String) async {
+    ///
+    /// - Parameter bypassCooldown: 새 mDNS 광고를 봤을 때 `true` — **쿨다운만** 건너뛴다.
+    ///   자동모드 OFF·USB 시리얼 같은 다른 조건은 `shouldReconnect` 가 그대로 지킨다
+    ///   (`lastAttemptAt` 을 nil 로 넘기는 방식).
+    func autoReconnect(lostSerial: String, bypassCooldown: Bool = false) async {
         let now = Date()
         let enabled = UserDefaults.standard.object(forKey: WifiAdbLogic.autoModeKey) as? Bool ?? true
         guard WifiAdbLogic.shouldReconnect(
             autoEnabled: enabled,
             lostSerial: lostSerial,
             now: now,
-            lastAttemptAt: reconnectLastAttemptAt,
+            lastAttemptAt: bypassCooldown ? nil : reconnectLastAttemptAt,
             failures: reconnectFailures
         ) else { return }
         guard !busy, !autoInFlight.contains(lostSerial) else { return }
@@ -792,15 +899,18 @@ final class WifiAdbController: ObservableObject {
             guard let ip = WifiAdbLogic.host(ofEndpoint: endpoint) else { continue }
             // adbd 가 이미 TCP 모드다(TCP 로 붙어 있었으니) — **tcpip 은 건드리지 않는다**
             // tcpip 은 adbd 를 재시작해서 그 순간 연결을 **또** 끊는다
-            guard PingProbe.reachable(ip: ip) else {
-                lastFailureDetail = L10n.format("wifi.reconnect.notReachable", endpoint)
-                continue
-            }
-            // ★ **adbd 포트가 열려 있는지 먼저 본다** (2026-09-28 실측)
-            //   후보가 여러 개일 때 `adb connect` 를 전부 시도하면 adb 서버 상태가
-            //   오염된다(connect 실패가 device 로 남음). 계측에서 ARP 이웃 3개 중
-            //   **5555 가 열린 것은 1개뿐**이었다 — 포트로 거르면 2회 시도가 사라진다.
-            guard Self.adbdPortOpen(ip: ip, port: WifiAdbLogic.defaultPort) else {
+            //
+            // ★ **그 엔드포인트의 포트로** 도달을 확인한다.
+            //   - 후보가 여러 개일 때 `adb connect` 를 전부 시도하면 adb 서버 상태가 오염된다
+            //     (connect 실패가 device 로 남음) — 2026-09-28 실측: ARP 이웃 3개 중 5555 가
+            //     열린 것은 1개뿐이었다. 포트로 거르면 시도가 2회 줄어든다.
+            //   - 종전엔 이 확인이 **5555 를 하드코딩**했다(도달 확인·포트 확인 두 곳 모두).
+            //     재부팅 뒤 폰은 5555 를 닫고 무선 디버깅 포트만 연다. 게다가 `mergeDiscovered` 가
+            //     같은 호스트의 옛 5555 후보를 버리므로 후보는 무선 포트 **하나뿐**인데,
+            //     그 하나가 두 게이트에서 걸러져 **mDNS 로 찾아 놓고도 못 붙었다**
+            //     (2026-10-18 실측: 광고 37311 이 5분 넘게 떠 있어도 재연결 0회).
+            //   - 도달 확인과 포트 확인은 **같은 `nc -z` 프로브**라 한 번으로 합쳤다.
+            guard PingProbe.reachable(ip: ip, port: WifiAdbLogic.probePort(forEndpoint: endpoint)) else {
                 lastFailureDetail = L10n.format("wifi.reconnect.notReachable", endpoint)
                 continue
             }
@@ -875,6 +985,8 @@ final class WifiAdbController: ObservableObject {
             }
             reconnectFailures = 0
             rememberEndpoint(endpoint, physicalId: physicalId(of: endpoint, adb: adb))
+            // 붙었으니 [끊기] 표식은 의미가 없다 (다시 잃어버리면 정상 경로로 재시도한다)
+            userDisconnectedEndpoints.remove(endpoint)
             lostNetworkEndpoints.remove(lostSerial)
             statusIsError = false
             statusMessage = L10n.format("wifi.reconnect.done", endpoint)
@@ -1344,6 +1456,8 @@ final class WifiAdbController: ObservableObject {
                 }
             }
             rememberEndpoint(clean, physicalId: physicalId(of: clean, adb: adb))
+            // 사용자가 직접 다시 이었다 — [끊기] 표식을 풀어 자동 재연결도 다시 살린다
+            userDisconnectedEndpoints.remove(clean)
             statusMessage = L10n.format("wifi.status.connected", clean)
             DebugLogger.shared.info("WifiAdb", "[INFO] [FEATURE] Wi-Fi 연결 \(clean)")
         }
@@ -1511,6 +1625,11 @@ final class WifiAdbController: ObservableObject {
             }
             do {
                 try WifiAdbRunner.run(adb, WifiAdbLogic.disconnectArgs(endpoint: serial))
+                // [끊기] 는 "다시 잇지 마" 라는 뜻이다 (2026-10-18 실측 결함: 기억이 남아 1분 뒤 되살아났다)
+                userDisconnectedEndpoints.insert(serial)
+                lostNetworkEndpoints.remove(serial)
+                lastSeenAdvertisement[serial] = nil
+                forgetEndpointMemory(serial)
                 statusMessage = L10n.string("wifi.status.disconnected")
                 DebugLogger.shared.info("WifiAdb", "[INFO] [FEATURE] Wi-Fi 해제 \(serial)")
             } catch {
@@ -1603,6 +1722,20 @@ final class WifiAdbController: ObservableObject {
         }
     }
 
+    /// 기억에서 이 엔드포인트를 지운다 — [끊기] 는 "다시 잇지 마" 다 (2026-10-18)
+    ///
+    /// 지우지 않으면 다음 틱의 기억 시드가 이 전송을 "잃어버린 기기"로 올려 **되살린다**.
+    /// 수동 연결의 "최근:" 바로가기(`lastEndpoint`)는 남긴다 — 그건 사용자가 눌러야 동작한다.
+    private func forgetEndpointMemory(_ endpoint: String) {
+        let next = WifiAdbLogic.forgetEndpoint(endpoint, in: endpointsByDevice)
+        guard next != endpointsByDevice else { return }
+        endpointsByDevice = next
+        UserDefaults.standard.set(
+            WifiAdbLogic.encodeEndpointsByDevice(next),
+            forKey: WifiAdbLogic.endpointsByDeviceKey
+        )
+    }
+
     /// 외부 명령 실패 원인 — WifiAdbError.cause 우선, 없으면 빈 문자열 (내부 코드 노출 금지)
     private func cause(_ error: Error) -> String { WifiAdbLogic.cause(error) }
 }
@@ -1629,7 +1762,11 @@ struct WifiAdbError: LocalizedError, Sendable {
 /// 더 직접적인 신호다.
 enum PingProbe {
     /// adb TCP 포트 도달 확인
-    static func reachable(ip: String, port: Int = WifiAdbLogic.defaultPort) -> Bool {
+    ///
+    /// **포트는 반드시 넘긴다** — 기본값을 두면 호출부가 무심코 5555 로 확인하고,
+    /// 재부팅 뒤 무선 디버깅 포트 후보를 통째로 버린다(2026-10-18 실측 · 그 실수를 되풀이하지 않게
+    /// 기본 인자를 **없앴다**).
+    static func reachable(ip: String, port: Int) -> Bool {
         guard WifiAdbLogic.isIPv4(ip), !WifiAdbLogic.isLoopback(ip) else { return false }
         let proc = Process()
         proc.executableURL = URL(fileURLWithPath: "/usr/bin/nc")

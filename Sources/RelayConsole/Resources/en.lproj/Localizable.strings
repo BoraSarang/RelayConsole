@@ -659,6 +659,7 @@
 "wifi.disconnect.action" = "Disconnect";
 "wifi.enable.action" = "Switch USB→Wi-Fi";
 "wifi.enable.noUsb" = "No USB device. Connect a cable and try again.";
+"wifi.enable.alreadyNetwork" = "Already connected over Wi-Fi — no USB conversion needed.";
 "wifi.endpoint.placeholder" = "e.g. 192.168.0.5:5555";
 "wifi.manual.last" = "Last: %@";
 "wifi.manual.pairHint" = "Android 11+ wireless debugging uses a separate pairing port — pair on the device first.";
@@ -672,7 +673,8 @@
 "wifi.pair.discovered.help" = "Devices with wireless debugging on, and devices showing a pairing dialog";
 "wifi.pair.kind.pairing" = "Pairing dialog";
 "wifi.pair.kind.connect" = "Wireless debugging";
-"wifi.pair.hint" = "Leaving wireless debugging on reconnects without USB even after a reboot (Android 11+).";
+"wifi.pair.hint" = "It reconnects without USB after a reboot or address change.";
+"wifi.pair.rebootNote" = "Turn wireless debugging back on if a reboot turns it off.";
 "wifi.pair.status.pairing" = "Pairing…";
 "wifi.pair.status.done" = "Connected via wireless debugging %@";
 "wifi.pair.error.code.format" = "The pairing code must be 6 digits";
@@ -702,7 +704,7 @@
 "wifi.sheet.title" = "Wi-Fi ADB onboarding";
 "wifi.status.connected" = "Connected %@";
 "wifi.status.connecting" = "Connecting…";
-"wifi.status.disconnected" = "Disconnected";
+"wifi.status.disconnected" = "Disconnected — removed from auto-reconnect · reconnect from Discovered devices above";
 "wifi.status.enabling" = "Switching to tcpip…";
 "droid.logs.search.placeholder" = "Search (ANR, FATAL, tag)";
 "droid.logs.search.clear" = "Clear";
@@ -718,6 +720,8 @@
 "wifi.auto.alreadyOpen" = "Already open over Wi-Fi — %@";
 "wifi.badge.autoFailed" = "auto-connect failed";
 "wifi.reconnect.done" = "Network changed — reconnected via %@";
+"wifi.lost.searching" = "Connection lost — searching again";
+"wifi.lost.autoOff" = "Connection lost — auto-reconnect is off";
 "wifi.reconnect.ipNotFound" = "Could not find the device IP — check Wi-Fi";
 "wifi.reconnect.notReachable" = "%@ is unreachable — check that you are on the same Wi-Fi";
 "wifi.reconnect.failed" = "Reconnect failed — %@";
