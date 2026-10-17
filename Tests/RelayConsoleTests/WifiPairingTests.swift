@@ -260,4 +260,34 @@ struct WifiPairingTests {
         #expect(merged.contains("192.168.86.30:5555"))   // 다른 폰은 그대로 남는다
         #expect(WifiAdbLogic.probePort(forEndpoint: merged[0]) == 45325)
     }
+
+    // MARK: - 새 광고 → 쿨다운 건너뛰기 (2026-10-18 · 폰이 돌아온 순간을 잡는다)
+
+    @Test func newAdvertisementSkipsCooldown() {
+        // 처음 보는 광고 = 폰이 돌아왔다 → 백오프를 기다리지 않는다
+        #expect(WifiAdbLogic.bypassCooldownOnNewAdvertisement(
+            discovered: ["192.168.86.49:37841"], lastSeen: nil))
+        // 포트가 바뀐 새 광고도 새 광고다 (재부팅·재토글 때마다 포트가 바뀐다)
+        #expect(WifiAdbLogic.bypassCooldownOnNewAdvertisement(
+            discovered: ["192.168.86.49:37841"], lastSeen: "192.168.86.49:37311"))
+    }
+
+    @Test func sameAdvertisementKeepsTheBackoff() {
+        // 같은 광고를 계속 보고 있으면 평소 백오프 — 매 틱(5초) 다시 붙으려 들지 않는다
+        let seen = WifiAdbLogic.advertisedKey(["192.168.86.49:37841"])
+        #expect(!WifiAdbLogic.bypassCooldownOnNewAdvertisement(
+            discovered: ["192.168.86.49:37841"], lastSeen: seen))
+    }
+
+    @Test func noAdvertisementKeepsTheBackoff() {
+        // 광고가 없으면(=폰이 없다) 백오프가 제 역할을 한다 — 서브넷 스윕을 자주 돌리지 않는다
+        #expect(!WifiAdbLogic.bypassCooldownOnNewAdvertisement(discovered: [], lastSeen: nil))
+        #expect(!WifiAdbLogic.bypassCooldownOnNewAdvertisement(discovered: [], lastSeen: "192.168.86.49:37311"))
+    }
+
+    @Test func advertisementKeyIgnoresOrder() {
+        // 광고 순서는 조회마다 흔들린다 — 순서 때문에 "새 광고"로 오판하지 않는다
+        #expect(WifiAdbLogic.advertisedKey(["192.168.86.49:37841", "192.168.86.49:45673"])
+            == WifiAdbLogic.advertisedKey(["192.168.86.49:45673", "192.168.86.49:37841"]))
+    }
 }

@@ -306,6 +306,24 @@ enum WifiAdbLogic {
         return true
     }
 
+    /// 새 mDNS 광고를 봤을 때 **쿨다운만** 건너뛸지 — 순수 판정 (IO 없음 · 테스트 고정)
+    ///
+    /// 재시도 백오프(60초→2분→4분→8분→15분)는 **정말 없는 기기**를 두드리지 않으려는 장치다.
+    /// 그런데 폰이 **돌아오는 순간**(재부팅·무선 디버깅 재토글)은 그 신호가 아니다 — 새 포트가
+    /// 광고되면 곧바로 붙어야 한다. 실측(2026-10-18): 폰을 10분 만에 다시 켜면 백오프 때문에
+    /// 최대 15분을 더 기다렸다(이번 사이클은 초기 단계라 51초).
+    ///
+    /// 광고가 **새로 보였을 때만** `true` 이므로 같은 광고로는 한 번만 건너뛴다 = 폭주하지 않는다.
+    static func bypassCooldownOnNewAdvertisement(discovered: [String], lastSeen: String?) -> Bool {
+        guard !discovered.isEmpty else { return false }
+        return advertisedKey(discovered) != lastSeen
+    }
+
+    /// 광고 묶음의 지문 — 순서에 흔들리지 않게 정렬해 고정한다
+    static func advertisedKey(_ discovered: [String]) -> String {
+        discovered.sorted().joined(separator: ",")
+    }
+
     /// adb connect 성공 판정 — 순수 함수 (테스트 고정)
     /// adb는 실패해도 exit 0을 반환하므로("failed to connect ..." + 0) 출력으로 판별한다.
     /// 스크립트의 `grep -qE "^(already )?connected to"` 와 동일 기준.
@@ -706,6 +724,8 @@ final class WifiAdbController: ObservableObject {
     /// 유실 이벤트 때 1회만 시도하고 끝내면, 그 시도가 Wi-Fi 꺼진 구간에 소진된 뒤
     /// Wi-Fi 가 돌아와도 재시도 트리거가 없다. 매 틱 쿨다운 걸고 재시도한다.
     private var lostNetworkEndpoints: Set<String> = []
+    /// 마지막으로 본 mDNS 광고 (유실 시리얼 → 광고 지문) — **새 광고가 뜨면 쿨다운을 건너뛴다**
+    private var lastSeenAdvertisement: [String: String] = [:]
     /// 재연결 상태 — 쿨다운과 연속 실패 횟수
     private var reconnectLastAttemptAt: Date?
     private var reconnectFailures = 0
@@ -750,8 +770,33 @@ final class WifiAdbController: ObservableObject {
            ) {
             lostNetworkEndpoints.insert(seed)
         }
+        // ★ 새 광고 감지 — 폰이 **돌아온 순간**은 "없는 기기"가 아니다 (2026-10-18)
+        //
+        //   재시도 백오프(60초→2분→…→15분)는 정말 없는 기기를 두드리지 않으려는 장치인데,
+        //   재부팅·토글 직후 **새 포트가 광고되는 순간**까지 기다리게 만들었다.
+        //   실측: 폰을 10분 만에 다시 켜면 최대 15분을 더 기다리게 된다.
+        //   → 광고가 **새로 보였을 때만** 그 기기의 쿨다운을 건너뛴다(같은 광고면 평소 백오프).
+        //   조회는 한 틱에 **한 번**만 한다(`adb mdns services` ≈20ms) — 잃어버린 기기가 있을 때만 돈다.
+        var services: [WifiAdbLogic.MdnsService] = []
+        if !lostNetworkEndpoints.isEmpty, let adb = DeviceMonitor.adbPathNow(),
+           let out = try? WifiAdbRunner.runMdnsServices(adb) {
+            services = WifiAdbLogic.parseMdnsServices(out)
+        }
+        let knownHosts = Set(endpointsByDevice.values.compactMap { WifiAdbLogic.host(ofEndpoint: $0) })
+
         for s in lostNetworkEndpoints {
-            await autoReconnect(lostSerial: s)
+            let discovered = WifiAdbLogic.matchingConnectEndpoints(
+                services: services,
+                physicalId: WifiAdbLogic.physicalIdForEndpoint(s, in: endpointsByDevice),
+                knownHosts: knownHosts
+            )
+            let bypass = WifiAdbLogic.bypassCooldownOnNewAdvertisement(
+                discovered: discovered, lastSeen: lastSeenAdvertisement[s]
+            )
+            lastSeenAdvertisement[s] = discovered.isEmpty
+                ? nil
+                : WifiAdbLogic.advertisedKey(discovered)
+            await autoReconnect(lostSerial: s, bypassCooldown: bypass)
         }
     }
 
@@ -762,14 +807,18 @@ final class WifiAdbController: ObservableObject {
     /// USB 를 다시 꽂지 않아도 앱이 스스로 새 IP 로 붙어야 한다.
     ///
     /// 실패해도 조용히 지나가지 않는다 — 사유를 상태로 남긴다 ([표시②])
-    func autoReconnect(lostSerial: String) async {
+    ///
+    /// - Parameter bypassCooldown: 새 mDNS 광고를 봤을 때 `true` — **쿨다운만** 건너뛴다.
+    ///   자동모드 OFF·USB 시리얼 같은 다른 조건은 `shouldReconnect` 가 그대로 지킨다
+    ///   (`lastAttemptAt` 을 nil 로 넘기는 방식).
+    func autoReconnect(lostSerial: String, bypassCooldown: Bool = false) async {
         let now = Date()
         let enabled = UserDefaults.standard.object(forKey: WifiAdbLogic.autoModeKey) as? Bool ?? true
         guard WifiAdbLogic.shouldReconnect(
             autoEnabled: enabled,
             lostSerial: lostSerial,
             now: now,
-            lastAttemptAt: reconnectLastAttemptAt,
+            lastAttemptAt: bypassCooldown ? nil : reconnectLastAttemptAt,
             failures: reconnectFailures
         ) else { return }
         guard !busy, !autoInFlight.contains(lostSerial) else { return }
