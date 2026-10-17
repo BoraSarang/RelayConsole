@@ -496,6 +496,38 @@ struct WifiReconnectTests {
         ) == ["192.168.198.49:5555"])
     }
 
+    // MARK: - [끊기] 는 되살리지 않는다 (2026-10-18 실측 결함)
+
+    @Test func seedLostEndpointsSkipsUserDisconnected() {
+        // 사용자가 [끊기] 로 끊은 전송은 기억이 남아 있어도 다시 시드하지 않는다 —
+        // 시드하면 다음 틱에 자동 재연결이 되살려 "껐는데 다시 붙는다"가 된다
+        let remembered = ["pidRouter": "192.168.84.79:5555", "pidS22": "192.168.198.49:36725"]
+        #expect(WifiAdbLogic.seedLostEndpoints(
+            remembered: remembered, found: [], pending: [],
+            userDisconnected: ["192.168.198.49:36725"]
+        ) == ["192.168.84.79:5555"])
+        // 다른 기기 기억은 그대로 산다
+        #expect(WifiAdbLogic.seedLostEndpoints(
+            remembered: remembered, found: [], pending: [],
+            userDisconnected: []
+        ) == ["192.168.198.49:36725", "192.168.84.79:5555"])
+    }
+
+    @Test func forgetEndpointRemovesOnlyThatEndpoint() {
+        // 기억 삭제는 그 엔드포인트만 — 같은 맥에 붙은 다른 기기 기억은 남는다
+        let remembered = ["pidRouter": "192.168.84.79:5555", "pidS22": "192.168.198.49:36725"]
+        let next = WifiAdbLogic.forgetEndpoint("192.168.198.49:36725", in: remembered)
+        #expect(next == ["pidRouter": "192.168.84.79:5555"])
+        // 없는 엔드포인트면 그대로 (불필요한 UserDefaults 쓰기를 피한다)
+        #expect(WifiAdbLogic.forgetEndpoint("10.0.0.1:5555", in: remembered) == remembered)
+    }
+
+    @Test func lostStatusKeyIsHonestAboutAutoMode() {
+        // 자동모드가 꺼져 있으면 "다시 찾는 중"이라고 말하면 거짓말이 된다
+        #expect(WifiAdbLogic.lostStatusKey(autoEnabled: true) == "wifi.lost.searching")
+        #expect(WifiAdbLogic.lostStatusKey(autoEnabled: false) == "wifi.lost.autoOff")
+    }
+
     @Test func physicalIdForEndpointReverseLookup() {
         let map = ["pidRouter": "192.168.84.79:5555"]
         #expect(WifiAdbLogic.physicalIdForEndpoint("192.168.84.79:5555", in: map) == "pidRouter")

@@ -196,6 +196,12 @@ struct WifiOnboardingSheet: View {
                     .font(OPFont.body(10))
                     .foregroundStyle(OPColor.inkDim)
                     .fixedSize(horizontal: false, vertical: true)
+                // 약속(hint)과 한계(rebootNote)를 **각각 자기 줄**로 둔다 — 한 문장으로 이어 붙이면
+                // 창 폭에 따라 뒤 문장이 잘려 안 보인다 (실측: 재부팅 안내가 잘렸다).
+                Text(L10n.string("wifi.pair.rebootNote"))
+                    .font(OPFont.body(10))
+                    .foregroundStyle(OPColor.inkDim)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
             // 3) 수동 연결

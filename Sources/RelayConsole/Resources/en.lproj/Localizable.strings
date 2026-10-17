@@ -672,7 +672,8 @@
 "wifi.pair.discovered.help" = "Devices with wireless debugging on, and devices showing a pairing dialog";
 "wifi.pair.kind.pairing" = "Pairing dialog";
 "wifi.pair.kind.connect" = "Wireless debugging";
-"wifi.pair.hint" = "With wireless debugging on, it reconnects without USB even after a reboot or address change (Android 11+). On some devices the toggle turns off after a reboot — turn it back on.";
+"wifi.pair.hint" = "It reconnects without USB after a reboot or address change.";
+"wifi.pair.rebootNote" = "Turn wireless debugging back on if a reboot turns it off.";
 "wifi.pair.status.pairing" = "Pairing…";
 "wifi.pair.status.done" = "Connected via wireless debugging %@";
 "wifi.pair.error.code.format" = "The pairing code must be 6 digits";
@@ -718,6 +719,8 @@
 "wifi.auto.alreadyOpen" = "Already open over Wi-Fi — %@";
 "wifi.badge.autoFailed" = "auto-connect failed";
 "wifi.reconnect.done" = "Network changed — reconnected via %@";
+"wifi.lost.searching" = "Connection lost — searching again";
+"wifi.lost.autoOff" = "Connection lost — auto-reconnect is off";
 "wifi.reconnect.ipNotFound" = "Could not find the device IP — check Wi-Fi";
 "wifi.reconnect.notReachable" = "%@ is unreachable — check that you are on the same Wi-Fi";
 "wifi.reconnect.failed" = "Reconnect failed — %@";

@@ -306,6 +306,15 @@ enum WifiAdbLogic {
         return true
     }
 
+    /// 유실을 알리는 문구 키 — **판정만** (IO 없음 · 테스트 고정)
+    ///
+    /// 끊긴 순간 상태 줄을 바꾸지 않으면 직전의 "다시 연결했습니다"(성공)가 그대로 남아
+    /// **"지금 연결됨"처럼 보인다** (2026-10-18 실측 — 사용자가 "안 없어지네").
+    /// 자동모드가 꺼져 있으면 "다시 찾는 중"은 거짓말이므로 다른 문구를 쓴다.
+    static func lostStatusKey(autoEnabled: Bool) -> String {
+        autoEnabled ? "wifi.lost.searching" : "wifi.lost.autoOff"
+    }
+
     /// 새 mDNS 광고를 봤을 때 **쿨다운만** 건너뛸지 — 순수 판정 (IO 없음 · 테스트 고정)
     ///
     /// 재시도 백오프(60초→2분→4분→8분→15분)는 **정말 없는 기기**를 두드리지 않으려는 장치다.
@@ -372,16 +381,28 @@ enum WifiAdbLogic {
         map.first { $0.value == endpoint }?.key
     }
 
-    /// 기기별 기억 시드 — 이미 발견된(found)·대기 중(pending)이 아닌 기억만 유실 목록에 올린다 (2026-10-11)
+    /// 기기별 기억 시드 — 이미 발견된(found)·대기 중(pending)·**사용자가 끊은** 기억은 올리지 않는다 (2026-10-11 · 2026-10-18)
     ///
     /// 종전 `seedLostEndpoint`는 "아무것도 안 보일 때"만 단일 슬롯을 살렸다.
     /// S22가 살아 있으면 Router 기억은 영원히 시드되지 않았다.
+    /// `userDisconnected` 가 없으면 **[끊기] 로 끊은 기기가 다음 틱에 되살아난다**(실측 결함).
     static func seedLostEndpoints(
         remembered: [String: String],
         found: Set<String>,
-        pending: Set<String>
+        pending: Set<String>,
+        userDisconnected: Set<String> = []
     ) -> [String] {
-        remembered.values.filter { !found.contains($0) && !pending.contains($0) }.sorted()
+        remembered.values.filter {
+            !found.contains($0) && !pending.contains($0) && !userDisconnected.contains($0)
+        }.sorted()
+    }
+
+    /// 기억에서 엔드포인트를 지운다 — **[끊기] 는 "다시 잇지 마" 라는 뜻**이다 (판정만: 새 맵 반환)
+    ///
+    /// 이 기억(`endpointsByDevice`)은 자동 재연결의 씨앗이라, 남겨 두면 사용자가 끊은 기기를
+    /// 앱이 1분 뒤 스스로 되살린다. 같은 물리 기기의 다른 엔드포인트는 그대로 둔다.
+    static func forgetEndpoint(_ endpoint: String, in remembered: [String: String]) -> [String: String] {
+        remembered.filter { $0.value != endpoint }
     }
 
     /// 시작 시 유실 후보 선등록 판정 — 순수 함수 (테스트 고정)
@@ -726,6 +747,8 @@ final class WifiAdbController: ObservableObject {
     private var lostNetworkEndpoints: Set<String> = []
     /// 마지막으로 본 mDNS 광고 (유실 시리얼 → 광고 지문) — **새 광고가 뜨면 쿨다운을 건너뛴다**
     private var lastSeenAdvertisement: [String: String] = [:]
+    /// 사용자가 **[끊기]** 로 끊은 전송 — 되살리지도, "다시 찾는 중"이라고 말하지도 않는다 (2026-10-18)
+    private var userDisconnectedEndpoints: Set<String> = []
     /// 재연결 상태 — 쿨다운과 연속 실패 횟수
     private var reconnectLastAttemptAt: Date?
     private var reconnectFailures = 0
@@ -741,9 +764,20 @@ final class WifiAdbController: ObservableObject {
     // MARK: - 재연결 (2026-09-27 · PLAN_wifi_reconnect)
 
     /// 유실 기록 — tick 의 유실 이벤트에서 부른다 (TCP 만)
+    ///
+    /// 끊긴 **순간** 상태 줄을 바꾼다 — 직전 성공 문구("다시 연결했습니다")가 그대로 남으면
+    /// "지금 연결됨"처럼 보인다 (2026-10-18 사용자 신고: "안 없어지네").
+    /// 사용자가 [끊기] 로 끊은 건 알리지 않는다 — 되살리지도 않고, 한 일을 사건처럼 말하지도 않는다.
     func noteLostNetworkEndpoint(_ serial: String) {
         guard WifiAdbLogic.isNetworkEndpoint(serial) else { return }
+        guard !userDisconnectedEndpoints.contains(serial) else { return }
+        let isNew = !lostNetworkEndpoints.contains(serial)
         lostNetworkEndpoints.insert(serial)
+        guard isNew else { return }  // 틱마다 같은 문구를 새로 쓰지 않는다
+        let enabled = UserDefaults.standard.object(forKey: WifiAdbLogic.autoModeKey) as? Bool ?? true
+        statusIsError = true
+        statusMessage = L10n.string(WifiAdbLogic.lostStatusKey(autoEnabled: enabled))
+        DebugLogger.shared.warn("WifiAdb", "[WARN] [LOST] \(serial) — \(statusMessage ?? "")")
     }
 
     /// 매 틱 재시도 — 돌아온 기기는 빼고, 남은 건 쿨다운 걸고 `autoReconnect`
@@ -755,7 +789,8 @@ final class WifiAdbController: ObservableObject {
         // 기기별 기억 시드 — S22가 살아 있어도 Router 기억은 살린다 (단일 슬롯의 foundEmpty 게이트와 달리).
         // 죽은 기기 기억은 쿨다운+백오프로 소진되므로 폭주하지 않는다.
         for ep in WifiAdbLogic.seedLostEndpoints(
-            remembered: endpointsByDevice, found: found, pending: lostNetworkEndpoints
+            remembered: endpointsByDevice, found: found, pending: lostNetworkEndpoints,
+            userDisconnected: userDisconnectedEndpoints
         ) {
             lostNetworkEndpoints.insert(ep)
         }
@@ -770,6 +805,9 @@ final class WifiAdbController: ObservableObject {
            ) {
             lostNetworkEndpoints.insert(seed)
         }
+        // 사용자가 [끊기] 한 전송은 어떤 경로로도 되살리지 않는다 (기억 시드·구 단일 슬롯 포함)
+        lostNetworkEndpoints.subtract(userDisconnectedEndpoints)
+
         // ★ 새 광고 감지 — 폰이 **돌아온 순간**은 "없는 기기"가 아니다 (2026-10-18)
         //
         //   재시도 백오프(60초→2분→…→15분)는 정말 없는 기기를 두드리지 않으려는 장치인데,
@@ -938,6 +976,8 @@ final class WifiAdbController: ObservableObject {
             }
             reconnectFailures = 0
             rememberEndpoint(endpoint, physicalId: physicalId(of: endpoint, adb: adb))
+            // 붙었으니 [끊기] 표식은 의미가 없다 (다시 잃어버리면 정상 경로로 재시도한다)
+            userDisconnectedEndpoints.remove(endpoint)
             lostNetworkEndpoints.remove(lostSerial)
             statusIsError = false
             statusMessage = L10n.format("wifi.reconnect.done", endpoint)
@@ -1407,6 +1447,8 @@ final class WifiAdbController: ObservableObject {
                 }
             }
             rememberEndpoint(clean, physicalId: physicalId(of: clean, adb: adb))
+            // 사용자가 직접 다시 이었다 — [끊기] 표식을 풀어 자동 재연결도 다시 살린다
+            userDisconnectedEndpoints.remove(clean)
             statusMessage = L10n.format("wifi.status.connected", clean)
             DebugLogger.shared.info("WifiAdb", "[INFO] [FEATURE] Wi-Fi 연결 \(clean)")
         }
@@ -1574,6 +1616,11 @@ final class WifiAdbController: ObservableObject {
             }
             do {
                 try WifiAdbRunner.run(adb, WifiAdbLogic.disconnectArgs(endpoint: serial))
+                // [끊기] 는 "다시 잇지 마" 라는 뜻이다 (2026-10-18 실측 결함: 기억이 남아 1분 뒤 되살아났다)
+                userDisconnectedEndpoints.insert(serial)
+                lostNetworkEndpoints.remove(serial)
+                lastSeenAdvertisement[serial] = nil
+                forgetEndpointMemory(serial)
                 statusMessage = L10n.string("wifi.status.disconnected")
                 DebugLogger.shared.info("WifiAdb", "[INFO] [FEATURE] Wi-Fi 해제 \(serial)")
             } catch {
@@ -1664,6 +1711,20 @@ final class WifiAdbController: ObservableObject {
                 forKey: WifiAdbLogic.endpointsByDeviceKey
             )
         }
+    }
+
+    /// 기억에서 이 엔드포인트를 지운다 — [끊기] 는 "다시 잇지 마" 다 (2026-10-18)
+    ///
+    /// 지우지 않으면 다음 틱의 기억 시드가 이 전송을 "잃어버린 기기"로 올려 **되살린다**.
+    /// 수동 연결의 "최근:" 바로가기(`lastEndpoint`)는 남긴다 — 그건 사용자가 눌러야 동작한다.
+    private func forgetEndpointMemory(_ endpoint: String) {
+        let next = WifiAdbLogic.forgetEndpoint(endpoint, in: endpointsByDevice)
+        guard next != endpointsByDevice else { return }
+        endpointsByDevice = next
+        UserDefaults.standard.set(
+            WifiAdbLogic.encodeEndpointsByDevice(next),
+            forKey: WifiAdbLogic.endpointsByDeviceKey
+        )
     }
 
     /// 외부 명령 실패 원인 — WifiAdbError.cause 우선, 없으면 빈 문자열 (내부 코드 노출 금지)
