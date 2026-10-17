@@ -114,6 +114,23 @@ QR도 최종적으로는 `adb pair` 한 번이다 — 다른 건 **6자리를 �
 - `docs/MANUAL_VERIFY.md`에 "무선 디버깅 페어링(USB 없이)" · "재부팅 후 자동 재연결" 2항목 추가.
 - `docs/TODO.md` T-2026-10-17-4 완료 조건: 4.2의 3·4번 실측 통과.
 
+### 4.4 실측 노트 (2026-10-17 · S22 `SM-S901N` Android 16 · 폰 무선 디버깅 ON)
+
+`adb mdns services` 실측 — 한 폰이 **같은 인스턴스 이름**으로 두 서비스를 광고한다:
+
+```
+adb-R5CT215F4QK-iL8Q9e  _adb-tls-connect._tcp   192.168.86.49:45325
+adb-R5CT215F4QK-iL8Q9e  _adb-tls-pairing._tcp   192.168.86.49:45673
+```
+
+| 관측 | 사실 | 반영 |
+|---|---|---|
+| 목록이 connect 줄 2개로 보임 | 행 식별자 `instance` 중복 → SwiftUI가 페어링 줄을 버림 | `MdnsService.id = 인스턴스+종류+주소` · 표시는 페어링 우선 |
+| 페어링 무반응 | connect 포트(45325)를 페어링 주소로 넣으면 `adb pair`가 `protocol fault`를 0.05초에 반환 | connect 주소 감지 시 adb 호출 없이 거부 + 올바른 주소 안내 |
+| 폰이 이미 이 맥을 신뢰 | 폰 화면 "페어링된 기기: lee@lees-MacBook-Pro.local" · `adb devices`에 `device` | 신규 페어링 판정은 **재부팅 실측(49)** 로 대체 |
+| 미러링이 죽음 | 미러 중 그 전송을 `adb disconnect` → scrcpy 즉시 종료(`ERROR: Demuxer error`) · 터미널 재현 | `mirroredSerial` 가드 — 정리·pre-disconnect에서 제외 |
+| 한 폰이 두 주소로 `device` | 5555(레거시 tcpip) + 45325(무선) → 기기 선택에 두 줄 | **T-2026-10-17-10** (표시만 합치기 · 자동 disconnect 금지) |
+
 ---
 
 ## 5. 리스크 · 한계 (거짓 약속 금지)

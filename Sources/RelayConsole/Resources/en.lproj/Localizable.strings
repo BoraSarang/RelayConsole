@@ -675,6 +675,13 @@
 "wifi.pair.error.unreachable" = "Phone not reachable — check the same Wi-Fi and that the pairing dialog is open";
 "wifi.pair.error.failed" = "Pairing failed";
 "wifi.pair.error.connectAfter" = "Paired, but connecting failed — try the 'IP address & Port' shown on the phone in Manual connect";
+"wifi.pair.lastLookup" = "Last scan %@ · %d devices";
+"wifi.pair.error.mdns" = "Scan failed — no response from adb (keeping the previous list)";
+"wifi.pair.error.wrongPort" = "That address is the 'wireless debugging' port — use the pairing address: %@";
+"wifi.pair.error.wrongPort.noPairing" = "That address is the 'wireless debugging' port — open 'Pair device with pairing code' on the phone and use the address shown there";
+"wifi.pair.error.alreadyTrusted" = "Pairing was refused — this device may already trust this Mac. Try %@ in Manual connect first";
+"wifi.pair.row.fill" = "Tap to fill";
+"wifi.pair.connect.action" = "Connect";
 "wifi.error.adbMissing" = "adb binary not found";
 "wifi.error.connectFailed" = "Wi-Fi connection failed";
 "wifi.error.disconnectFailed" = "Wi-Fi disconnection failed";

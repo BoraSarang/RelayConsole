@@ -165,4 +165,75 @@ struct WifiPairingTests {
         #expect(WifiAdbLogic.validateEndpoint("192.168.0.7:43811") == nil)
         #expect(WifiAdbLogic.validateEndpoint("192.168.0.7") != nil)
     }
+
+    // MARK: - 같은 인스턴스 이름 (2026-10-17 실측)
+
+    /// S22(192.168.86.49) 실측 출력 — 한 폰이 connect·pairing 을 **같은 인스턴스 이름**으로 광고한다.
+    /// 이걸 `id: \.instance` 로 그리면 SwiftUI 가 id 중복으로 connect 줄을 두 번 그리고
+    /// **페어링 줄은 사라진다**(사용자가 겪은 "페어링 주소가 안 보인다" 증상).
+    private let realS22 = """
+    List of discovered mdns services
+    adb-R5CT215F4QK-iL8Q9e\t_adb-tls-connect._tcp\t192.168.86.49:45325
+    adb-R5CT215F4QK-iL8Q9e\t_adb-tls-pairing._tcp\t192.168.86.49:45673
+    """
+
+    @Test func sameInstanceNameStillYieldsTwoDistinctRows() {
+        let services = WifiAdbLogic.parseMdnsServices(realS22)
+        #expect(services.count == 2)
+        #expect(Set(services.map(\.id)).count == 2)
+    }
+
+    @Test func idIsUniqueEvenForSameTypeAndDifferentPort() {
+        let a = WifiAdbLogic.MdnsService(
+            instance: "adb-R5CT215F4QK-iL8Q9e",
+            type: WifiAdbLogic.MdnsService.typeConnect,
+            host: "192.168.86.49",
+            port: 45325
+        )
+        let b = WifiAdbLogic.MdnsService(
+            instance: "adb-R5CT215F4QK-iL8Q9e",
+            type: WifiAdbLogic.MdnsService.typeConnect,
+            host: "192.168.86.49",
+            port: 45673
+        )
+        #expect(a.id != b.id)
+    }
+
+    @Test func pairingRowIsShownFirst() {
+        let ordered = WifiAdbLogic.displayOrdered(WifiAdbLogic.parseMdnsServices(realS22))
+        #expect(ordered.first?.isPairing == true)
+        #expect(ordered.map(\.endpoint) == ["192.168.86.49:45673", "192.168.86.49:45325"])
+    }
+
+    @Test func displayOrderIsStableAcrossHosts() {
+        let a = WifiAdbLogic.MdnsService(
+            instance: "adb-X-1",
+            type: WifiAdbLogic.MdnsService.typeConnect,
+            host: "192.168.0.9",
+            port: 37000
+        )
+        let b = WifiAdbLogic.MdnsService(
+            instance: "adb-X-2",
+            type: WifiAdbLogic.MdnsService.typeConnect,
+            host: "192.168.0.7",
+            port: 5555
+        )
+        #expect(WifiAdbLogic.displayOrdered([a, b]).map(\.host) == ["192.168.0.7", "192.168.0.9"])
+    }
+
+    // MARK: - 포트 혼동 가드 (페어링 ≠ connect)
+
+    @Test func connectPortIsRejectedAsPairingAddress() {
+        let services = WifiAdbLogic.parseMdnsServices(realS22)
+        #expect(WifiAdbLogic.isConnectEndpoint("192.168.86.49:45325", services: services))
+        #expect(WifiAdbLogic.isConnectEndpoint(" 192.168.86.49:45325 ", services: services))
+        #expect(!WifiAdbLogic.isConnectEndpoint("192.168.86.49:45673", services: services))
+    }
+
+    @Test func pairingAddressIsOfferedWhenConnectPortWasUsed() {
+        let services = WifiAdbLogic.parseMdnsServices(realS22)
+        #expect(WifiAdbLogic.pairingEndpoint(host: "192.168.86.49", services: services) == "192.168.86.49:45673")
+        // 페어링 창이 닫혀 있으면 대신 줄 주소가 없다 — 문구 분기에 쓴다
+        #expect(WifiAdbLogic.pairingEndpoint(host: "192.168.86.50", services: services) == nil)
+    }
 }

@@ -115,18 +115,18 @@ struct WifiOnboardingSheet: View {
                         Text(L10n.string("wifi.pair.discovered"))
                             .font(OPFont.body(10))
                             .foregroundStyle(OPColor.inkDim)
-                        ForEach(wifi.mdnsServices, id: \.instance) { s in
-                            Button {
-                                pairEndpoint = s.endpoint
-                            } label: {
-                                Text("\(s.isPairing ? L10n.string("wifi.pair.kind.pairing") : L10n.string("wifi.pair.kind.connect")) · \(s.endpoint)")
-                                    .font(OPFont.number(11))
-                                    .foregroundStyle(OPColor.cta)
-                            }
-                            .buttonStyle(.plain)
-                            .help(L10n.string("wifi.pair.discovered.help"))
+                        // id: \.instance 로는 안 된다 — 한 폰이 connect·pairing 을 같은 인스턴스 이름으로
+                        // 광고한다(실측). 그대로 쓰면 페어링 줄이 사라지고 connect 줄이 두 번 그려진다.
+                        ForEach(WifiAdbLogic.displayOrdered(wifi.mdnsServices)) { s in
+                            discoveredRow(s)
                         }
                     }
+                }
+
+                if let at = wifi.mdnsLastRefresh {
+                    Text(L10n.format("wifi.pair.lastLookup", WifiAdbController.clockText(at), wifi.mdnsServices.count))
+                        .font(OPFont.body(10))
+                        .foregroundStyle(wifi.mdnsServices.isEmpty ? OPColor.inkDim : OPColor.ok)
                 }
 
                 HStack(spacing: 8) {
@@ -163,9 +163,33 @@ struct WifiOnboardingSheet: View {
                     .disabled(wifi.busy || pairCode.isEmpty || pairEndpoint.isEmpty)
 
                     OPSecondaryButton(title: L10n.string("wifi.pair.refresh")) {
-                        Task { await wifi.refreshMdnsServices() }
+                        wifi.lookupMdns()
                     }
                     .disabled(wifi.busy)
+
+                    if wifi.busy {
+                        ProgressView()
+                            .controlSize(.small)
+                    }
+                }
+
+                if let msg = wifi.pairStatus {
+                    HStack(alignment: .top, spacing: 6) {
+                        Image(systemName: wifi.pairStatusIsError ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(wifi.pairStatusIsError ? OPColor.bad : OPColor.ok)
+                        Text(msg)
+                            .font(OPFont.body(11))
+                            .foregroundStyle(wifi.pairStatusIsError ? OPColor.bad : OPColor.ok)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Spacer(minLength: 0)
+                    }
+                    .padding(8)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(
+                        (wifi.pairStatusIsError ? OPColor.bad : OPColor.ok).opacity(0.10),
+                        in: RoundedRectangle(cornerRadius: 8)
+                    )
                 }
 
                 Text(L10n.string("wifi.pair.hint"))
@@ -254,6 +278,8 @@ struct WifiOnboardingSheet: View {
             // 재오픈 시 지난 성공/실패 메시지가 새 상태처럼 보이지 않도록 초기화 (AGENTS.local §4 [표시②])
             wifi.statusMessage = nil
             wifi.statusIsError = false
+            wifi.pairStatus = nil
+            wifi.pairStatusIsError = false
             if pairEndpoint.isEmpty,
                let first = WifiAdbLogic.pairingEndpoints(wifi.mdnsServices).first {
                 pairEndpoint = first
@@ -267,6 +293,45 @@ struct WifiOnboardingSheet: View {
             }
             if let kind = connectionKind, kind == .network, let p = presetSerial {
                 manualEndpoint = p
+            }
+        }
+    }
+
+    /// 발견된 광고 한 줄
+    ///
+    /// 페어링 줄을 누르면 주소가 채워진다(그리고 페어링 포트가 아닌 주소를 넣는 흔한 실수를 막는다).
+    /// connect 줄은 **바로 연결**할 수 있다 — 무선 디버깅만 켠 기기는 페어링 없이도 붙는 경우가 많다.
+    @ViewBuilder
+    private func discoveredRow(_ s: WifiAdbLogic.MdnsService) -> some View {
+        HStack(spacing: 6) {
+            Button {
+                if s.isPairing {
+                    pairEndpoint = s.endpoint
+                } else {
+                    manualEndpoint = s.endpoint
+                }
+            } label: {
+                Text("\(s.isPairing ? L10n.string("wifi.pair.kind.pairing") : L10n.string("wifi.pair.kind.connect")) · \(s.endpoint)")
+                    .font(OPFont.number(11))
+                    .foregroundStyle(OPColor.cta)
+            }
+            .buttonStyle(.plain)
+            .help(L10n.string("wifi.pair.discovered.help"))
+
+            Spacer(minLength: 4)
+
+            if s.isPairing {
+                Text(L10n.string("wifi.pair.row.fill"))
+                    .font(OPFont.body(10))
+                    .foregroundStyle(OPColor.inkDim)
+            } else {
+                Button(L10n.string("wifi.pair.connect.action")) {
+                    wifi.connect(endpoint: s.endpoint)
+                }
+                .buttonStyle(.plain)
+                .font(OPFont.body(10))
+                .foregroundStyle(OPColor.cta)
+                .disabled(wifi.busy)
             }
         }
     }
