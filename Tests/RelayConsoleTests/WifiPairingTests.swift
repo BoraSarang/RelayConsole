@@ -236,4 +236,28 @@ struct WifiPairingTests {
         // 페어링 창이 닫혀 있으면 대신 줄 주소가 없다 — 문구 분기에 쓴다
         #expect(WifiAdbLogic.pairingEndpoint(host: "192.168.86.50", services: services) == nil)
     }
+
+    // MARK: - 재연결 후보의 포트 (2026-10-17 · 49 실측 전 코드 검토)
+
+    @Test func probePortUsesTheCandidatesOwnPort() {
+        // 재부팅 뒤 폰은 5555(레거시 tcpip)를 닫고 무선 디버깅 포트만 연다 —
+        // 게이트가 5555 를 보면 무선 후보를 통째로 걸러 자동 재연결이 영영 안 붙는다
+        #expect(WifiAdbLogic.probePort(forEndpoint: "192.168.86.49:45325") == 45325)
+        #expect(WifiAdbLogic.probePort(forEndpoint: "192.168.86.49:5555") == 5555)
+        // 포트 없는 후보(IP만)는 기본 5555 로 확인한다
+        #expect(WifiAdbLogic.probePort(forEndpoint: "192.168.86.49") == WifiAdbLogic.defaultPort)
+    }
+
+    @Test func discoveredWirelessCandidateIsTheOnlyOneLeftForItsHost() {
+        // mDNS 로 찾은 무선 후보가 앞에 서고, 같은 호스트의 옛 5555 후보는 버려진다.
+        // → 그 호스트에 남는 후보의 포트는 5555 가 아니다(게이트가 그 후보를 버리면 안 된다)
+        let merged = WifiAdbLogic.mergeDiscovered(
+            discovered: ["192.168.86.49:45325"],
+            base: ["192.168.86.49:5555", "192.168.86.30:5555"]
+        )
+        #expect(merged.first == "192.168.86.49:45325")
+        #expect(!merged.contains("192.168.86.49:5555"))
+        #expect(merged.contains("192.168.86.30:5555"))   // 다른 폰은 그대로 남는다
+        #expect(WifiAdbLogic.probePort(forEndpoint: merged[0]) == 45325)
+    }
 }

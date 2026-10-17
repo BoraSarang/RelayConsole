@@ -437,6 +437,17 @@ enum WifiAdbLogic {
         "\(ip):\(port)"
     }
 
+    /// 후보 엔드포인트를 확인할 때 **볼 포트** — 후보의 자기 포트(없으면 기본 5555)
+    ///
+    /// ★ 2026-10-17: 종전엔 재연결 게이트가 **5555 를 하드코딩**했다. 재부팅 뒤 폰은
+    ///   5555(레거시 tcpip)를 닫고 무선 디버깅 포트만 연다. 게다가 `mergeDiscovered` 가
+    ///   같은 호스트의 옛 5555 후보를 버리므로, 그 순간 후보는 무선 포트 **하나뿐**인데
+    ///   게이트가 5555 를 보며 **그 하나를 걸러냈다** — mDNS 로 찾아 놓고도 못 붙는 경로다.
+    ///   (49 실측 전 코드 검토에서 발견 · 실기기에서 재현하기 전에 고침)
+    static func probePort(forEndpoint endpoint: String) -> Int {
+        splitHostPort(endpoint)?.port ?? defaultPort
+    }
+
     /// `host:port` 분리 — 포트 없으면 nil (기본 포트는 호출부에서 붙임)
     static func splitHostPort(_ t: String) -> (host: String, port: Int)? {
         let parts = t.split(separator: ":", maxSplits: 1, omittingEmptySubsequences: false)
@@ -800,7 +811,9 @@ final class WifiAdbController: ObservableObject {
             //   후보가 여러 개일 때 `adb connect` 를 전부 시도하면 adb 서버 상태가
             //   오염된다(connect 실패가 device 로 남음). 계측에서 ARP 이웃 3개 중
             //   **5555 가 열린 것은 1개뿐**이었다 — 포트로 거르면 2회 시도가 사라진다.
-            guard Self.adbdPortOpen(ip: ip, port: WifiAdbLogic.defaultPort) else {
+            //   ★ 포트는 **후보의 자기 포트**로 본다. 5555 로 고정하면 재부팅 뒤
+            //   무선 디버깅 포트 후보가 전부 걸러져 자동 재연결이 영영 안 붙는다(2026-10-17)
+            guard Self.adbdPortOpen(ip: ip, port: WifiAdbLogic.probePort(forEndpoint: endpoint)) else {
                 lastFailureDetail = L10n.format("wifi.reconnect.notReachable", endpoint)
                 continue
             }
