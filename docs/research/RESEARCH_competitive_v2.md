@@ -6,6 +6,7 @@
 > 미검증 항목은 본문에 **미검증**으로 표시했고 §6에 모아 두었다.
 > 동반 문서: `docs/research/RESEARCH_windows_equivalents.md` (Windows 진영 심화 조사 — §F2·F3의 원자료)
 > 배포본: `~/Documents/RelayConsole_Competitor_Research_20261017/` (같은 내용의 HTML·PDF)
+> 재검증: 2026-10-17 `gh api`(PAT 인증 · 시간당 5,000회)로 저장소 **44개 전수 재확인** → **부록 B** (1차 조사가 과소평가한 경쟁자 2건·과대평가한 도구 4건 정정)
 
 ---
 
@@ -100,22 +101,30 @@ AirDroid는 Personal과 Business의 성격이 완전히 다르다. Personal은 �
 
 즉 요소는 다 있는데 결합이 없다. "트레이 상주 + 다중 기기 + 심층 텔레메트리 + 임계 알림 + 로컬 전용"을 한 앱에서 제공하는 Windows 제품은 **발견되지 않았다**. 이 결론은 스크린샷·웹 검색을 포함한 10개 이상 질의를 시도한 결과이며 [조사 방법 §8], Binaries 검색으로는 트레이+ntfy 패턴이 주변기기 배터리 감시(예: Bluetooth 기기 배터리 트레이 + ntfy 푸시)에만 존재함을 확인했다 — 즉 **패턴 자체는 사용자에게 익숙하지만 안드로이드 기기에 적용한 제품은 없다.**
 
-### F4. macOS·ADB 유틸 지형 — 같은 폼팩터는 존재하지만 소규모이고 경보가 없다
+**규모 정정(재검증)**: 이 절에서 거론한 도구 상당수는 취미 규모다 — `alanisme/adb-tui` **20★**(2026-03-11 이후 커밋 없음) · `AbiMangalan/JankMark` **1★** · `RuizheGu0/droidgauge` **8★** · `yuhnin-m/Adb-DECK` **25★** · `measure-sh/holo` **92★**. 1차 조사는 adb-tui(MCP 내장)를 "주목할 도구"로 다뤘지만 실제 위상은 작다. 반대로 Windows ADB 관리 도구 중 가장 큰 것은 `Shrey113/Adb-Device-Manager-2` **634★**(트레이 상주 + 알림·통화 동기화, 텔레메트리 없음)이다.
 
-Relay Console과 **같은 폼팩터**(맥 메뉴바/데스크톱 앱 + ADB)는 실제로 존재한다. 다만 규모가 작고 관제 기능이 없다.
+### F4. macOS·ADB 유틸 지형 — 같은 폼팩터는 실제로 있고, 둘은 무시할 수 없다
+
+Relay Console과 **같은 폼팩터**(맥 메뉴바 또는 네이티브 앱 + ADB)는 실제로 존재하며, 재검증 결과 그중 둘은 무시할 수 없는 규모다(2026-10-17 `gh api` 실측).
 
 | 프로젝트 | 별 | 최근 푸시 | 라이선스 | 성격 | 관제 |
 |---|---|---|---|---|---|
-| WhileEndless/AndroidDeviceManager | 3 | 2025-07-27 | AGPL-3.0 | macOS 메뉴바 ADB(스크린샷·클립보드·셸·포트포워딩·Frida·파일/앱 관리·로그뷰어) | X |
+| **aman-senpai/AndroLaunch** | **88** | 2026-10-02 | AGPL-3.0 | macOS 메뉴바(현재 Win/Linux 확장) · ADB+scrcpy · **QR 무선 페어링** · 양방향 클립보드 · Wi-Fi/BT/DND/회전 토글 · 볼륨·밝기 · 앱 설치/제거/데이터 삭제 · ADB 셸 | X |
+| **Droidective/Droidective** | **62** | **2026-10-17** | MIT | 네이티브 macOS(Swift 6·SwiftUI) 커맨드 팔레트 · **61종 툴** · PTY 터미널 · 파일·앱 탐색기 · **크래시 브라우저(ANR 포함)** · **라이브 성능 차트** · 6대 미러 월 · **MCP 서버** · 메뉴바 상주 | X(경보·채널 없음) |
 | Zaphkiel-Ivanovna/adb-studio | 25 | 2026-10-05 | MIT | 네이티브 macOS ADB 관리 GUI | X |
-| samkit/droid-scout | 3 | 2026-06-12 | Apache-2.0 | macOS 메뉴바 + logcat 스트림 파일 기록, Android Studio/Gradle 산출물 감지 | X |
-| ztcxzc/adb-device-monitor | 0 | 2026-08-11 | 없음 | Electron, 27개 실시간 메트릭(배터리·RAM·CPU 온도·RSSI·RX/TX) + 미러링 + 파일브라우저 | X(알림 없음) |
+| yuhnin-m/Adb-DECK | 25 | 2026-03-27 | 없음 | 데스크톱 ADB UI(기기·앱·로그) + 모니터 패널 | X |
 | Bloby22/andtls | 4 | 2026-08-30 | MIT | Go TUI, 기기별 배터리·RAM·CPU·온도 + scrcpy | X |
-| Droidective (macOS 14+) | — | — | MIT | 61종 툴 + 메뉴바 | X |
-| **DeviceFarmer/stf** | 4,605 | 2026-10-02 | NOASSERTION | 브라우저 기기 팜(인벤토리, 배터리·헬스 추적, 예약, REST API) | 일부(대시보드만, 경보 없음) |
+| WhileEndless/AndroidDeviceManager | 3 | 2025-07-27 | AGPL-3.0 | macOS 메뉴바 ADB(스크린샷·클립보드·셸·포트포워딩·Frida·파일/앱 관리·로그뷰어) | X |
+| samkit/droid-scout | 3 | 2026-06-12 | Apache-2.0 | macOS 메뉴바 + logcat 스트림 파일 기록 | X |
+| ztcxzc/adb-device-monitor | 0 | 2026-08-11 | 없음 | Electron, 27개 실시간 메트릭(배터리·RAM·CPU 온도·RSSI·RX/TX) + 미러링 + 파일브라우저 | X(알림 없음) |
+| **DeviceFarmer/stf** | 4,605 | 2026-10-02 | NOASSERTION | 브라우저 기기 팜(인벤토리·배터리/헬스 추적·예약·REST API) | 일부(대시보드만, 경보 없음) |
 | **Relay Console** [자체] | — | — | — | 메뉴바 관제탑 | **O** |
 
-표에서 볼 수 있듯 **"메뉴바 + ADB"는 있는데 "메뉴바 + 감시 + 알림"은 없다.** 가장 근접한 개념은 ztcxzc/adb-device-monitor(27개 메트릭 3초 갱신)지만 셀프호스팅 규모가 0★이고 임계 알림·추이 보존·인시던트가 없다. 다기기 팜의 유일한 성숙 오픈소스 STF는 macOS 메뉴바 앱이 아니라 **서버+웹 구조**이고, 사용자 경보 시스템이 없다 [28].
+**정정 1 — Droidective**: 1차 조사는 "61종 툴 + 메뉴바"로만 적고 별 수를 비워 두었다. 재검증 결과 **우리와 같은 스택(Swift 6·SwiftUI)으로 오늘도 커밋되는 62★ 프로젝트**이며, 기능이 상당히 겹친다. `DeviceMonitor`(2초 폴 주기)로 기기를 감시하고, **크래시 브라우저**(Java·네이티브·RN·ANR을 필터 목록 + watch 모드 + Slack/Jira용 포맷팅), **라이브 성능 차트**(코어별 CPU·RAM·FPS·네트워크·프로세스별, 기록·JSON/CSV 내보내기), **메뉴바 상주**, **MCP 서버**, 6대 동시 미러 월, bugreport zip까지 갖췄다. v3.11.0으로 서명·공증·Sparkle 자동 업데이트되고, **Windows/Linux 베타가 같은 `main`에서 나온다**(32개 뷰 중 29개 포팅).
+
+**정정 2 — AndroLaunch**: macOS 메뉴바 앱이면서 <b>QR 무선 페어링을 이미 구현</b>했고, 양방향 클립보드·빠른 토글·앱 관리·셸을 제공한다. 즉 §4.1 **G1(무선 페어링)은 "격차"가 아니라 "따라잡기"** 다.
+
+그럼에도 **관제의 핵심 네 축은 여전히 비어 있다**: ① 임계 기반 감시 이벤트 + 쿨다운·ack·뮤트(모두 없음), ② 이벤트 이력의 영구 보존과 아침 브리핑(차트 기록은 있으나 **감시 판정·알림 이력**은 없음), ③ 외부 채널 전송(Droidective의 "Slack-ready"는 **포맷팅**이지 전송이 아니다), ④ **앱별 네트워크 귀속과 `adb(내부)` 분리**. 즉 경쟁 압력은 "도구의 완성도"에서 오고, 우리 방어선은 "지속 감시와 알림"에 있다. 다기기 팜의 유일한 성숙 오픈소스 STF는 macOS 앱이 아니라 서버+웹 구조이고 사용자 경보가 없다 [28].
 
 ### F5. GitHub 오픈소스 지형 — 미러링은 활발, 관제 결합은 공백
 
@@ -172,7 +181,7 @@ Relay Console은 반대편에서 MCP를 제공한다 — 로컬 전용, **읽기
 
 Relay Console은 **L3에서 로컬·무계정·무서버로 서는 유일한 제품**이며, L1·L2 기능을 최소한으로 흡수(scrcpy 위임, 파일 탐색기, logcat)해 "한 창에서 끝내는" 경험을 만든다. **Sites·Jobs 삭제 이후 포지션은 더 선명해졌다** — 이전에는 "폰·사이트·작업을 한 배지로"였지만, 지금은 **"폰을 지키는 메뉴바 관제탑"** 한 문장으로 좁혀졌고 이 문장에 대응하는 경쟁 제품이 실질적으로 없다.
 
-동시에 이 조사는 **위협의 방향**을 알려준다. ① Sefirah류 오픈소스가 폰 통합을 무료·무계정으로 평준화하면 "폰 앱을 깔지 않는다"는 우리 강점은 폰 앱 설치를 싫어하는 사용자에게만 유효하다. ② AirDroid Business가 가격을 낮추거나 로컬 모드를 내면 L3의 로컬 틈새가 줄어든다. ③ adb-tui처럼 MCP+성능 뷰를 결합한 도구가 감시·알림을 붙이면 정면 충돌한다(현재는 없음). 반대로 **앱별 트래픽 귀속 + adb(내부) 분리 + 인시던트 번들 + 로컬 MCP**는 조사 범위에서 아무도 하지 않는다.
+동시에 이 조사는 **위협의 방향**을 알려준다. ① **가장 실질적인 위협은 Droidective다** — 같은 스택(Swift 6·SwiftUI)·같은 플랫폼(macOS)·오늘도 커밋되는 62★·61종 툴·크래시 브라우저·성능 차트·메뉴바 상주·MCP 서버·Win/Linux 베타까지 갖췄다. 여기에 임계 감시와 알림 채널만 붙으면 우리 포지션과 정면으로 겹친다. ② Sefirah류 오픈소스가 폰 통합을 무료·무계정으로 평준화하면 "폰 앱을 깔지 않는다"는 강점은 그 가치를 아는 사용자에게만 유효하다. ③ AirDroid Business가 가격을 낮추거나 로컬 모드를 내면 L3의 로컬 틈새가 줄어든다. ④ AndroLaunch가 이미 QR 페어링·클립보드를 갖췄으므로 **우리 P1-1은 선택이 아니라 필수**다. 반대로 **앱별 트래픽 귀속 + `adb(내부)` 분리 + 임계 감시 이력 + 채널 전송**의 4축 결합은 조사 범위에서 아무도 하지 않는다.
 
 ---
 
@@ -182,7 +191,7 @@ Relay Console은 **L3에서 로컬·무계정·무서버로 서는 유일한 제
 
 | # | 기능 | 제공자 | 우리 상태 | adb만으로 가능한가 | 판정 |
 |---|---|---|---|---|---|
-| G1 | **무선 디버깅 QR/코드 페어링**(Android 11+) | scrcpy-gui·ADB Studio·다수 | USB→`tcpip 5555` 방식, **재부팅 시 풀림** [49][50] | **가능**(`adb pair`, 프로토콜 공개) [49][50] | **P1 — 명확한 격차** |
+| G1 | **무선 디버깅 QR/코드 페어링**(Android 11+) | **AndroLaunch(88★·macOS 메뉴바)**·scrcpy-gui·ADB Studio·다수 | USB→`tcpip 5555` 방식, **재부팅 시 풀림** [49][50] | **가능**(`adb pair`, 프로토콜 공개) [49][50] | **P1 — 격차이자 필수 따라잡기** |
 | G2 | **폰 찾기/벨 울리기** | KDE Connect, Phone Link, Sefirah | 없음 | 경로 존재하나 **미검증**(구현 스파이크 필요) | **P1 후보** |
 | G3 | **오디오 포워딩**(11+)·**카메라 미러링**(12+)·**가상 디스플레이**·화면 끈 채 미러링 | scrcpy 5.x, QtScrcpy [24][23] | scrcpy 옵션 노출이 제한적 | **가능**(scrcpy 플래그 위임) | **P2 — 저비용 체감** |
 | G4 | **동시 다중 기기 미러링·그룹 제어** | QtScrcpy(그룹 제어), escrcpy [23][40] | 감시는 다기기, 미러링 동시성 미검증 | 가능(scrcpy 다중 인스턴스) | P2~P3 |
@@ -201,11 +210,12 @@ Relay Console은 **L3에서 로컬·무계정·무서버로 서는 유일한 제
 
 | # | 기능 | 확인 결과 |
 |---|---|---|
-| M1 | **앱별 네트워크 귀속 + `adb(내부)` 트래픽 분리** | 조사한 어떤 제품에도 없음. DroidGauge가 앱별 네트워크를 HTML 리포트로 내지만 [32] 실시간·알림·adb 분리는 없음. 폰측 앱(PCAPdroid·NetGuard·GlassWire)은 로컬에 갇혀 있음 [43][45][46] |
+| M1 | **앱별 네트워크 귀속 + `adb(내부)` 트래픽 분리** | 조사한 어떤 제품에도 없음. DroidGauge(8★)가 앱별 네트워크를 HTML 리포트로 내지만 [32] 실시간·알림·adb 분리는 없음. Droidective의 성능 차트에도 **앱별 귀속은 없음**(코어별 CPU·프로세스별 사용량까지). 폰측 앱(PCAPdroid·NetGuard·GlassWire)은 로컬에 갇혀 있음 [43][45][46] |
 | M2 | **18종 감시 + hysteresis + ack/mute/note** | 경쟁 제품은 임계 알림이 없거나(AirDroid Business 예외, 클라우드·유료) 단순 임계만 있음 [21] |
-| M3 | **인시던트 번들(ANR·크래시 자동 캡처)** | ACRA/Crashlytics/Sentry는 SDK 삽입 또는 SaaS, adb dropbox 조합은 우리뿐 [51][52][53] |
+| M3 | **인시던트 번들(ANR·크래시 자동 캡처)** | **Droidective의 크래시 브라우저가 가장 근접**(ANR 포함·watch 모드·Slack/Jira 포맷팅)하나 **임계 자동 캡처·번들 묶음·번들 export는 없음**. ACRA/Crashlytics/Sentry는 SDK 삽입 또는 SaaS [51][52][53] |
 | M4 | **로컬 읽기 전용 MCP 서버** | mobile-mcp 계열은 제어 자동화용 [30][31]. 텔레메트리·이벤트 MCP는 드묾 |
-| M5 | **메뉴바 상주 + 위젯 + 브리핑 + Health Score** | macOS 메뉴바 ADB 앱은 존재하나 감시·알림이 없음(§F4) [37][38] |
+| M5 | **메뉴바 상주 + 위젯 + 브리핑 + Health Score** | 메뉴바 상주 자체는 AndroLaunch(88★)·Droidective(62★)·AndroidDeviceManager(3★)도 제공. **브리핑·위젯·Health Score·감시 이벤트 연동은 우리뿐** [37][38] |
+| M8 | **임계 감시 + 이벤트 이력 + 채널 전송(3축 결합)** | Droidective(차트+크래시)와 AndroLaunch(토글+QR)를 합쳐도 이 3축은 성립하지 않음 → **§3 위협 ①에 대한 실질 방어선** |
 | M6 | **ntfy·Slack 채널 + 시스템 알림 동일 필터** | KDE Connect/Phone Link/Sefirah/CoveLink 모두 외부 채널 없음 [5][15][25][26] |
 | M7 | **Android + Apple 한 창** | KDE Connect는 iOS 제약(알림·SMS·가상 디스플레이 없음) [5][9] |
 
@@ -224,6 +234,7 @@ Relay Console은 **L3에서 로컬·무계정·무서버로 서는 유일한 제
 **P1-1. Android 11+ 무선 디버깅 QR/6자리 코드 페어링 온보딩 (G1)**
 
 - **왜**: 지금은 USB → `adb tcpip 5555` 방식이라 **폰을 재부팅하면 연결이 풀리고 USB를 다시 꽂아야 한다** [49][50]. 관제 앱의 전제는 "켜져 있으면 감시된다"인데 이 제약이 그 전제를 깨뜨린다. 기능 부족이 아니라 **신뢰성 결함**이다.
+- **경쟁 상황(재검증)**: macOS 메뉴바 경쟁자 **AndroLaunch(88★)가 이미 QR 페어링을 제공**한다 → 격차 해소가 아니라 **따라잡기**이며, 뒤처질수록 "메뉴바 앱은 AndroLaunch, 관제는 Relay Console"로 사용자가 이원화된다.
 - **어떻게**: `adb mdns services`로 `_adb-tls-pairing._tcp` 탐색 → 코드 입력 → `adb pair host:port code`. QR을 띄우려면 페어링 서비스 문자열을 폰 화면에 띄워야 하므로, 1차는 **6자리 코드 입력**이 현실적이고 QR은 2차.
 - **난이도/효과**: 중 / 상. 기존 Wi-Fi 온보딩(`WifiOnboarding.swift`)이 이미 있으므로 "Android 11+면 새 경로, 그 이하면 기존 경로" 폴백 구조가 자연스럽다.
 
@@ -265,7 +276,7 @@ Relay Console은 **L3에서 로컬·무계정·무서버로 서는 유일한 제
 
 | # | 항목 | 상태 |
 |---|---|---|
-| L1 | GitHub 별 수·최근 푸시(표 3) | 조사 시점(2026-10-17) 1차 수집값. 조사 중 GitHub API가 레이트리밋(403)에 걸려 **전수 재검증 실패**. Sefirah 등 일부만 재확인 |
+| L1 | GitHub 별 수·최근 푸시 | ~~1차 수집값~~ → **2026-10-17 재검증 완료**: `gh api`(PAT 인증)로 저장소 44개 전수 조회(부록 B). 다만 별 수는 계속 변동하므로 수치는 조사 시점값 |
 | L2 | Windows 트레이 상주 앱 부재 | **검색 기반 결론**(시도 질의는 §8). 전수 조사가 아니므로 "발견되지 않음"이 정확한 표현 |
 | L3 | adb 실현 가능성 G2(폰 찾기)·G6(SMS)·G9(미디어 제어) | **구현 경로 미검증** — 스파이크 필요 |
 | L4 | adb로 알림 미러링 가능성 | 상시 알림 스트림은 폰측 앱/특수 권한이 필요하다고 판단하나 **미검증** |
@@ -307,6 +318,65 @@ Relay Console은 **L3에서 로컬·무계정·무서버로 서는 유일한 제
 **읽는 법**: 3개의 굵은 축(앱별 네트워크 / 임계 알림 / 폰 앱 불필요 + 메뉴바 상주)이 비어 있는 열이 우리의 자리다. 반대로 알림·SMS·클립보드 열은 **이미 강자가 있어 다시 만들 이유가 없다**는 것이 이번 조사의 실질 결론이다.
 
 ---
+
+## 부록 B. GitHub 저장소 재검증 (2026-10-17 · `gh api` PAT 인증 · 5,000/h)
+
+1차 조사에서 익명 `curl`(시간당 60회)이 레이트리밋으로 막혀 재검증하지 못했던 항목을 인증 토큰으로 전수 재조회했다. **표 3의 주요 수치는 모두 일치**했고, 아래는 보고서에 등장하는 전체 저장소다.
+
+| 저장소 | 별 | 최근 푸시 | 라이선스 | 아카이브 |
+|---|---|---|---|---|
+| `Genymobile/scrcpy` | 152361 | 2026-10-14 | Apache-2.0 | N |
+| `barry-ran/QtScrcpy` | 32445 | 2026-10-15 | Apache-2.0 | N |
+| `viarotel-org/escrcpy` | 12094 | 2026-10-10 | Apache-2.0 | N |
+| `mobile-next/mobile-mcp` | 9688 | 2026-10-15 | Apache-2.0 | N |
+| `ACRA/acra` | 6500 | 2026-10-15 | Apache-2.0 | N |
+| `emanuele-f/PCAPdroid` | 4926 | 2026-09-26 | GPL-3.0 | N |
+| `DeviceFarmer/stf` | 4605 | 2026-10-02 | NOASSERTION | N |
+| `tomotoes/scrcpy-gui` | 4131 | 2026-10-15 | MIT | N |
+| `SimonAKing/scrcpy-gui` | 4131 | 2026-10-15 | MIT | N |
+| `KDE/kdeconnect-kde` | 4061 | 2026-10-17 | none | N |
+| `GSConnect/gnome-shell-extension-gsconnect` | 3744 | 2026-10-02 | GPL-2.0 | N |
+| `yume-chan/ya-webadb` | 3249 | 2026-10-09 | MIT | N |
+| `srevinsaju/guiscrcpy` | 3053 | 2023-12-29 | GPL-3.0 | **Y** |
+| `shrimqy/Sefirah` | 3024 | 2026-10-17 | GPL-3.0 | N |
+| `koush/vysor.io` | 2030 | 2026-10-16 | none | N |
+| `KDE/kdeconnect-android` | 1481 | 2026-10-17 | GPL-2.0 | N |
+| `kil0bit-kb/scrcpy-gui` | 1416 | 2026-08-24 | MIT | N |
+| `shrimqy/Sefirah-Android` | 988 | 2026-10-15 | GPL-3.0 | N |
+| `CursorTouch/Android-MCP` | 898 | 2026-10-16 | MIT | N |
+| `Shrey113/Adb-Device-Manager-2` | 634 | 2026-08-28 | Apache-2.0 | N |
+| `GeorgeEnglezos/Scrcpy-GUI` | 502 | 2026-09-02 | AGPL-3.0 | N |
+| `measure-sh/holo` | 92 | 2026-04-29 | MIT | N |
+| `aman-senpai/AndroLaunch` | 88 | 2026-10-02 | AGPL-3.0 | N |
+| `Droidective/Droidective` | 62 | 2026-10-17 | MIT | N |
+| `Zaphkiel-Ivanovna/adb-studio` | 25 | 2026-10-05 | MIT | N |
+| `yuhnin-m/Adb-DECK` | 25 | 2026-03-27 | none | N |
+| `Codertainment/scrcpy_buddy` | 24 | 2026-08-23 | Apache-2.0 | N |
+| `alanisme/adb-tui` | 20 | 2026-03-11 | Apache-2.0 | N |
+| `meroving/FluentAdb` | 14 | 2016-09-24 | Apache-2.0 | N |
+| `RuizheGu0/droidgauge` | 8 | 2026-08-25 | MIT | N |
+| `Bloby22/andtls` | 4 | 2026-08-30 | MIT | N |
+| `pepperonas/adboss` | 4 | 2026-08-21 | MIT | N |
+| `CRTYPUBG/adb-studio` | 3 | 2026-08-10 | Apache-2.0 | N |
+| `samkit/droid-scout` | 3 | 2026-06-12 | Apache-2.0 | N |
+| `WhileEndless/AndroidDeviceManager` | 3 | 2025-07-27 | AGPL-3.0 | N |
+| `sxwik/Relay` | 2 | 2026-06-23 | NOASSERTION | N |
+| `davistdaniel/droic` | 2 | 2025-05-28 | MIT | N |
+| `shruhood/MEGASUS` | 1 | 2026-07-01 | none | N |
+| `AbiMangalan/JankMark` | 1 | 2026-06-23 | NOASSERTION | N |
+| `Jaswanth776/android-device-monitor` | 1 | 2025-05-26 | none | N |
+| `snackboycoder/mphone` | {"message":"Not Found","documentation_url":"https://docs.github.com/rest","status":"404"}FAILED | - | - | N |
+| `ztcxzc/adb-device-monitor` | 0 | 2026-08-11 | none | N |
+| `nexuls/scrcpy-gui` | 0 | 2026-03-01 | MIT | N |
+| `Dinip/adb_metrics` | 0 | 2025-05-24 | MIT | N |
+
+**읽는 법(정량 결론)**
+
+1. **미러링은 거대하고, 관제는 극소다** — 미러링 계열은 152,361★(scrcpy)·32,445★(QtScrcpy)·12,094★(escrcpy)인데, 감시·관제 계열은 92★(holo)·62★(Droidective)·25★(Adb-DECK)·8★(droidgauge)·1★(JankMark)이다. "관제"는 시장이 비어 있는 게 아니라 **아직 아무도 제대로 만들지 않았다**.
+2. **에이전트 축은 이미 크다** — mobile-mcp 9,688★ → MCP는 실험 단계가 아니다. 우리 읽기 전용 텔레메트리 MCP의 차별점은 "제어"가 아니라 "진단·감시 문맥"이다.
+3. **동일 스택 경쟁자가 존재한다** — Droidective(62★, Swift 6·SwiftUI, 2026-10-17 푸시)가 가장 가까운 위협이며, AndroLaunch(88★, macOS 메뉴바)가 P1-1(QR 페어링)을 이미 구현했다.
+4. **폰측 도구는 성숙하다** — PCAPdroid 4,926★·ACRA 6,500★ → "폰에서 끝나는 도구"는 이미 강자가 있으므로 폰측 앱을 새로 만드는 방향은 비권장(§5.4).
+5. `SimonAKing/scrcpy-gui`와 `tomotoes/scrcpy-gui`는 **같은 저장소**(리네임·리다이렉트, 동일 4,131★)이고, `snackboycoder/mphone`은 404(비공개·삭제), `sxwik/Relay`(2★)는 이름만 비슷한 무관 프로젝트다.
 
 ## 7. 참고문헌
 

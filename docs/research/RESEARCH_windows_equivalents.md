@@ -10,7 +10,7 @@
 1. **정확한 Windows 대응물은 없다.** 트레이(알림 영역)에 상주하면서 **여러 대의 안드로이드 기기**의 **CPU/발열/메모리/배터리/네트워크 텔레메트리를 차트+이력으로** 보여주고 **임계 알림까지** 하는 Windows 앱은 이번 조사에서 **발견되지 않았다**(§10).
 2. 가장 가까운 조합은 **"미러링 + ADB 툴박스"(QtScrcpy, Adb-DECK, ADB AppControl) + "단일기기 텔레메트리 대시보드"(JankMark, holo, DroidGauge)** 이며, **알림(alerting) + 텔레메트리**를 동시에 가진 사실상 유일한 상용 제품은 **AirDroid Business(클라우드 MDM, 웹/데스크톱 콘솔)** 다(§5, §9).
 3. Windows "폰 연동"의 기본값은 **Microsoft Phone Link**지만, 텔레메트리라고 부를 수 있는 것은 **배터리 %, Wi‑Fi/모바일 데이터 상태, 연결 상태**뿐이다. **CPU·발열·메모리·앱별 트래픽·logcat은 없다**(§1).
-4. macOS 쪽 직접 경쟁자(맥 전용)는 **AndroidDeviceManager(메뉴바), ADB Studio, Droidective** 이며, **Droidective만 Windows 베타(Tauri)** 를 예고했다(§9). 즉 "맥에서 되는 걸 Windows에서" 하려는 수요는 대부분 **미충족 상태**다.
+4. macOS 쪽 직접 경쟁자(맥 전용)는 **AndroidDeviceManager(메뉴바), ADB Studio, Droidective** 이며, **Droidective(62★)는 예고가 아니라 Windows/Linux 베타를 실제 배포 중**이다(§9·§14). 즉 "맥에서 되는 걸 Windows에서" 하려는 수요는 대부분 **미충족 상태**다.
 
 ---
 
@@ -126,7 +126,7 @@
 **(c) macOS 전용(= "맥에서 되는 것"의 원류, Windows 대응 없음)**
 - **AndroidDeviceManager(WhileEndless)**: **macOS 메뉴바** 앱, 10초 탐지, root/인증 표시, USB/Wi-Fi. (v1.2.1, 2025-07-25)
 - **ADB Studio(Zaphkiel-Ivanovna)**: **macOS 14+ SwiftUI**, 무선 디버깅·mDNS 발견·포트포워드 프리셋·APK.
-- **Droidective**: macOS 14+ Swift 6. **61개 툴, 무료·MIT, 메뉴바 extra 제공** + **Windows/Linux는 베타 채널(Tauri, NSIS/MSI)** — "ADBKit가 Linux/Windows에서도 빌드·테스트 통과"라는 릴리스 노트 존재. **Windows 정식판 아님(미검증 수준).**
+- **Droidective**: macOS 14+ Swift 6. **61개 툴, 무료·MIT, 메뉴바 extra 제공** + **Windows/Linux는 베타 채널(NSIS/MSI, Rust 네이티브 메뉴바)** — **재검증(§14): 62★ · 2026-10-17 푸시 · 같은 `main`에서 32개 뷰 중 29개 포팅**(미러·터미널 포함). Windows **정식판은 아님**. **이 생태계에서 가장 실질적인 경쟁자다.**
 
 - 출처: [DeviceFarmer/stf](https://github.com/DeviceFarmer/stf) · [RobusTest(v3.7.9, 2026-07-08)](https://robustest.com/blog/why-device-labs-get-abandoned) · [ADB AppControl](https://adbappcontrol.com/en/pc/) · [ADB AppControl 구매](https://adbappcontrol.com/en/pc/buy/) · [Technastic($7)](https://technastic.com/adb-app-control-extended-android/) · [Panda](https://panda.some3c.com/) · [MPhone](https://github.com/snackboycoder/mphone) · [Adb-DECK](https://github.com/yuhnin-m/Adb-DECK) · [ADBOSS](https://github.com/pepperonas/adboss) · [ADB Device Manager](https://github.com/Shrey113/Adb-Device-Manager-2) · [AndroLaunch](https://github.com/aman-senpai/AndroLaunch) · [JankMark](https://github.com/AbiMangalan/JankMark) · [holo](https://github.com/measure-sh/holo) · [DroidGauge](https://github.com/RuizheGu0/droidgauge) · [Droic](https://github.com/davistdaniel/droic) · [adb_metrics](https://github.com/Dinip/adb_metrics) · [MEGASUS](https://github.com/shruhood/MEGASUS) · [android-device-monitor](https://github.com/Jaswanth776/android-device-monitor) · [sxwik/Relay](https://github.com/sxwik/Relay) · [adb-tui](https://github.com/alanisme/adb-tui) · [Android Studio 프로파일링](https://developer.android.com/studio/profile) · [단독 프로파일러(Win/Linux만, macOS 미지원)](https://developer.android.com/studio/profile/standalone-profiler) · [Power Profiler](https://developer.android.com/studio/profile/power-profiler) · [APA 발표 2026-05-19](https://developer.android.com/blog/posts/introducing-android-performance-analyzer-the-next-evolution-in-profiling-for-android) · [Droidective](https://github.com/Droidective/Droidective) · [AndroidDeviceManager(macOS)](https://github.com/WhileEndless/AndroidDeviceManager) · [adb-studio(macOS)](https://github.com/Zaphkiel-Ivanovna/adb-studio) · [CRTYPUBG/adb-studio(Windows-first, 0.1.0-dev)](https://github.com/CRTYPUBG/adb-studio)
 
@@ -185,7 +185,7 @@
 | 9j | Android Studio Profiler / **APA** | Google | Win(단독)/전 OS(APA) | 무료 | APA 오픈베타(2026-05-19) | CPU/메모리/네트워크/전력레일 심층 | debuggable 앱 전제·상시감시/알림/트레이 아님 |
 | 9k | sxwik/Relay | (개인) | Win(Electron) | 무료로 보임(미검증) | 릴리스 없음 → **미검증** | 퍼포먼스 모니터·배터리 온도·알림 센터·기기 타임라인 | 유지보수·알림 임계·신뢰도 **미검증** |
 | 10 | **BatteryBoi** | blueheron786 | Win 트레이 | 무료 | 릴리스 피드 없음 | **트레이에 안드로이드 배터리 %**(ADB) | 배터리 외 전부(차트·알림·다기기) |
-| — | AndroidDeviceManager / ADB Studio / Droidective(정식) | 각 개인 | **macOS 전용** | 무료 | 2025-07 / SwiftUI / macOS 14+ | 메뉴바·ADB GUI | Windows 없음(Droidective만 Win 베타 예고) |
+| — | AndroidDeviceManager / ADB Studio / Droidective(정식) | 각 개인 | **macOS 전용** | 무료 | 2025-07 / SwiftUI / macOS 14+ | 메뉴바·ADB GUI | Windows 없음(Droidective는 Win/Linux 베타 실제 배포) |
 
 † archived = 유지보수 종료.
 
@@ -205,3 +205,26 @@
 - STF의 Cygwin 설치 가능성(문서상 "never tried").
 - AirDroid Personal 무료 로컬 모드의 정확한 한계(파일 크기/기능 제한).
 - Windows Store 내 소형 "폰 배터리 트레이 위젯"류의 전수 조사 불가.
+
+---
+
+## 14. 재검증 (2026-10-17 · `gh api` PAT 인증 · 5,000/h)
+
+1차 조사는 익명 GitHub API(시간당 60회)로 수집해 레이트리밋(403) 때문에 별 수를 재확인하지 못했다. 인증 토큰으로 전수 재조회한 결과는 아래와 같으며, **본 문서의 작은 프로젝트들은 실제로 대부분 취미 규모**임이 확인됐다(반대로 Phone Link·Sefirah·AirDroid 같은 큰 항목의 서술은 유지된다).
+
+| 저장소 | 별 | 최근 푸시 | 라이선스 | 비고 |
+|---|---|---|---|---|
+| Shrey113/Adb-Device-Manager-2 | **634** | 2026-08-28 | Apache-2.0 | Windows 트레이 + ADB/scrcpy 이중 모드(알림·통화·미디어·Audio Cast) — **텔레메트리 없음** |
+| aman-senpai/AndroLaunch | **88** | 2026-10-02 | AGPL-3.0 | macOS 메뉴바(+Win/Linux) · **QR 무선 페어링** · 양방향 클립보드 |
+| measure-sh/holo | **92** | 2026-04-29 | MIT | 터미널 UI · 성능·로그·ANR 트레이스 |
+| Droidective/Droidective | **62** | **2026-10-17** | MIT | Swift 6·SwiftUI · 61툴 · 크래시 브라우저 · 라이브 성능 차트 · MCP · **Win/Linux 베타(29/32 뷰)** |
+| yuhnin-m/Adb-DECK | 25 | 2026-03-27 | 없음 | ADB UI + 모니터 패널 |
+| alanisme/adb-tui | **20** | 2026-03-11 | Apache-2.0 | TUI + MCP 서버 — **"주목할 도구"로 보기엔 규모가 작다(1차 서술 정정)** |
+| RuizheGu0/droidgauge | **8** | 2026-08-25 | MIT | 앱별 네트워크·발열 HTML 리포트 + CI 게이트(실시간·알림 없음) |
+| AbiMangalan/JankMark | **1** | 2026-06-23 | 없음 | FPS·프레임타임·하드웨어 텔레메트리(Windows 베타) — 사실상 개인 프로젝트 |
+| Bloby22/andtls | 4 | 2026-08-30 | MIT | Go TUI + scrcpy |
+| RobusTest / Panda / MPhone | — | — | — | RobusTest 블로그는 유효, **MPhone 저장소는 404**(비공개·삭제), Panda는 별도 벤더 |
+
+**결론(변경 없음)**: Windows에도, macOS에도 **"트레이·메뉴바 상주 + 다기기 + 심층 텔레메트리 + 임계 알림 + 로컬 전용"** 을 한 제품에서 제공하는 앱은 **여전히 발견되지 않았다.** 단 macOS에서는 Droidective가 가장 근접하며(도구 폭·크래시 브라우저·성능 차트·메뉴바 상주·MCP), **임계 감시와 알림 채널이 없다**는 점이 우리 방어선이다.
+
+**출처(재검증)**: https://api.github.com/repos/Droidective/Droidective · https://api.github.com/repos/aman-senpai/AndroLaunch · https://api.github.com/repos/Shrey113/Adb-Device-Manager-2 · https://api.github.com/repos/alanisme/adb-tui · https://api.github.com/repos/AbiMangalan/JankMark · https://api.github.com/repos/measure-sh/holo · https://api.github.com/repos/RuizheGu0/droidgauge

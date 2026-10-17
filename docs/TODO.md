@@ -165,6 +165,7 @@
   - 목표: Android 11+ 는 `adb pair`(1차: 6자리 코드 입력 · 2차: QR/`_adb-tls-pairing._tcp` mDNS) 경로 추가,
     Android 10 이하는 기존 USB→tcpip 경로 폴백 (기존 `WifiOnboarding.swift` 확장)
   - 근거: `docs/research/RESEARCH_competitive_v2.md` §4.1 G1 · §5.1 P1-1 (AOSP `adb_wifi` 설계 문서에 페어링 형식 공개)
+  - 경쟁: **AndroLaunch(88★ · macOS 메뉴바)가 이미 QR 페어링 제공** (v2 부록 B) → 격차 해소가 아니라 **따라잡기**
   - 다음: 착수 시 `docs/plans/PLAN_wifi_pairing.md` 작성 → 실기기(S22 · `192.168.86.49:5555`) 페어링 실측
     · 완료 후 `docs/MANUAL_VERIFY.md` 에 "재부팅 후 자동 재연결" 항목 추가
 - **T-2026-10-17-5 "즉시 조치" 세트 — 폰 찾기·스크린샷·무음/진동·앱 강제 종료** (P1 · 리서치 v2 §4.1 G2 · §5.1 P1-2)
