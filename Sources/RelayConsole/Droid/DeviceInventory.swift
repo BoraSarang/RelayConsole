@@ -500,7 +500,12 @@ struct DeviceInventory: Equatable {
         return order.compactMap { key in
             guard let members = buckets[key], !members.isEmpty else { return nil }
             let sorted = members.sorted(by: preferredGroupMember)
-            let chosen = selected.flatMap { s in sorted.first { $0.serial == s } } ?? sorted[0]
+            // 선택된 전송이 **온라인이면** 대표로 삼는다 — 화면 선택 표시와 어긋나지 않게.
+            // 오프라인 전송을 대표로 삼으면 폰이 다른 전송으로 붙어 있는데도
+            // 죽은 주소를 활성인 것처럼 보여준다(선택이 아직 따라오지 않은 순간).
+            let chosen = selected
+                .flatMap { s in sorted.first { $0.serial == s && $0.isOnline } }
+                ?? sorted[0]
             return DeviceGroup(
                 id: key,
                 primary: chosen,

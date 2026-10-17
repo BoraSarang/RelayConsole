@@ -94,6 +94,14 @@ struct DeviceTransportGroupingTests {
         #expect(groups[0].contains("192.168.86.49:45325"))
     }
 
+    @Test func selectedButOfflineTransportDoesNotBecomePrimary() {
+        // 선택이 아직 따라오지 않은 순간: 죽은 5555 를 활성인 것처럼 보여주면 안 된다
+        let deadLegacy = snap("192.168.86.49:5555", kind: .network, physicalId: "R5CT215F4QK", online: false)
+        let groups = DeviceInventory.group([deadLegacy, wireless], selected: "192.168.86.49:5555")
+        #expect(groups[0].primary.serial == "192.168.86.49:45325")
+        #expect(groups[0].others.map(\.serial) == ["192.168.86.49:5555"])
+    }
+
     @Test func onlineTransportBeatsOfflineOne() {
         let offlineUSB = snap("R5CT215F4QK", kind: .usb, physicalId: "R5CT215F4QK", online: false)
         let groups = DeviceInventory.group([offlineUSB, wireless])
