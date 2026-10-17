@@ -166,6 +166,13 @@
 "droid.empty.noDeviceHint" = "Network device: adb connect IP:PORT";
 "droid.header.health" = "Health";
 "droid.header.picker" = "Select device";
+"device.transport.usb" = "USB";
+"device.transport.wireless" = "wireless";
+"device.transport.legacy" = "tcpip 5555";
+"device.transport.usb.help" = "USB link — most stable, but needs a cable";
+"device.transport.wireless.help" = "Android 11+ wireless debugging — survives a phone reboot via mDNS";
+"device.transport.legacy.help" = "adb tcpip 5555 — the port closes on reboot and needs USB to re-enable";
+"device.transport.others" = "%d other links";
 "droid.header.title" = "Relay Console · External Console";
 "droid.lastError" = "Error: %@";
 "droid.lastSample.at" = "Last sample %@";
