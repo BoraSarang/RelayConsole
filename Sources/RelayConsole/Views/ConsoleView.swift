@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// 섹션 enum은 ConsoleSection.swift (위젯 딥링크 공용)
+/// 섹션 enum은 ConsoleSection.swift
 
 /// Devices 하위 플랫폼 — Android 실구현 · Apple 예정
 private enum DevicePlatform: String, CaseIterable, Identifiable {
@@ -31,18 +31,6 @@ struct ConsoleView: View {
         .frame(minWidth: 760, minHeight: 520)
         .background(OPColor.popBG)
         .preferredColorScheme(ThemeManager.shared.mode.preferred)
-        // 위젯 딥링크 — 창이 열릴 때/열린 후 탭 이동 ([표시②] pending 신호 수신)
-        .onAppear { applyPendingSection() }
-        .onReceive(store.$pendingConsoleSection) { pending in
-            guard pending != nil else { return }
-            applyPendingSection()
-        }
-    }
-
-    private func applyPendingSection() {
-        guard let pending = store.pendingConsoleSection else { return }
-        selection = pending
-        store.pendingConsoleSection = nil
     }
 
     private var sidebar: some View {

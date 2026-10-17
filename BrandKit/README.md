@@ -15,7 +15,7 @@ SM_S901N ...5555 포트에 연결된 폰 하나, 배터리 - / 온도 - / 발열
 
 그래서 컨셉을 뒤집었다.
 맥이 주인이 아니라, 맥은 그냥 관제 콘솔(Consol)일 뿐이다.
-진짜 주인은 외부에 있다 - Droid, Apple, Sites, Jobs, Notify.
+진짜 주인은 외부에 있다 - Droid, Apple, Notify.
 외부에서 신호가 오면 맥으로 릴레이(Relay)되는 구조.
 
 그래서 이름은 Relay Console.
@@ -29,7 +29,6 @@ Relay Console은 당신의 모든 외부 기기를 하나의 메뉴바에서 관
 [주요 기능]
 - Droid: Android 배터리, 온도, 쓰로틀링, 메모리 압박을 iStat Menus 스타일 그래프로 실시간 모니터링. 설정 변경 탐지(accelerometer_rotation) 및 logcat 키워드 트래킹.
 - Apple: iPhone, AirPods 배터리 및 상태 (예정)
-- Sites & Jobs: 배포 상태 및 백그라운드 작업 큐 (예정)
 - 메뉴바 팝오버: 클릭 한 번으로 CPU 8코어, GPU, 네트워크 물결 확인. 발열 주의 42.3°C 시 즉시 알림 배너.
 - 원클릭 액션: Scrcpy로 열기, 파일 드랍, 강제 종료
 
@@ -66,6 +65,18 @@ Supports macOS 26+ Liquid Glass, light/dark mode, white template menubar icon.
 - Active 상태: 초록 점 + 릴레이 심볼
 
 ## 7. 포함 파일
-- AppIcons/AppIcon_*.png (16~1024)
+- AppIcons/AppIcon_1024.png (마스터 · 파생 크기는 아래 명령으로 생성)
+- AppIcons/AppIcon_Solid_1024.png (대안 마스터)
 - MenuBarIcons/MenuBar_Black_Template_*.png (템플릿 - Xcode에 Template으로 설정)
 - MenuBarIcons/MenuBar_White_*.png (프리뷰용)
+
+### 파생 아이콘 재생성 (2026-10-17 정리 — 중간 크기 PNG 32개 삭제)
+
+`Resources/icons/AppIcon.icns`가 있으면 빌드는 그대로 쓴다. icns 부재 시 폴백은
+`scripts/build-macos.sh`가 **1024 마스터에서 `sips`로** 필요한 크기를 만든다 —
+중간 크기를 리포지토리에 두지 않는다 (같은 이미지의 중복 커밋 방지).
+
+```bash
+# 단일 크기 예시
+sips -z 512 512 BrandKit/AppIcons/AppIcon_1024.png --out /tmp/AppIcon_512.png
+```

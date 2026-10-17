@@ -1,5 +1,5 @@
 #!/bin/bash
-# macOS 빌드 — Relay Console 1.16.0
+# macOS 빌드 — Relay Console (버전은 Resources/Info.plist 단일 소스)
 set -eo pipefail
 
 APP_NAME="RelayConsole"
@@ -8,7 +8,11 @@ BUNDLE_ID="com.borasarang.relayconsole"
 DEST_DIR="$HOME/Applications"
 BUILD_DIR="./.build"
 
-# 서명 — 앱과 위젯 appex를 동일 Apple Development로 통일 (ad-hoc/팀 불일치면 위젯 갤러리 미표시 — 가이드 §2.1)
+# 버전 단일 진실원처 — Info.plist 에서만 읽는다 (스크립트 하드코딩 금지)
+VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" Resources/Info.plist)
+[ -n "$VERSION" ] || { echo "Info.plist 버전 읽기 실패"; exit 1; }
+
+# 서명 — Apple Development (비샌드박스 앱 · DECISIONS D2 로 위젯 appex 제거)
 CODE_SIGN_IDENTITY="76811B50FF3F9015B9E287FC6829806E1D42B9DB" # Apple Development: leeborasarang@gmail.com (HLQNBZHQQN) · TEAM 6GPJQ7BQC9
 DEVELOPMENT_TEAM="6GPJQ7BQC9"
 
@@ -33,7 +37,7 @@ mkdir -p "$DEST_DIR"
 CONFIG_FLAG=""
 [ "$MODE" = "release" ] && CONFIG_FLAG="-c release"
 
-log "빌드 시작 (mode: $MODE, version: 1.16.0)"
+log "빌드 시작 (mode: $MODE, version: $VERSION)"
 swift build $CONFIG_FLAG
 
 BUILD_MODE_DIR="debug"
@@ -57,7 +61,6 @@ mkdir -p "$APP_BUNDLE/Contents/Resources"
 
 cp "$BINARY" "$APP_BUNDLE/Contents/MacOS/"
 cp "Resources/Info.plist" "$APP_BUNDLE/Contents/"
-cp "error_message_ko.json" "$APP_BUNDLE/Contents/Resources/" 2>/dev/null || true
 # ★ Resources/Localizable.xcstrings 는 2026-09-28 에 삭제했다 (왜: TODO 참조).
 #   앱은 Sources/RelayConsole/Resources/{en,ko}.lproj/Localizable.strings 만 읽고,
 #   이 파일은 612키로 낙오해 있어 **"여기서 고쳐도 아무 일도 안 일어나는" 함정**이 된다.
@@ -79,24 +82,24 @@ for f in Resources/icons/MenuBar*.png; do
   [ -f "$f" ] && cp "$f" "$APP_BUNDLE/Contents/Resources/"
 done
 
-# AppIcon.icns 생성 (BrandKit 1024)
+# AppIcon.icns 생성 (BrandKit 1024 마스터 — 파생 크기는 여기서 sips 로 만든다)
 ICNS_SRC="Resources/icons/AppIcon.icns"
 if [ -f "$ICNS_SRC" ]; then
   cp "$ICNS_SRC" "$APP_BUNDLE/Contents/Resources/AppIcon.icns"
 elif [ -f "BrandKit/AppIcons/AppIcon_1024.png" ]; then
   TMP_ICONSET=$(mktemp -d)/AppIcon.iconset
   mkdir -p "$TMP_ICONSET"
-  SRC="BrandKit/AppIcons"
-  sips -z 16 16     "$SRC/AppIcon_16.png"     --out "$TMP_ICONSET/icon_16x16.png" >/dev/null 2>&1 || true
-  sips -z 32 32     "$SRC/AppIcon_32.png"     --out "$TMP_ICONSET/icon_16x16@2x.png" >/dev/null 2>&1 || true
-  sips -z 32 32     "$SRC/AppIcon_32.png"     --out "$TMP_ICONSET/icon_32x32.png" >/dev/null 2>&1 || true
-  sips -z 64 64     "$SRC/AppIcon_64.png"     --out "$TMP_ICONSET/icon_32x32@2x.png" >/dev/null 2>&1 || true
-  sips -z 128 128   "$SRC/AppIcon_128.png"    --out "$TMP_ICONSET/icon_128x128.png" >/dev/null 2>&1 || true
-  sips -z 256 256   "$SRC/AppIcon_256.png"    --out "$TMP_ICONSET/icon_128x128@2x.png" >/dev/null 2>&1 || true
-  sips -z 256 256   "$SRC/AppIcon_256.png"    --out "$TMP_ICONSET/icon_256x256.png" >/dev/null 2>&1 || true
-  sips -z 512 512   "$SRC/AppIcon_512.png"    --out "$TMP_ICONSET/icon_256x256@2x.png" >/dev/null 2>&1 || true
-  sips -z 512 512   "$SRC/AppIcon_512.png"    --out "$TMP_ICONSET/icon_512x512.png" >/dev/null 2>&1 || true
-  sips -z 1024 1024 "$SRC/AppIcon_1024.png"   --out "$TMP_ICONSET/icon_512x512@2x.png" >/dev/null 2>&1 || true
+  MASTER="BrandKit/AppIcons/AppIcon_1024.png"
+  sips -z 16 16     "$MASTER" --out "$TMP_ICONSET/icon_16x16.png"      >/dev/null 2>&1 || true
+  sips -z 32 32     "$MASTER" --out "$TMP_ICONSET/icon_16x16@2x.png"   >/dev/null 2>&1 || true
+  sips -z 32 32     "$MASTER" --out "$TMP_ICONSET/icon_32x32.png"      >/dev/null 2>&1 || true
+  sips -z 64 64     "$MASTER" --out "$TMP_ICONSET/icon_32x32@2x.png"   >/dev/null 2>&1 || true
+  sips -z 128 128   "$MASTER" --out "$TMP_ICONSET/icon_128x128.png"    >/dev/null 2>&1 || true
+  sips -z 256 256   "$MASTER" --out "$TMP_ICONSET/icon_128x128@2x.png" >/dev/null 2>&1 || true
+  sips -z 256 256   "$MASTER" --out "$TMP_ICONSET/icon_256x256.png"    >/dev/null 2>&1 || true
+  sips -z 512 512   "$MASTER" --out "$TMP_ICONSET/icon_256x256@2x.png" >/dev/null 2>&1 || true
+  sips -z 512 512   "$MASTER" --out "$TMP_ICONSET/icon_512x512.png"    >/dev/null 2>&1 || true
+  sips -z 1024 1024 "$MASTER" --out "$TMP_ICONSET/icon_512x512@2x.png" >/dev/null 2>&1 || true
   if iconutil -c icns "$TMP_ICONSET" -o "$APP_BUNDLE/Contents/Resources/AppIcon.icns" 2>/dev/null; then
     log "AppIcon.icns 생성 완료"
   else
@@ -105,43 +108,8 @@ elif [ -f "BrandKit/AppIcons/AppIcon_1024.png" ]; then
   rm -rf "$(dirname "$TMP_ICONSET")"
 fi
 
-# ── 위젯 appex (PLAN_widget) ─────────────────────────────────────────────
-# SPM swift build appex는 WidgetKit bootstrap 크래시 → 반드시 xcodegen + xcodebuild (가이드 §2.3/§4.1)
-WIDGET_NAME="RelayWidget"
-WIDGET_DIR="./WidgetXcode"
-if [ "$MODE" = "release" ]; then XCODE_CFG="Release"; else XCODE_CFG="Debug"; fi
-
-if ! command -v xcodegen >/dev/null 2>&1; then
-  error "xcodegen 없음 — brew install xcodegen (위젯 빌드 불가)"
-  exit 1
-fi
-[ -d "$WIDGET_DIR/RelayWidgetXcode.xcodeproj" ] || (cd "$WIDGET_DIR" && xcodegen generate)
-
-log "위젯 빌드 (xcodebuild, $XCODE_CFG)..."
-WIDGET_LOG=$(mktemp)
-if (cd "$WIDGET_DIR" && xcodebuild \
-    -project RelayWidgetXcode.xcodeproj -target "$WIDGET_NAME" -configuration "$XCODE_CFG" build \
-    CODE_SIGN_IDENTITY="$CODE_SIGN_IDENTITY" DEVELOPMENT_TEAM="$DEVELOPMENT_TEAM") >"$WIDGET_LOG" 2>&1; then
-  log "위젯 빌드 완료"
-else
-  error "위젯 빌드 실패 — $WIDGET_LOG"
-  tail -n 30 "$WIDGET_LOG"
-  exit 1
-fi
-
-WIDGET_APPX="$WIDGET_DIR/build/$XCODE_CFG/$WIDGET_NAME.appex"
-if [ ! -d "$WIDGET_APPX" ]; then
-  error "appex 없음: $WIDGET_APPX"
-  exit 1
-fi
-# 앱 재설치 시 PlugIns가 통째로 지워지므로 매번 재생성 (가이드 §4.2 주의)
-rm -rf "$APP_BUNDLE/Contents/PlugIns"
-mkdir -p "$APP_BUNDLE/Contents/PlugIns"
-cp -R "$WIDGET_APPX" "$APP_BUNDLE/Contents/PlugIns/"
-log "appex 복사: Contents/PlugIns/$WIDGET_NAME.appex"
-
-# ── 서명 — Apple Development (앱 + appex 팀 통일) ──────────────────────────
-log "Apple Development 서명 (entitlements: App Group)..."
+# ── 서명 — Apple Development (비샌드박스 앱 단독 · 2026-10-17 위젯 제거) ─────
+log "Apple Development 서명..."
 if codesign --force -s "$CODE_SIGN_IDENTITY" \
     --entitlements Entitlements/RelayConsole.entitlements \
     "$APP_BUNDLE" 2>&1 | tail -n 5; then
@@ -155,7 +123,7 @@ if ! codesign --verify --deep --strict "$APP_BUNDLE" 2>&1; then
   error "서명 검증 실패 (codesign --verify --deep --strict)"
   exit 1
 fi
-log "서명 검증 통과 (app + appex 동일 팀 $DEVELOPMENT_TEAM)"
+log "서명 검증 통과 (팀 $DEVELOPMENT_TEAM)"
 
-log "완료: $APP_BUNDLE ($BUNDLE_ID, 1.16.0)"
+log "완료: $APP_BUNDLE ($BUNDLE_ID, $VERSION)"
 open "$APP_BUNDLE" 2>/dev/null || true

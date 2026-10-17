@@ -2,8 +2,8 @@ import SwiftUI
 import AppKit
 
 /// 실행 시 자동 열린 대시보드와 사용자 요청 구분 — SwiftUI는 첫 Window 씬을 자동 표시하므로,
-/// 설정이 꺼져 있으면 진입 직후 닫는다. 위젯 딥링크·사용자 클릭은 전부 `openConsole()`을
-/// 경유하므로 플래그로 보호한다 (딥링크로 열린 창을 닫는 사고 방지).
+/// 설정이 꺼져 있으면 진입 직후 닫는다. 사용자가 직접 연 창은 전부 `openConsole()`을
+/// 경유하므로 플래그로 보호한다 (사용자가 연 창을 닫는 사고 방지).
 enum ConsoleLaunchGate {
     /// 가변 전역(Swift 6 금지) 대신 불변 박스 + 잠금 — 메인 스레드에서만 접근
     private static let box = LaunchFlagBox()
@@ -47,13 +47,6 @@ struct RelayConsoleApp: App {
                 FloatingGraphController.shared.openProcesses = { openProcesses() }
                 FloatingGraphController.shared.openAppNetwork = { openAppNetwork() }
                 FloatingGraphController.shared.openConsole = { openConsole() }
-                // 위젯 딥링크 라우팅 — 클로저 주입 완료 후 보류 URL 플러시
-                WidgetDeepLink.shared.openProcesses = { openProcesses() }
-                WidgetDeepLink.shared.openLogs = { openLogs() }
-                WidgetDeepLink.shared.openAppNetwork = { openAppNetwork() }
-                WidgetDeepLink.shared.openSettings = { openSettingsWindow() }
-                WidgetDeepLink.shared.openConsole = { openConsole() }
-                WidgetDeepLink.shared.flush()
             }
         )
 

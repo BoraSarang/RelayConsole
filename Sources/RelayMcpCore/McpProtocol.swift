@@ -114,7 +114,7 @@ public enum McpRouter {
     public static let serverName = "relay-console"
     /// relay-mcp는 앱과 별도 프로세스라 앱의 Info.plist를 읽을 수 없다.
     /// 앱 버전과 어긋나면 안 되므로 McpProtocolTests에서 Info.plist와 대조한다.
-    public static let serverVersion = "1.16.0"
+    public static let serverVersion = "1.17.0"
 
     /// tools/list 페이로드
     public static func toolsList() -> [[String: Any]] {

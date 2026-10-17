@@ -28,7 +28,7 @@ swift test
 - **프로젝트명**: RelayConsole / 앱 이름 **Relay Console** (구 Outpost → 브랜드 이관, 코드 신규)
 - **플랫폼**: macOS 확정 — AppKit NSStatusItem 메뉴바 (구 SwiftUI MenuBarExtra, PLAN_menubar_nsstatusitem), macOS 26.0+ 상주
 - **기술 스택**: SwiftPM + SwiftUI MenuBarExtra + AppKit + 시스템 ADB 외부 호출 (GRDB는 범위 밖 · **외부 scrcpy 호출은 허용**, 내장 미러링은 범위 밖) · `RelayMcpCore`(읽기 전용 로컬 MCP 프로토콜·데이터) + `relay-mcp` 바이너리 — 감시 경로에서 쓰기 금지
-- **구조**: `Sources/RelayConsole/`(App/Droid/Apple/Incident/Models/Views/DesignSystem/Utils, `RelayWidgetCore`에만 의존) · `Sources/RelayWidgetCore`(위젯 공유 — SPM 등록) · `Sources/RelayWidget`(SPM 미등록 — §4 위젯 참조) · `Sources/RelayMcpCore`+`Sources/RelayMcp` · `Tests/RelayConsoleTests/`
+- **구조**: `Sources/RelayConsole/`(App/Droid/Apple/Incident/Models/Views/DesignSystem/Utils) · `Sources/RelayMcpCore`+`Sources/RelayMcp` · `Tests/RelayConsoleTests/` (2026-10-17 위젯 제거 — DECISIONS D2)
 - **서버 없음 · 로컬 전용** — 외부 전송은 사용자가 연결한 ntfy/Slack 채널에만
 - **테스트**: `swift test` 전체, 단일 포커스는 `swift test --filter <TestClass>`
 - **최소 OS**: macOS 26.0 Tahoe (BrandKit/AppStore_Metadata)
@@ -39,7 +39,7 @@ swift test
 ## 2. 번들ID / 앱 ID
 - macOS bundleIdentifier: `com.borasarang.relayconsole` **확정** (AGENTS 플랫폼 규칙 `com.borasarang.{AppName}`)
 - 앱 표시명: Relay Console / 메뉴바: RELAY
-- **버전**: `1.16.0` (파일 탐색기 ADB 읽기·가져오기·전송 — 이전 1.15.0 위젯 WidgetKit 3종 · App Group 스냅샷 · 딥링크)
+- **버전**: `1.17.0` (위젯 제거·미사용 자산 정리 — 이전 1.16.0 파일 탐색기 ADB 읽기·가져오기·전송)
 - UserDefaults·설정 키 접두어: `relay.*` (구 `outpost.*` 계승 금지 — 코드 신규)
 
 ## 3. 성능 예산 Override
@@ -61,10 +61,10 @@ swift test
   - 오프라인·이전 수치를 병치하면 "마지막 스냅샷"임을 명시 (`apple.offline.banner`와 동일 패턴)
   - 새 상태/에러 문구는 en·ko L10n 키를 **같은 키명으로 동시 추가** (키 개수 1:1 유지)
   - L10n 원천: `Sources/RelayConsole/Resources/{en,ko}.lproj/Localizable.strings`만. `Resources/Localizable.xcstrings`는 삭제됨 — 재생성·편집 금지. 리소스 번들(`Bundle.module`) 누락은 런타임 fatal
-  - 하트비트 서버는 **127.0.0.1 전용 바인드** — 외부 노출 금지. 토큰·웹훅 URL 하드코딩 금지, 로그에는 마스킹 기록
+  - 알림 채널 토큰·웹훅 URL 하드코딩 금지, 로그에는 마스킹 기록 (`NotifyChannel.maskSecret`)
 - **팝오버·Droid 대시보드 표시: 다크 전용** (밝은 테마/웹풍 버튼/print 금지)
 - **[HARD] 빌드 스크립트는 최상단 참조 — 매 수정 직후 `./scripts/build-macos.sh debug` 필수** (`swift build`/`swift test`만으로 종료 금지)
-- **위젯 구조 (1.15.0)**: `Sources/RelayWidget`는 **SPM 미등록** — `WidgetXcode/project.yml`(xcodegen)+`xcodebuild`로만 빌드 (SPM appex는 WidgetKit bootstrap 크래시, 가이드 §2.3). `Sources/RelayWidgetCore`만 SPM 타깃(공유·public). 앱·위젯 **서명은 Apple Development(6GPJQ7BQC9) 통일 유지** — ad-hoc/팀 불일치면 위젯 갤러리 미표시. 앱은 **비샌드박스 유지**(adb/scrcpy), 위젯 appex만 sandbox. 공유 데이터는 App Group `6GPJQ7BQC9.com.borasarang.relayconsole`의 `widget-snapshot.json` (`WidgetSnapshotStore`)
+- **위젯 제거 (2026-10-17 · DECISIONS D2)**: 위젯(WidgetKit 3종)·`WidgetXcode`(xcodegen)·`RelayWidgetCore`·App Group·`relayconsole://` 딥링크를 제거했다. 빌드는 **SwiftPM 단독**(`swift build` → `scripts/build-macos.sh`)이라 **xcodegen 불필요**. 앱은 계속 **비샌드박스 유지**(adb/scrcpy). 되살리자는 이야기가 나오면 D2를 먼저 읽는다
 
 ## 5. 디자인 토큰
 - 색/폰트: docs/DESIGN.md
