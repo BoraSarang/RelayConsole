@@ -141,6 +141,7 @@
 "droid.card.health.title" = "HEALTH";
 "droid.card.memory.pressure" = "압박 %@";
 "droid.card.memory.title" = "MEMORY";
+"droid.card.network.adb" = "adb(내부)";
 "droid.card.network.down" = "다운";
 "droid.card.network.external" = "외부";
 "droid.card.network.note" = "합계 실시간 · adb 제외 · 앱별 60초 평균";

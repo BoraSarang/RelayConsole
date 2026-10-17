@@ -141,6 +141,7 @@
 "droid.card.health.title" = "HEALTH";
 "droid.card.memory.pressure" = "Pressure %@";
 "droid.card.memory.title" = "MEMORY";
+"droid.card.network.adb" = "adb (internal)";
 "droid.card.network.down" = "Down";
 "droid.card.network.external" = "External";
 "droid.card.network.note" = "Live totals · excl. adb · per-app 60-sec avg";

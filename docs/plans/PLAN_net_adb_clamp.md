@@ -32,17 +32,22 @@
 
 - `AdbClient`
   - `netTotal(up:down:shellUp:shellDown:) -> (up, down, adbDominant)` — 차감 후 0이 되는 방향은 실측 유지, `adbDominant` 로 각주 전환.
-  - `steadyShellRate(from:)` — 링에서 방향별 최소값(상시 오버헤드).
+  - `steadyShellRate(from:)` — 링에서 방향별 최소값(상시 오버헤드) ← 차감용.
+  - `meanShellRate(from:)` — 링 평균 ← "adb(내부)" 행 표시용(앱별 행과 같은 60초 창).
   - `excludeShell` 은 **그대로**(순수 클램프) — 기존 의미·테스트 보존, 새 규칙은 `netTotal` 이 감싼다.
 - `DeviceMonitor`
   - netdev 합계·경로별 그룹(cell/wifi)이 `netTotal` 사용. `state.cacheNetAdbDominant` → 스냅샷.
   - netstats 블록에서 **직전 틱 델타**로 shell 추정 → `shellRateHistory`(최대 5) → `steadyShellRate` → 캐시. 앱별 60초 창(`appNetBaselineIndex`)은 그대로.
 - `DeviceSnapshot.netAdbDominant: Bool?` + merge 폴백(5초 틱이 15초 값을 덮지 않음) · `DroidCards.network` 각주 분기 · L10n 1키 양쪽(`droid.card.network.note.adb`).
+- **카드 "adb(내부)" 행** — 합계에서 뺀 adb 트래픽을 숨기지 않고 목록에 세운다(`AdbClient.meanShellRate`).
+  - 값은 링 **평균(≈60초)**: 바로 아래 앱별 행과 같은 창·통계로 맞춰 비교 가능하게 하고, 플러시가 밀리는 기기(Router 실측 — 틱 값이 대부분 0.0)에서 행이 죽어 보이는 것을 막는다.
+  - 그래서 **버스트가 행과 합계에서 함께 보인다**: push 중 합계가 3.4 MB/s 로 튀는 순간 행도 ↓620 KB/s 로 올라간다 — "이 스파이크가 adb 때문" 이 카드 안에서 설명된다.
+  - `DeviceSnapshot.netAdbUp/DownMBps` + merge 폴백 · L10n 1키 양쪽(`droid.card.network.adb`).
 
 ## 4. 검증 [HARD]
 
-- `swift test` **XCTest 184/0 + Swift Testing 659/0** — 신규 2건: `netTotal`(과차감 시 실측 유지 · 실측 0이면 0 유지 · 정상 차감은 그대로) · `steadyShellRate`(링 최소값 · 빈 링은 차감 0).
-- `./scripts/build-macos.sh debug` **EXIT=0** · L10n **781키 en/ko 1:1** · 한자 0건.
+- `swift test` **XCTest 184/0 + Swift Testing 659/0** — 신규 2건: `netTotal`(과차감 시 실측 유지 · 실측 0이면 0 유지 · 정상 차감은 그대로) · `steadyShellRate`/`meanShellRate`(차감=최소값, 표시=평균 · 빈 링 0).
+- `./scripts/build-macos.sh debug` **EXIT=0** · L10n **782키 en/ko 1:1** · 한자 0건.
 - **실기 재현 대조** (S22 · `adb push` 80MB = 4.4초 · 18 MB/s):
 
   | 항목 | 실측(폰) | 카드 표시 |
@@ -51,8 +56,8 @@
   | 이후 지속 다운로드 | 400 KB/s (지속) | **+60초 412 KB/s** ← 수정 전 0.0 이던 자리 |
   | uid 2000 버킷 | 39 MB/s 1회 튐 | 합계를 오염시키지 않음(최소값 차감) |
   | 앱별 행 | droidrelay ↓400 KB/s | ↓402 KB/s (방향·크기 일치) |
+  | **adb 행** | push 60MB (3.5초) | 평소 `adb(내부) ↓1.0 KB/s` → push 틱 `↓620 KB/s`(60초 평균) — 합계 3.4 MB/s 스파이크의 출처가 카드 안에서 설명됨 |
 
 ## 5. 남은 것
 
 - 육안: `docs/MANUAL_VERIFY.md` **45번** (사용자 확인 대기).
-- 미구현(같은 계열): adb 트래픽을 **별도 행**으로 보여주기(지금은 합계에 섞여 보이거나, 우세할 때만 각주로 알림).

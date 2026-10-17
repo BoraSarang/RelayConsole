@@ -94,6 +94,12 @@ actor DeviceMonitor {
         /// 창 스무딩값을 그대로 빼면 사용자 파일 전송 1회가 60초 동안 합계를 0으로 눌렀다
         /// (2026-10-17 `adb push` 100MB 실측 — `AdbClient.steadyShellRate`).
         var shellRateHistory: [(up: Double, down: Double)] = []
+        /// 카드 "adb" 행에 보여줄 adb(shell) 속도 — 차감분(`cacheShell*` = 상시 최소값)과 달리
+        /// **링 평균(≈60초)** 이다: 아래 앱별 행과 같은 창·통계로 맞춰 비교 가능하게 하고,
+        /// 플러시가 밀리는 기기에서 틱 값이 0으로 떨어져 행이 죽어 보이는 것을 막는다.
+        /// (nil = 아직 미측정 → 행 없음)
+        var cacheAdbUp: Double?
+        var cacheAdbDown: Double?
         /// 직전 틱의 합계가 adb 우세(과차감 0 클램프)였는지 — 각주 전환용
         var cacheNetAdbDominant: Bool = false
         /// uid → 패키지명 (1회 조회 후 캐시)
@@ -642,6 +648,13 @@ actor DeviceMonitor {
                         let steady = AdbClient.steadyShellRate(from: state.shellRateHistory)
                         state.cacheShellUp = steady.up
                         state.cacheShellDown = steady.down
+                        // 표시용 "adb" 행은 **링 평균**(앱별 행과 같은 60초 창) — 차감분(최소값)이 아니라
+                        // 실제 adb 트래픽을 보여준다(파일 전송 버스트도 희석돼 드러난다).
+                        let adbRow = AdbClient.meanShellRate(from: state.shellRateHistory)
+                        state.cacheAdbUp = adbRow.up
+                        state.cacheAdbDown = adbRow.down
+                        snap.netAdbUpMBps = adbRow.up
+                        snap.netAdbDownMBps = adbRow.down
                     }
                     // 표시·누적용은 shell 제외 (합계 차감분은 위에서 따로 계산)
                     snap.appNetStats = allRows.filter { $0.uid != AdbClient.shellUid }
@@ -809,6 +822,8 @@ actor DeviceMonitor {
         snap.netWifiUpMBps = snap.netWifiUpMBps ?? state.cacheWifiNetUp
         snap.netWifiDownMBps = snap.netWifiDownMBps ?? state.cacheWifiNetDown
         snap.netAdbDominant = snap.netAdbDominant ?? state.cacheNetAdbDominant
+        snap.netAdbUpMBps = snap.netAdbUpMBps ?? state.cacheAdbUp
+        snap.netAdbDownMBps = snap.netAdbDownMBps ?? state.cacheAdbDown
         snap.networkType = snap.networkType ?? state.cacheNetworkType
         snap.androidVersion = snap.androidVersion ?? state.cacheAndroidVersion
         snap.sdkInt = snap.sdkInt ?? state.cacheSDK

@@ -139,8 +139,9 @@
   - 원인: 합계 = `/proc/net/dev` **15초 live** − shell(uid 2000) 추정 **45~60초 창** → `max(0,…)` 클램프.
     창 불일치로 버스트 1회가 60초 동안 가짜 차감이 됐고, netstats 플러시 지연이 그 값을 **39 MB/s**까지 키웠다
   - 수정(B+D): shell 추정을 **합계와 같은 틱**으로 → 링 5개 **최소값**만 차감 · 과차감이면 0 대신 실측 + 각주 전환
+  - **adb(내부) 행**: 뺀 adb 트래픽을 목록에 세운다(60초 평균 — 앱별 행과 같은 창). push 60MB → 행 ↓620 KB/s, 합계 3.4 MB/s 동시
   - **검증 [HARD]**: `swift test` **XCTest 184/0 + Swift Testing 659/0** · `./scripts/build-macos.sh debug` **EXIT=0**
-    · L10n **781키 en/ko 1:1** · 한자 0건
+    · L10n **782키 en/ko 1:1** · 한자 0건
   - **라이브 대조**: push 80MB → 카드 +60초 **412 KB/s**(실측 400 KB/s · 종전 0.0 자리) · uid 2000 버킷 39 MB/s 1회에도 합계 불변
   - **육안 대기** → `docs/MANUAL_VERIFY.md` 45번
 - **T-2026-10-13-6 외부(인터넷) 트래픽 분리 표시** — `docs/plans/PLAN_net_external.md`

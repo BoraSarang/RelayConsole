@@ -1118,6 +1118,12 @@ struct AdbParsingTests {
         // 빈 링 = 차감 없음 (기기 연결 직후)
         let e = AdbClient.steadyShellRate(from: [])
         #expect(e.up == 0 && e.down == 0)
+        // 카드 "adb" 행은 링 **평균**(앱별 행과 같은 60초 창) — 차감분(최소값)과 다르다
+        let m = AdbClient.meanShellRate(from: ring)
+        #expect(abs(m.up - (0.02 + 1.7 + 0.03) / 3) < 0.000001)
+        #expect(abs(m.down - (0.005 + 1.9 + 0.006) / 3) < 0.000001)
+        let me = AdbClient.meanShellRate(from: [])
+        #expect(me.up == 0 && me.down == 0)
     }
 
     @Test func appNetBaselineIndexPicksOldestMature() {

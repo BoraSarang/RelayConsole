@@ -603,6 +603,25 @@ enum AdbClient {
         return (max(0, up), max(0, down))
     }
 
+    /// shell(adb) 기여분 링의 **평균** — 카드 "adb" 행 표시용.
+    ///
+    /// ## 왜 최소값(차감분)이 아니라 평균인가
+    /// 행은 "지금 adb가 얼마나 쓰나"를 보여주는 자리이고, 바로 아래 앱별 행이 60초 평균이므로
+    /// **같은 창·같은 통계**로 맞춘다. 마지막 틱 값(실시간)을 쓰면 netstats 버킷 플러시가
+    /// 밀리는 기기에서 틱별로 `0/0/…/버스트` 로 튀어 행이 죽은 것처럼 보인다(실측: Router 는
+    /// 대부분 틱이 0.0, S22 는 정상). 버스트는 창 안에서 희석되지만 사라지지 않는다
+    /// (80MB 전송 1회 → 60초 평균 ≈ 1.3 MB/s).
+    static func meanShellRate(
+        from recent: [(up: Double, down: Double)]
+    ) -> (up: Double, down: Double) {
+        guard !recent.isEmpty else { return (0, 0) }
+        let n = Double(recent.count)
+        return (
+            max(0, recent.map(\.up).reduce(0, +) / n),
+            max(0, recent.map(\.down).reduce(0, +) / n)
+        )
+    }
+
     /// 60초 윈도우 기준 샘플 인덱스 — `ages`는 오래된 순 경과초.
     /// 45초 이상 지난 가장 오래된 샘플을 고른다 (45~60초 윈도우, 경계 지터 흡수).
     /// 없으면 nil → 호출자가 직전 샘플로 폴백 (기동 후 첫 1분 = 종전 15초 동작).
