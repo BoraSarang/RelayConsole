@@ -155,10 +155,13 @@ struct WifiAutoTests {
     /// "닿지 않음" 으로 오판해 tcpip 을 건너뛴다.
     @Test func reachabilityRejectsInvalidInputWithoutTouchingNetwork() {
         // 잘못된 입력 / 루프백은 네트워크를 건드리지 않고 즉시 false 여야 한다
-        #expect(!PingProbe.reachable(ip: "not-an-ip"))
-        #expect(!PingProbe.reachable(ip: "999.1.1.1"))
-        #expect(!PingProbe.reachable(ip: "127.0.0.1"), "루프백은 검사 대상이 아니다")
-        #expect(!PingProbe.reachable(ip: ""))
+        // (포트는 **반드시** 넘긴다 — 기본값을 두면 호출부가 무심코 5555 로 확인해
+        //  재부팅 뒤 무선 디버깅 후보를 버린다. 2026-10-18 실측 · 그 실수를 되풀이하지 않게)
+        #expect(!PingProbe.reachable(ip: "not-an-ip", port: WifiAdbLogic.defaultPort))
+        #expect(!PingProbe.reachable(ip: "999.1.1.1", port: WifiAdbLogic.defaultPort))
+        #expect(!PingProbe.reachable(ip: "127.0.0.1", port: WifiAdbLogic.defaultPort),
+                "루프백은 검사 대상이 아니다")
+        #expect(!PingProbe.reachable(ip: "", port: WifiAdbLogic.defaultPort))
     }
 
     /// 닫혀 있는 포트(로컬 listen 없는 고포트) 는 false — 도달 불가의 기본 동작

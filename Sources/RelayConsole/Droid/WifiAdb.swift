@@ -803,17 +803,18 @@ final class WifiAdbController: ObservableObject {
             guard let ip = WifiAdbLogic.host(ofEndpoint: endpoint) else { continue }
             // adbd 가 이미 TCP 모드다(TCP 로 붙어 있었으니) — **tcpip 은 건드리지 않는다**
             // tcpip 은 adbd 를 재시작해서 그 순간 연결을 **또** 끊는다
-            guard PingProbe.reachable(ip: ip) else {
-                lastFailureDetail = L10n.format("wifi.reconnect.notReachable", endpoint)
-                continue
-            }
-            // ★ **adbd 포트가 열려 있는지 먼저 본다** (2026-09-28 실측)
-            //   후보가 여러 개일 때 `adb connect` 를 전부 시도하면 adb 서버 상태가
-            //   오염된다(connect 실패가 device 로 남음). 계측에서 ARP 이웃 3개 중
-            //   **5555 가 열린 것은 1개뿐**이었다 — 포트로 거르면 2회 시도가 사라진다.
-            //   ★ 포트는 **후보의 자기 포트**로 본다. 5555 로 고정하면 재부팅 뒤
-            //   무선 디버깅 포트 후보가 전부 걸러져 자동 재연결이 영영 안 붙는다(2026-10-17)
-            guard Self.adbdPortOpen(ip: ip, port: WifiAdbLogic.probePort(forEndpoint: endpoint)) else {
+            //
+            // ★ **그 엔드포인트의 포트로** 도달을 확인한다.
+            //   - 후보가 여러 개일 때 `adb connect` 를 전부 시도하면 adb 서버 상태가 오염된다
+            //     (connect 실패가 device 로 남음) — 2026-09-28 실측: ARP 이웃 3개 중 5555 가
+            //     열린 것은 1개뿐이었다. 포트로 거르면 시도가 2회 줄어든다.
+            //   - 종전엔 이 확인이 **5555 를 하드코딩**했다(도달 확인·포트 확인 두 곳 모두).
+            //     재부팅 뒤 폰은 5555 를 닫고 무선 디버깅 포트만 연다. 게다가 `mergeDiscovered` 가
+            //     같은 호스트의 옛 5555 후보를 버리므로 후보는 무선 포트 **하나뿐**인데,
+            //     그 하나가 두 게이트에서 걸러져 **mDNS 로 찾아 놓고도 못 붙었다**
+            //     (2026-10-18 실측: 광고 37311 이 5분 넘게 떠 있어도 재연결 0회).
+            //   - 도달 확인과 포트 확인은 **같은 `nc -z` 프로브**라 한 번으로 합쳤다.
+            guard PingProbe.reachable(ip: ip, port: WifiAdbLogic.probePort(forEndpoint: endpoint)) else {
                 lastFailureDetail = L10n.format("wifi.reconnect.notReachable", endpoint)
                 continue
             }
@@ -1642,7 +1643,11 @@ struct WifiAdbError: LocalizedError, Sendable {
 /// 더 직접적인 신호다.
 enum PingProbe {
     /// adb TCP 포트 도달 확인
-    static func reachable(ip: String, port: Int = WifiAdbLogic.defaultPort) -> Bool {
+    ///
+    /// **포트는 반드시 넘긴다** — 기본값을 두면 호출부가 무심코 5555 로 확인하고,
+    /// 재부팅 뒤 무선 디버깅 포트 후보를 통째로 버린다(2026-10-18 실측 · 그 실수를 되풀이하지 않게
+    /// 기본 인자를 **없앴다**).
+    static func reachable(ip: String, port: Int) -> Bool {
         guard WifiAdbLogic.isIPv4(ip), !WifiAdbLogic.isLoopback(ip) else { return false }
         let proc = Process()
         proc.executableURL = URL(fileURLWithPath: "/usr/bin/nc")
