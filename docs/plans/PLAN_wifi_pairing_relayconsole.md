@@ -1,6 +1,6 @@
 # PLAN_wifi_pairing_relayconsole — Android 11+ 무선 디버깅 페어링 + 재부팅 내구성 (macOS)
 
-> 착수: 2026-10-17 · 규모 M · 상태: **계획(스파이크) — 구현 전 · 사용자 승인 대기**
+> 착수: 2026-10-17 · 규모 M · 상태: **1·2단계 구현 완료 — 실기기 검증 대기** (3단계 QR은 판정 전)
 > 선행: `PLAN_wifi_onboarding_relayconsole`(수동 endpoint) · `PLAN_wifi_auto_tcpip_relayconsole`(USB→tcpip) · `PLAN_wifi_reconnect_relayconsole`(TCP 유실 재연결)
 > 근거: `docs/research/RESEARCH_competitive_v2.md` §4.1 G1 · §5.1 P1-1 · 출처 [49][50] · TODO `T-2026-10-17-4`
 

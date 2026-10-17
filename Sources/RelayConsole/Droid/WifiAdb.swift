@@ -457,6 +457,138 @@ enum WifiAdbLogic {
         return true
     }
 
+    // MARK: - 무선 디버깅 페어링 (Android 11+ · 2026-10-17 · PLAN_wifi_pairing)
+
+    /// mDNS 광고 한 건 — `adb mdns services` 한 줄
+    ///
+    /// AOSP 설계(adbd_wifi)상 광고는 **폰이** 한다. 페어링 서비스는 "페어링 코드로 기기 페어링"
+    /// 창이 열려 있는 동안만, connect 서비스는 무선 디버깅이 켜져 있는 동안 뜬다.
+    /// 그래서 connect 광고는 **포트가 바뀌어도 우리에게 새 주소를 알려주는 유일한 단서**다.
+    struct MdnsService: Equatable, Sendable {
+        /// `adb-R0QKSX…-QXjCrW` (QR 페어링은 `studio-…`)
+        let instance: String
+        /// `_adb-tls-connect._tcp`
+        let type: String
+        let host: String
+        let port: Int
+
+        static let typePairing = "_adb-tls-pairing._tcp"
+        static let typeConnect = "_adb-tls-connect._tcp"
+
+        var endpoint: String { "\(host):\(port)" }
+        var isPairing: Bool { type == Self.typePairing }
+        var isConnect: Bool { type == Self.typeConnect }
+
+        /// 인스턴스 이름의 시리얼이 이 기기 것인가 — `adb-<serial>[-<random>]`
+        ///
+        /// 접두 일치만 보면 `R0QKSX` 가 `R0QKSX2` 를 삼킨다 — 뒤가 끝이거나 `-` 여야 한다.
+        func belongs(to serial: String) -> Bool {
+            let prefix = "adb-\(serial)"
+            guard instance.hasPrefix(prefix) else { return false }
+            let rest = instance.dropFirst(prefix.count)
+            return rest.isEmpty || rest.hasPrefix("-")
+        }
+    }
+
+    /// `adb mdns services` 출력 파싱
+    ///
+    /// 실측 출력(그대로 테스트 픽스처에 고정):
+    /// ```
+    /// List of discovered mdns services
+    /// adb-14141FDF600081         _adb._tcp          192.168.86.38:5555
+    /// adb-14141FDF600081-QXjCrW  _adb-tls-pairing._tcp  192.168.86.38:33861
+    /// ```
+    /// 헤더·빈 줄은 버리고, 열 구분은 **공백/탭 가변**이므로 토큰 분리로 읽는다.
+    static func parseMdnsServices(_ text: String) -> [MdnsService] {
+        text.split(separator: "\n").compactMap { raw in
+            let tokens = raw.split(whereSeparator: { $0 == " " || $0 == "\t" })
+            guard tokens.count == 3 else { return nil }
+            let instance = String(tokens[0])
+            let type = String(tokens[1])
+            guard !instance.isEmpty, type.hasPrefix("_adb") else { return nil }
+            guard let hp = splitHostPort(String(tokens[2])), isIPv4(hp.host) else { return nil }
+            return MdnsService(instance: instance, type: type, host: hp.host, port: hp.port)
+        }
+    }
+
+    /// 페어링 창이 열린 기기 — 사용자가 코드를 읽어 올 대상
+    static func pairingEndpoints(_ services: [MdnsService]) -> [String] {
+        services.filter(\.isPairing).map(\.endpoint)
+    }
+
+    /// **우리 기기**의 connect 엔드포인트만 고른다
+    ///
+    /// 같은 네트워크에 폰이 여러 대면 아무 폰에나 붙으면 안 된다 — 붙어도 `device` 로 보이므로
+    /// `adoptEndpoint` 의 검증을 통과해 **남의 폰을 우리 기기로 착각**한다.
+    /// ① 인스턴스 이름의 시리얼 일치(가장 정확) → ② 기억된 호스트 IP 일치(시리얼을 모를 때).
+    static func matchingConnectEndpoints(
+        services: [MdnsService],
+        physicalId: String?,
+        knownHosts: Set<String>
+    ) -> [String] {
+        let connect = services.filter(\.isConnect)
+        if let pid = physicalId, !pid.isEmpty {
+            let bySerial = connect.filter { $0.belongs(to: pid) }
+            if !bySerial.isEmpty { return bySerial.map(\.endpoint) }
+        }
+        guard !knownHosts.isEmpty else { return [] }
+        return connect.filter { knownHosts.contains($0.host) }.map(\.endpoint)
+    }
+
+    /// 발견된 엔드포인트를 후보 **앞**으로 — 같은 호스트의 옛 후보는 버린다
+    ///
+    /// 페어링·재부팅 뒤 포트는 바뀌고 레거시 5555 는 **닫혀 있다**. 옛 후보를 남겨두면
+    /// 그 포트로 connect 를 날려 adb 서버 목록만 오염시킨다.
+    static func mergeDiscovered(discovered: [String], base: [String]) -> [String] {
+        guard !discovered.isEmpty else { return base }
+        let discoveredHosts = Set(discovered.compactMap { host(ofEndpoint: $0) })
+        var out: [String] = []
+        for ep in discovered + base {
+            guard !out.contains(ep) else { continue }
+            if !discovered.contains(ep),
+               let h = host(ofEndpoint: ep),
+               discoveredHosts.contains(h) {
+                continue
+            }
+            out.append(ep)
+        }
+        return out
+    }
+
+    /// 페어링 코드 정규화 — 6자리 숫자. 폰 화면에서 옮겨 적을 때 공백·하이픈이 묻어온다
+    static func normalizePairingCode(_ raw: String) -> String {
+        raw.filter(\.isNumber)
+    }
+
+    static func isValidPairingCode(_ raw: String) -> Bool {
+        normalizePairingCode(raw).count == 6
+    }
+
+    static func pairArgs(endpoint: String, code: String) -> [String] {
+        ["pair", endpoint.trimmingCharacters(in: .whitespacesAndNewlines), normalizePairingCode(code)]
+    }
+
+    /// `adb pair` 성공 판정 — **출력으로** 판정한다(adb는 실패해도 exit 0인 경우가 있다).
+    /// 실측 기준 출력: `Successfully paired to 192.168.86.38:43811 [guid=adb-…]`
+    static func isPairSuccess(output: String) -> Bool {
+        output.lowercased().contains("successfully paired")
+    }
+
+    /// 페어링 실패 원문 → 사용자 문구 키 (원문은 UI가 함께 노출한다 — [표시②])
+    static func pairFailureKey(output: String) -> String {
+        let t = output.lowercased()
+        if t.contains("wrong password") || t.contains("authentication failed") || t.contains("invalid") {
+            return "wifi.pair.error.code"
+        }
+        if t.contains("already paired") { return "wifi.pair.error.already" }
+        if t.contains("timed out") || t.contains("timeout") { return "wifi.pair.error.timeout" }
+        if t.contains("failed to connect") || t.contains("cannot connect")
+            || t.contains("protocol fault") || t.contains("no route") || t.contains("unreachable") {
+            return "wifi.pair.error.unreachable"
+        }
+        return "wifi.pair.error.failed"
+    }
+
     // MARK: - private helpers
 
     static func isLoopback(_ s: String) -> Bool { s.hasPrefix("127.") }
@@ -779,7 +911,34 @@ final class WifiAdbController: ObservableObject {
             gateway: gateway,
             arpNeighbours: neighbours
         )
-        return order.map { WifiAdbLogic.defaultEndpoint(ip: $0) }
+        // ★ 새 후보 소스(2026-10-17 · PLAN_wifi_pairing): mDNS 광고.
+        //   페어링해 둔 기기는 **재부팅 뒤에도** `_adb-tls-connect` 를 광고하고, 포트는 매번 다르다.
+        //   그 포트는 ARP·게이트웨이 추정으로 알 수 없다 — 광고가 유일한 단서다.
+        //   로직은 늘리지 않는다: 기존 후보 **앞에** 놓기만 한다(순수 함수가 순서를 고정).
+        let discovered = Self.mdnsConnectEndpoints(
+            adb: adb,
+            physicalId: WifiAdbLogic.physicalIdForEndpoint(lostSerial, in: endpointsByDevice),
+            knownHosts: Set(order)
+        )
+        return WifiAdbLogic.mergeDiscovered(
+            discovered: discovered,
+            base: order.map { WifiAdbLogic.defaultEndpoint(ip: $0) }
+        )
+    }
+
+    /// mDNS 광고에서 **우리 기기**의 connect 엔드포인트 — 실패하면 빈 배열(추정으로 채우지 않는다)
+    private static func mdnsConnectEndpoints(
+        adb: String,
+        physicalId: String?,
+        knownHosts: Set<String>
+    ) -> [String] {
+        guard (physicalId?.isEmpty == false) || !knownHosts.isEmpty else { return [] }
+        guard let out = try? WifiAdbRunner.runMdnsServices(adb) else { return [] }
+        return WifiAdbLogic.matchingConnectEndpoints(
+            services: WifiAdbLogic.parseMdnsServices(out),
+            physicalId: physicalId,
+            knownHosts: knownHosts
+        )
     }
 
     /// adb 가 그 엔드포인트를 **실제 device 로** 인식했는지 확인
@@ -1127,6 +1286,73 @@ final class WifiAdbController: ObservableObject {
         }
     }
 
+    // MARK: - 무선 디버깅 페어링 (Android 11+ · 2026-10-17 · PLAN_wifi_pairing)
+
+    /// mDNS 광고 목록 — UI가 보여주고, 재연결 후보의 새 소스가 된다 (매 틱 조회는 하지 않는다)
+    @Published private(set) var mdnsServices: [WifiAdbLogic.MdnsService] = []
+
+    /// 광고 조회 — 무선 디버깅이 켜진 기기(`_adb-tls-connect`)와 페어링 창이 열린 기기가 보인다
+    func refreshMdnsServices() async {
+        guard let adb = DeviceMonitor.adbPathNow() else { return }
+        guard let text = try? WifiAdbRunner.runMdnsServices(adb) else { return }
+        mdnsServices = WifiAdbLogic.parseMdnsServices(text)
+    }
+
+    /// Android 11+ 무선 디버깅 페어링 — **USB 없이** 첫 연결을 만든다
+    ///
+    /// 폰에서 "페어링 코드로 기기 페어링"을 열면 6자리 코드와 `IP:포트`가 나온다.
+    /// 성공하면 곧바로 connect 까지 시도한다 — 페어링만 하고 끝나면 사용자가 다시 눌러야 한다.
+    /// connect 포트는 페어링 포트와 **다르다**: mDNS 광고가 정답이고, 없으면 폰 화면의 포트를
+    /// 수동 연결에 넣는 길을 안내한다.
+    func pair(endpoint: String, code: String) {
+        guard !busy else { return }
+        if let key = WifiAdbLogic.validateEndpoint(endpoint) {
+            fail(key)
+            return
+        }
+        guard WifiAdbLogic.isValidPairingCode(code) else {
+            fail("wifi.pair.error.code.format")
+            return
+        }
+        let clean = endpoint.trimmingCharacters(in: .whitespacesAndNewlines)
+        busy = true
+        statusIsError = false
+        statusMessage = L10n.string("wifi.pair.status.pairing")
+        Task {
+            defer { busy = false }
+            guard let adb = DeviceMonitor.adbPathNow() else {
+                fail("wifi.error.adbMissing")
+                return
+            }
+            do {
+                try WifiAdbRunner.runPair(adb, WifiAdbLogic.pairArgs(endpoint: clean, code: code))
+            } catch {
+                failDetail(WifiAdbLogic.pairFailureKey(output: cause(error)), detail: cause(error))
+                return
+            }
+            DebugLogger.shared.info("WifiAdb", "[INFO] [FEATURE] 무선 디버깅 페어링 \(clean)")
+            await refreshMdnsServices()
+            let host = WifiAdbLogic.host(ofEndpoint: clean) ?? ""
+            let discovered = WifiAdbLogic.matchingConnectEndpoints(
+                services: mdnsServices,
+                physicalId: nil,
+                knownHosts: host.isEmpty ? [] : [host]
+            )
+            let target = discovered.first ?? WifiAdbLogic.defaultEndpoint(ip: host)
+            do {
+                try WifiAdbRunner.runConnect(adb, WifiAdbLogic.connectArgs(endpoint: target))
+            } catch {
+                // 페어링은 성공했다 — 연결 실패는 별개 사실로 알린다 (원문 노출)
+                failDetail("wifi.pair.error.connectAfter", detail: cause(error))
+                return
+            }
+            rememberEndpoint(target, physicalId: physicalId(of: target, adb: adb))
+            statusIsError = false
+            statusMessage = L10n.format("wifi.pair.status.done", target)
+            DebugLogger.shared.info("WifiAdb", "[INFO] [FEATURE] 무선 디버깅 연결 \(target)")
+        }
+    }
+
     func disconnect(serial: String) {
         guard !busy else { return }
         busy = true
@@ -1348,10 +1574,42 @@ enum WifiAdbRunner {
     /// adb connect 전용 — exit 코드가 아니라 **출력**으로 성공 판별한다.
     /// adb는 실패해도 exit 0을 반환하므로 출력에 "connected to"가 없으면 실패로 던진다
     /// (스크립트의 grep 판별과 동일 — exit 코드만 믿으면 실패를 성공으로 오판한다).
+    @discardableResult
     static func runConnect(_ path: String, _ args: [String]) throws -> String {
         let text = try runCapture(path, args)
         guard WifiAdbLogic.isConnectSuccess(output: text) else {
             throw WifiAdbError(cause: text.trimmingCharacters(in: .whitespacesAndNewlines))
+        }
+        return text
+    }
+
+    @discardableResult
+    /// `adb mdns services` — 즉시 끝난다(실측 0.02초). 광고 목록만 읽고 adb 상태는 건드리지 않는다.
+    ///
+    /// 실패는 **빈 문자열이 아니라 오류**로 알린다 — 호출부가 "광고 없음"과 "조회 실패"를
+    /// 구분해야 기존 목록을 잘못 비우지 않는다.
+    static func runMdnsServices(_ path: String) throws -> String {
+        let out = try ProcessRunner.capture(path, ["mdns", "services"], timeout: 5)
+        guard !out.timedOut else {
+            throw WifiAdbError(cause: "mdns services timed out")
+        }
+        return out.stdout
+    }
+
+    /// `adb pair` — 코드를 **인자로** 넘긴다.
+    ///
+    /// 인자 없이 실행하면 `Enter pairing code:` 로 입력을 기다려 **멈춘다**(실측).
+    /// 그래서 항상 인자로 넘기고 타임아웃을 걸어 프로세스가 남지 않게 한다.
+    @discardableResult
+    static func runPair(_ path: String, _ args: [String], timeout: TimeInterval = 30) throws -> String {
+        let out = try ProcessRunner.capture(path, args, timeout: timeout)
+        if out.timedOut {
+            throw WifiAdbError(cause: L10n.string("wifi.pair.error.timeout"))
+        }
+        let text = "\(out.stdout)\n\(out.stderr)"
+        guard WifiAdbLogic.isPairSuccess(output: text) else {
+            let cause = out.cause
+            throw WifiAdbError(cause: cause.isEmpty ? L10n.string("wifi.pair.error.failed") : cause)
         }
         return text
     }

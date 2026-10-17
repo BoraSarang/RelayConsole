@@ -168,15 +168,22 @@
     L10n **721키 en/ko 1:1** · U+FFFD 0건
 
 ## 진행 중 (bd ready)
-- **T-2026-10-17-4 무선 디버깅 QR/코드 페어링 내구성** (P1 · 경쟁 리서치 v2 §4.1 G1)
+- **T-2026-10-17-4 무선 디버깅 페어링 내구성** (P1 · 경쟁 리서치 v2 §4.1 G1) — **구현 완료(1·2단계) · 실기기 검증 대기**
   - 문제: 현재 Wi-Fi 연결은 **USB → `adb tcpip 5555`** 방식이라 **폰을 재부팅하면 풀리고 USB를 다시 꽂아야 한다**
     → "켜져 있으면 감시된다"는 관제 전제가 깨진다 (기능 부족이 아니라 **신뢰성 결함**)
-  - 목표: Android 11+ 는 `adb pair`(1차: 6자리 코드 입력 · 2차: QR/`_adb-tls-pairing._tcp` mDNS) 경로 추가,
-    Android 10 이하는 기존 USB→tcpip 경로 폴백 (기존 `WifiOnboarding.swift` 확장)
-  - 근거: `docs/research/RESEARCH_competitive_v2.md` §4.1 G1 · §5.1 P1-1 (AOSP `adb_wifi` 설계 문서에 페어링 형식 공개)
-  - 경쟁: **AndroLaunch(88★ · macOS 메뉴바)가 이미 QR 페어링 제공** (v2 부록 B) → 격차 해소가 아니라 **따라잡기**
-  - 다음: 착수 시 `docs/plans/PLAN_wifi_pairing.md` 작성 → 실기기(S22 · `192.168.86.49:5555`) 페어링 실측
-    · 완료 후 `docs/MANUAL_VERIFY.md` 에 "재부팅 후 자동 재연결" 항목 추가
+  - 계획: `docs/plans/PLAN_wifi_pairing_relayconsole.md` — AOSP `adb_wifi.md` 원문 확인
+    (Pairing Server는 **폰에서** 돌고, 폰이 mDNS 3종 `_adb`/`_adb-tls-pairing`/`_adb-tls-connect`를 광고한다)
+  - **1단계 구현**: `adb pair <ip:pairPort> <6자리 코드>` — 시트에 "Android 11+ 무선 디버깅" 섹션
+    (코드·주소 입력 + mDNS 탐색 목록 탭 채움 + 페어링 성공 시 `connect` 자동).
+    코드는 **인자로** 넘긴다 — 인자 없이 실행하면 `Enter pairing code:` 에서 멈춘다(실측)
+  - **2단계 구현**: `_adb-tls-connect._tcp` 광고를 재연결 후보의 **새 소스**로 추가 —
+    시리얼(`adb-<serial>`) 우선 · 호스트 IP 폴백으로 **남의 폰에 붙지 않게** 하고, 같은 호스트의 옛 5555 후보는 버린다
+  - Android 10 이하 · mDNS 차단망은 기존 USB→tcpip · 수동 연결 폴백 유지(삭제하지 않음)
+  - 검증: `swift test` **676/0**(순수 함수 17개 신규) · L10n **776키 en/ko 1:1** · 한자·U+FFFD 0
+  - 남은 것: **실기기 페어링·재부팅 실측**(사용자 손 필요 · MANUAL_VERIFY 48·49) · 3단계 QR은
+    `adb pair`가 우리가 만든 비밀 문자열을 받는지 판정 후
+  - 리스크: **무선 디버깅 토글이 재부팅 후에도 켜져 있는지는 기기별로 다름 — 미검증.**
+    그 실측이 "무엇을 약속할 수 있는지"를 정한다(약속을 부풀리지 않는다)
 - **T-2026-10-17-5 "즉시 조치" 세트 — 폰 찾기·스크린샷·무음/진동·앱 강제 종료** (P1 · 리서치 v2 §4.1 G2 · §5.1 P1-2)
   - 문제: KDE Connect·Phone Link·Sefirah·CoveLink가 **전부** 제공하는데 우리에게만 없다 → 감시 → 알림 → **조치**의 마지막 한 걸음 공백
   - 1단계(경로 확실): 즉시 스크린샷(`screencap`) · 볼륨/무음(`input keyevent`) · 앱 강제 종료(`am force-stop`) — 이미 쓰는 adb 표면

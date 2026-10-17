@@ -1,0 +1,168 @@
+import Testing
+@testable import RelayConsole
+
+/// Android 11+ 무선 디버깅 페어링 (2026-10-17 · PLAN_wifi_pairing)
+///
+/// 여기서 고정하는 것은 **adb 출력 형식**이다. 파서·판정이 순수 함수라서
+/// 실기기 없이도 형식 회귀를 잡을 수 있다(실측 출력을 그대로 픽스처로 쓴다).
+struct WifiPairingTests {
+
+    /// AOSP 문서의 `adb mdns services` 실제 형식 — 열 구분이 공백/탭 가변
+    private let sample = """
+    List of discovered mdns services
+    adb-14141FDF600081         _adb._tcp          192.168.86.38:5555
+    adb-14141FDF600081-QXjCrW  _adb-tls-pairing._tcp  192.168.86.38:33861
+    adb-14141FDF600081-TnSdi9  _adb-tls-connect._tcp  192.168.86.38:33015
+    studio-g@<xeYnap/    _adb-tls-pairing._tcp\t192.168.86.39:55861
+    """
+
+    // MARK: - 파싱
+
+    @Test func parsesAllRowsAndSkipsHeader() {
+        let services = WifiAdbLogic.parseMdnsServices(sample)
+        #expect(services.count == 4)
+        #expect(services[0].instance == "adb-14141FDF600081")
+        #expect(services[0].type == "_adb._tcp")
+        #expect(services[0].host == "192.168.86.38")
+        #expect(services[0].port == 5555)
+    }
+
+    @Test func parsesTabSeparatedRow() {
+        let services = WifiAdbLogic.parseMdnsServices(sample)
+        #expect(services.contains { $0.instance == "studio-g@<xeYnap/" && $0.endpoint == "192.168.86.39:55861" })
+    }
+
+    @Test func skipsMalformedRows() {
+        let text = """
+        List of discovered mdns services
+        adb-x  _adb._tcp  not-an-ip:5555
+        adb-y  _adb._tcp
+        adb-z  _other._tcp  192.168.0.9:5555
+        adb-ok  _adb-tls-connect._tcp  192.168.0.7:37000
+        """
+        let services = WifiAdbLogic.parseMdnsServices(text)
+        #expect(services.count == 1)
+        #expect(services[0].endpoint == "192.168.0.7:37000")
+    }
+
+    @Test func emptyOutputYieldsNoServices() {
+        #expect(WifiAdbLogic.parseMdnsServices("List of discovered mdns services").isEmpty)
+    }
+
+    // MARK: - 종류별 필터
+
+    @Test func splitsPairingEndpoints() {
+        let services = WifiAdbLogic.parseMdnsServices(sample)
+        #expect(WifiAdbLogic.pairingEndpoints(services) == ["192.168.86.38:33861", "192.168.86.39:55861"])
+    }
+
+    // MARK: - 우리 기기 고르기
+
+    @Test func matchesBySerialPrefix() {
+        let services = WifiAdbLogic.parseMdnsServices(sample)
+        let hit = WifiAdbLogic.matchingConnectEndpoints(
+            services: services,
+            physicalId: "14141FDF600081",
+            knownHosts: []
+        )
+        #expect(hit == ["192.168.86.38:33015"])
+    }
+
+    @Test func serialPrefixDoesNotSwallowLongerSerial() {
+        let service = WifiAdbLogic.MdnsService(
+            instance: "adb-R0QKSX2-TnSdi9",
+            type: WifiAdbLogic.MdnsService.typeConnect,
+            host: "192.168.0.5",
+            port: 37000
+        )
+        #expect(service.belongs(to: "R0QKSX2"))
+        #expect(!service.belongs(to: "R0QKSX"))
+    }
+
+    @Test func fallsBackToKnownHostWhenSerialUnknown() {
+        let services = WifiAdbLogic.parseMdnsServices(sample)
+        let hit = WifiAdbLogic.matchingConnectEndpoints(
+            services: services,
+            physicalId: nil,
+            knownHosts: ["192.168.86.38"]
+        )
+        #expect(hit == ["192.168.86.38:33015"])
+    }
+
+    @Test func neverPicksAnotherPhone() {
+        let services = WifiAdbLogic.parseMdnsServices(sample)
+        // 시리얼이 다르고 호스트도 모른다 — 남의 폰에 붙으면 안 된다
+        let hit = WifiAdbLogic.matchingConnectEndpoints(
+            services: services,
+            physicalId: "ZZZZZZZZ",
+            knownHosts: ["192.168.99.99"]
+        )
+        #expect(hit.isEmpty)
+    }
+
+    // MARK: - 후보 병합 (재부팅 내구성)
+
+    @Test func discoveredGoesFirstAndOldPortForSameHostIsDropped() {
+        let merged = WifiAdbLogic.mergeDiscovered(
+            discovered: ["192.168.0.7:37000"],
+            base: ["192.168.0.7:5555", "192.168.0.9:5555"]
+        )
+        // 같은 호스트의 옛 후보(5555)는 버린다 — 페어링·재부팅 뒤 그 포트는 닫혀 있다
+        #expect(merged == ["192.168.0.7:37000", "192.168.0.9:5555"])
+    }
+
+    @Test func keepsBaseOrderWhenNothingDiscovered() {
+        let base = ["192.168.0.7:5555", "192.168.0.9:5555"]
+        #expect(WifiAdbLogic.mergeDiscovered(discovered: [], base: base) == base)
+    }
+
+    @Test func mergeDoesNotDuplicate() {
+        let merged = WifiAdbLogic.mergeDiscovered(
+            discovered: ["192.168.0.7:37000", "192.168.0.9:33015"],
+            base: ["192.168.0.9:33015"]
+        )
+        #expect(merged == ["192.168.0.7:37000", "192.168.0.9:33015"])
+    }
+
+    // MARK: - 코드·인자
+
+    @Test func normalizesCodeTypedWithNoise() {
+        #expect(WifiAdbLogic.normalizePairingCode(" 515 109 ") == "515109")
+        #expect(WifiAdbLogic.normalizePairingCode("515-109") == "515109")
+        #expect(WifiAdbLogic.isValidPairingCode("515109"))
+        #expect(!WifiAdbLogic.isValidPairingCode("51510"))
+        #expect(!WifiAdbLogic.isValidPairingCode("abcdef"))
+    }
+
+    @Test func pairArgsPassCodeAsArgument() {
+        // 인자 없이 실행하면 `Enter pairing code:` 로 **멈춘다**(실측) — 항상 코드를 넘긴다
+        #expect(WifiAdbLogic.pairArgs(endpoint: " 192.168.0.7:43811 ", code: "515-109")
+            == ["pair", "192.168.0.7:43811", "515109"])
+    }
+
+    // MARK: - 성공·실패 판정
+
+    @Test func successIsDetectedFromOutput() {
+        let real = "Successfully paired to 192.168.86.38:43811 [guid=adb-14141FDF600081-QXjCrW]"
+        #expect(WifiAdbLogic.isPairSuccess(output: real))
+        // adb는 실패해도 exit 0 인 경우가 있다 — 종료코드만 믿으면 실패를 성공으로 오판한다
+        #expect(!WifiAdbLogic.isPairSuccess(output: "failed to connect to 192.168.0.7:43811"))
+    }
+
+    @Test func failureKeyMapsKnownCauses() {
+        #expect(WifiAdbLogic.pairFailureKey(output: "Failed: Wrong password") == "wifi.pair.error.code")
+        #expect(WifiAdbLogic.pairFailureKey(output: "Already paired to 192.168.0.7:43811")
+            == "wifi.pair.error.already")
+        #expect(WifiAdbLogic.pairFailureKey(output: "adb: pairing timed out") == "wifi.pair.error.timeout")
+        #expect(WifiAdbLogic.pairFailureKey(output: "failed to connect to 192.168.0.7:43811")
+            == "wifi.pair.error.unreachable")
+        #expect(WifiAdbLogic.pairFailureKey(output: "error: protocol fault (couldn't read status message)")
+            == "wifi.pair.error.unreachable")
+        #expect(WifiAdbLogic.pairFailureKey(output: "something else") == "wifi.pair.error.failed")
+    }
+
+    @Test func endpointValidationIsReusedForPairing() {
+        #expect(WifiAdbLogic.validateEndpoint("192.168.0.7:43811") == nil)
+        #expect(WifiAdbLogic.validateEndpoint("192.168.0.7") != nil)
+    }
+}
