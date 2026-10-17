@@ -476,6 +476,23 @@ enum DroidCards {
                         .truncationMode(.tail)
                         .minimumScaleFactor(0.9)
                 }
+                // adb(내 PC 도구) 트래픽 — 합계에서 상시 폴링분을 빼므로 얼마인지 숨기지 않는다.
+                // 실시간(이번 틱) 값이라 사용자가 시작한 파일 전송·미러링 버스트도 그대로 보인다.
+                if let device,
+                   let adbUp = device.netAdbUpMBps, let adbDown = device.netAdbDownMBps {
+                    HStack(spacing: 6) {
+                        Text(L10n.string("droid.card.network.adb"))
+                            .font(OPFont.number(10))
+                            .foregroundStyle(OPColor.ink.opacity(0.75))
+                            .lineLimit(1)
+                        Spacer(minLength: 0)
+                        Text(AdbClient.formatNetRatePair(up: adbUp, down: adbDown))
+                            .font(OPFont.number(10))
+                            .foregroundStyle(OPColor.inkDim)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.85)
+                    }
+                }
                 if let top = device?.appNetRates?.prefix(3), !top.isEmpty {
                     VStack(alignment: .leading, spacing: 2) {
                         ForEach(Array(top)) { r in
@@ -494,7 +511,10 @@ enum DroidCards {
                             }
                         }
                     }
-                    Text(L10n.string("droid.card.network.note"))
+                    // 과차감으로 합계가 adb 우세면 각주를 바꾼다 — 값이 "adb 제외" 가 아닌 순간이다
+                    Text(L10n.string(device?.netAdbDominant == true
+                        ? "droid.card.network.note.adb"
+                        : "droid.card.network.note"))
                         .font(OPFont.number(9))
                         .foregroundStyle(OPColor.inkDim.opacity(0.8))
                         .lineLimit(1)

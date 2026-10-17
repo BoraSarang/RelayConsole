@@ -96,6 +96,13 @@ struct DeviceSnapshot: Sendable, Equatable {
     /// Wi-Fi 경로 속도 (외부 후보 — 테더 클라이언트의 활성 경로) — shell 제외 후, nil = 미측정
     var netWifiUpMBps: Double? = nil
     var netWifiDownMBps: Double? = nil
+    /// adb(내 PC 도구)가 이 기기에 쓰는 실시간 트래픽 — 합계에서는 상시 폴링분만 빼므로,
+    /// 얼마인지 행으로 드러낸다(nil = 미측정 — 행 없음).
+    var netAdbUpMBps: Double? = nil
+    var netAdbDownMBps: Double? = nil
+    /// 합계가 adb(내부 폴링) 우세로 과차감되어 **실측값을 그대로 쓴 상태**인가.
+    /// true면 카드 각주가 "adb 포함" 으로 바뀐다 (nil = 미측정 — 5초 틱이 상속).
+    var netAdbDominant: Bool? = nil
     /// Wi-Fi / LTE / NR / … — dumpsys connectivity Active default
     var networkType: String?
     var voltageMV: Int?
@@ -287,6 +294,9 @@ struct DeviceInventory: Equatable {
                 merged.netCellDownMBps = merged.netCellDownMBps ?? prev.netCellDownMBps
                 merged.netWifiUpMBps = merged.netWifiUpMBps ?? prev.netWifiUpMBps
                 merged.netWifiDownMBps = merged.netWifiDownMBps ?? prev.netWifiDownMBps
+                merged.netAdbDominant = merged.netAdbDominant ?? prev.netAdbDominant
+                merged.netAdbUpMBps = merged.netAdbUpMBps ?? prev.netAdbUpMBps
+                merged.netAdbDownMBps = merged.netAdbDownMBps ?? prev.netAdbDownMBps
                 merged.networkType = merged.networkType ?? prev.networkType
                 merged.voltageMV = merged.voltageMV ?? prev.voltageMV
                 merged.batteryCurrentMA = merged.batteryCurrentMA ?? prev.batteryCurrentMA

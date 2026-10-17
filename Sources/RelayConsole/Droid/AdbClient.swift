@@ -559,6 +559,69 @@ enum AdbClient {
         (max(0, up - shellUp), max(0, down - shellDown))
     }
 
+    /// 표시용 합계 — adb 기여분을 뺀 뒤 **과차감이 실측을 지웠으면 실측을 그대로 쓴다.**
+    ///
+    /// ## 왜 필요한가 (2026-10-17 실측 재현)
+    /// adb 트래픽 차감이 실측을 넘어서면 0으로 클램프되는데, 그 0은 "트래픽 없음"이 아니다.
+    /// 실측: droidrelay 다운로드 ↓285~400 KB/s가 계속 흐르는 동안
+    /// `adb push` 100MB 1회 → 이어지는 약 60초 동안 카드 합계가 **0.0 KB/s** 로 표시됐다
+    /// (같은 순간 앱별 행은 285 KB/s 그대로). 0 대신 그 순간의 실측을 보여주고
+    /// `adbDominant` 로 각주를 바꾸면 "왜 0이지" 를 사용자가 묻지 않아도 된다.
+    ///
+    /// - `up`/`down`: 실측(live) 값 — 차감 후 0이 되면 이 값이 그대로 표시된다
+    /// - 반환 `adbDominant`: 한 방향이라도 차감이 실측을 지웠는가 (각주 전환용)
+    static func netTotal(
+        up: Double,
+        down: Double,
+        shellUp: Double,
+        shellDown: Double
+    ) -> (up: Double, down: Double, adbDominant: Bool) {
+        let clean = excludeShell(up: up, down: down, shellUp: shellUp, shellDown: shellDown)
+        let upDominant = up > 0 && clean.up == 0
+        let downDominant = down > 0 && clean.down == 0
+        return (
+            up: upDominant ? up : clean.up,
+            down: downDominant ? down : clean.down,
+            adbDominant: upDominant || downDominant
+        )
+    }
+
+    /// shell(adb) 기여분 링에서 **차감에 쓸 값**을 고른다 — 각 방향 최소값.
+    ///
+    /// ## 왜 최소값인가
+    /// 추정을 45~60초 창으로 스무딩해 그 값을 그대로 빼면, 사용자 파일 전송·미러링 같은
+    /// **버스트 1회가 약 60초 동안** 가짜 adb 트래픽으로 남아 합계를 0으로 눌렀다
+    /// (위 `netTotal` 실측). 추정을 합계와 **같은 틱(≈15초)** 으로 계산해 두면
+    /// 버스트는 그 틱 하나만 크고, **최소값 = 상시 폴링 오버헤드**라 버스트가 빠져나간다.
+    /// 상시 트래픽(미러링 등)이면 모든 틱이 커지므로 종전처럼 차감된다.
+    static func steadyShellRate(
+        from recent: [(up: Double, down: Double)]
+    ) -> (up: Double, down: Double) {
+        guard let up = recent.map(\.up).min(), let down = recent.map(\.down).min() else {
+            return (0, 0)
+        }
+        return (max(0, up), max(0, down))
+    }
+
+    /// shell(adb) 기여분 링의 **평균** — 카드 "adb" 행 표시용.
+    ///
+    /// ## 왜 최소값(차감분)이 아니라 평균인가
+    /// 행은 "지금 adb가 얼마나 쓰나"를 보여주는 자리이고, 바로 아래 앱별 행이 60초 평균이므로
+    /// **같은 창·같은 통계**로 맞춘다. 마지막 틱 값(실시간)을 쓰면 netstats 버킷 플러시가
+    /// 밀리는 기기에서 틱별로 `0/0/…/버스트` 로 튀어 행이 죽은 것처럼 보인다(실측: Router 는
+    /// 대부분 틱이 0.0, S22 는 정상). 버스트는 창 안에서 희석되지만 사라지지 않는다
+    /// (80MB 전송 1회 → 60초 평균 ≈ 1.3 MB/s).
+    static func meanShellRate(
+        from recent: [(up: Double, down: Double)]
+    ) -> (up: Double, down: Double) {
+        guard !recent.isEmpty else { return (0, 0) }
+        let n = Double(recent.count)
+        return (
+            max(0, recent.map(\.up).reduce(0, +) / n),
+            max(0, recent.map(\.down).reduce(0, +) / n)
+        )
+    }
+
     /// 60초 윈도우 기준 샘플 인덱스 — `ages`는 오래된 순 경과초.
     /// 45초 이상 지난 가장 오래된 샘플을 고른다 (45~60초 윈도우, 경계 지터 흡수).
     /// 없으면 nil → 호출자가 직전 샘플로 폴백 (기동 후 첫 1분 = 종전 15초 동작).

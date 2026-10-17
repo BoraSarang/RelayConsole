@@ -90,6 +90,18 @@ actor DeviceMonitor {
         /// shell(uid 2000) 속도 스무딩값 — 합계(live)에서 뺄 adb(내부 폴링) 기여분
         var cacheShellUp: Double = 0
         var cacheShellDown: Double = 0
+        /// shell 추정 링 (오래된 순, 최대 5개 = 약 60초) — 차감은 이 중 **최소값**을 쓴다.
+        /// 창 스무딩값을 그대로 빼면 사용자 파일 전송 1회가 60초 동안 합계를 0으로 눌렀다
+        /// (2026-10-17 `adb push` 100MB 실측 — `AdbClient.steadyShellRate`).
+        var shellRateHistory: [(up: Double, down: Double)] = []
+        /// 카드 "adb" 행에 보여줄 adb(shell) 속도 — 차감분(`cacheShell*` = 상시 최소값)과 달리
+        /// **링 평균(≈60초)** 이다: 아래 앱별 행과 같은 창·통계로 맞춰 비교 가능하게 하고,
+        /// 플러시가 밀리는 기기에서 틱 값이 0으로 떨어져 행이 죽어 보이는 것을 막는다.
+        /// (nil = 아직 미측정 → 행 없음)
+        var cacheAdbUp: Double?
+        var cacheAdbDown: Double?
+        /// 직전 틱의 합계가 adb 우세(과차감 0 클램프)였는지 — 각주 전환용
+        var cacheNetAdbDominant: Bool = false
         /// uid → 패키지명 (1회 조회 후 캐시)
         var packageUids: [Int: String]?
         /// 15s 앱 네트워크 속도 캐시 (5s 틱이 상속)
@@ -545,19 +557,23 @@ actor DeviceMonitor {
                 state.prevNetAt = Date()
                 if let r = upDown {
                     // 합계는 live지만 우리 폴링(adb) 트래픽이 섞여 있음 —
-                    // 직전 틱의 스무딩된 shell 기여분을 뺀다 (내부용이므로 표시에서 제외)
-                    let clean = AdbClient.excludeShell(
+                    // 직전 틱의 shell 기여분(상시 오버헤드)을 뺀다 (내부용이므로 표시에서 제외).
+                    // 과차감으로 실측이 0이 되면 실측을 그대로 쓴다 — 0은 거짓말 (netTotal).
+                    let clean = AdbClient.netTotal(
                         up: r.up, down: r.down,
                         shellUp: state.cacheShellUp, shellDown: state.cacheShellDown
                     )
                     state.cacheNetUp = clean.up
                     state.cacheNetDown = clean.down
+                    state.cacheNetAdbDominant = clean.adbDominant
+                    snap.netAdbDominant = clean.adbDominant
                     state.cacheNetworkInfo = AdbClient.formatNetRatePair(up: clean.up, down: clean.down)
                     // 경로별도 같은 shell 기여분을 뺀다 (대칭 — 각 쌍이 독립적으로 정직).
-                    // shell이 타는 경로는 알 수 없으므로 양쪽에서 빼고 0 클램프 (과차감 방지).
+                    // shell이 타는 경로는 알 수 없으므로 양쪽에서 빼고, 여기서도 과차감이면
+                    // 실측을 유지한다 (합계와 같은 규칙).
                     func cleanGroup(_ up: Double?, _ down: Double?) -> (Double?, Double?) {
                         guard let up, let down else { return (nil, nil) }
-                        let c = AdbClient.excludeShell(
+                        let c = AdbClient.netTotal(
                             up: up, down: down,
                             shellUp: state.cacheShellUp, shellDown: state.cacheShellDown
                         )
@@ -590,6 +606,8 @@ actor DeviceMonitor {
                         )
                     }
                     let now = Date()
+                    // 직전 틱(≈15초) 샘플 — 합계 차감용 shell 추정도 합계와 같은 틱 폭으로 잰다.
+                    let prevTick = state.appNetHistory.last
                     let ages = state.appNetHistory.map { now.timeIntervalSince($0.at) }
                     let baseRows: [AppNetStat]
                     let secs: Double
@@ -605,9 +623,6 @@ actor DeviceMonitor {
                         secs = 0
                     }
                     if secs > 0 {
-                        let sh = AdbClient.shellRate(prev: baseRows, curr: allRows, seconds: secs)
-                        state.cacheShellUp = sh.up
-                        state.cacheShellDown = sh.down
                         let rates = AdbClient.appNetRates(
                             prev: baseRows, curr: allRows, seconds: secs,
                             excluding: [AdbClient.shellUid]
@@ -616,6 +631,30 @@ actor DeviceMonitor {
                             snap.appNetRates = rates
                             state.cacheAppNetRates = rates
                         }
+                    }
+                    // shell(adb) 기여분 — **합계와 같은 틱 폭**으로 추정해 링에 넣고,
+                    // 차감은 링의 최소값(상시 폴링 오버헤드)으로 한다. 45~60초 창 값을
+                    // 그대로 빼면 사용자 파일 전송 1회가 60초 동안 합계를 0으로 눌렀다
+                    // (2026-10-17 `adb push` 실측 · AdbClient.steadyShellRate).
+                    if let prevTick, now.timeIntervalSince(prevTick.at) > 0 {
+                        let sh = AdbClient.shellRate(
+                            prev: prevTick.rows, curr: allRows,
+                            seconds: now.timeIntervalSince(prevTick.at)
+                        )
+                        state.shellRateHistory.append(sh)
+                        if state.shellRateHistory.count > 5 {
+                            state.shellRateHistory.removeFirst(state.shellRateHistory.count - 5)
+                        }
+                        let steady = AdbClient.steadyShellRate(from: state.shellRateHistory)
+                        state.cacheShellUp = steady.up
+                        state.cacheShellDown = steady.down
+                        // 표시용 "adb" 행은 **링 평균**(앱별 행과 같은 60초 창) — 차감분(최소값)이 아니라
+                        // 실제 adb 트래픽을 보여준다(파일 전송 버스트도 희석돼 드러난다).
+                        let adbRow = AdbClient.meanShellRate(from: state.shellRateHistory)
+                        state.cacheAdbUp = adbRow.up
+                        state.cacheAdbDown = adbRow.down
+                        snap.netAdbUpMBps = adbRow.up
+                        snap.netAdbDownMBps = adbRow.down
                     }
                     // 표시·누적용은 shell 제외 (합계 차감분은 위에서 따로 계산)
                     snap.appNetStats = allRows.filter { $0.uid != AdbClient.shellUid }
@@ -782,6 +821,9 @@ actor DeviceMonitor {
         snap.netCellDownMBps = snap.netCellDownMBps ?? state.cacheCellNetDown
         snap.netWifiUpMBps = snap.netWifiUpMBps ?? state.cacheWifiNetUp
         snap.netWifiDownMBps = snap.netWifiDownMBps ?? state.cacheWifiNetDown
+        snap.netAdbDominant = snap.netAdbDominant ?? state.cacheNetAdbDominant
+        snap.netAdbUpMBps = snap.netAdbUpMBps ?? state.cacheAdbUp
+        snap.netAdbDownMBps = snap.netAdbDownMBps ?? state.cacheAdbDown
         snap.networkType = snap.networkType ?? state.cacheNetworkType
         snap.androidVersion = snap.androidVersion ?? state.cacheAndroidVersion
         snap.sdkInt = snap.sdkInt ?? state.cacheSDK
