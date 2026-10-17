@@ -7,6 +7,10 @@ struct ScrcpyHeaderButton: View {
     let serial: String
     /// 플로팅처럼 폭이 빡빡한 곳에서는 아이콘만 (텍스트가 기기 피커를 밀어내지 않도록)
     var compact: Bool = false
+    /// 팝오버 헤더처럼 **pill 배경은 유지**하되 폭이 빡빡한 곳: 22×22 아이콘만.
+    /// `compact`(플로팅 전용 · 배경 없음)와 다르다 — 팝오버는 카드 배경이 기본이라
+    /// 배경을 빼면 이웃(상세 토글)과 어긋난다. 라벨은 툴팁·접근성 라벨로 대체한다.
+    var iconOnly: Bool = false
     @ObservedObject private var scrcpy = ScrcpyController.shared
     @State private var showInstall = false
     @State private var showError = false
@@ -65,18 +69,23 @@ struct ScrcpyHeaderButton: View {
                     if scrcpy.isInstalling {
                         ProgressView()
                             .controlSize(.mini)
-                            .padding(.trailing, 2)
+                            .padding(.trailing, iconOnly ? 0 : 2)
                     } else {
                         Image(systemName: state == .running ? "rectangle.fill.on.rectangle.fill" : "rectangle.on.rectangle")
                             .font(.system(size: 10, weight: .semibold))
                     }
-                    Text(label)
-                        .font(OPFont.number(10))
-                        .lineLimit(1)
+                    if !iconOnly {
+                        Text(label)
+                            .font(OPFont.number(10))
+                            .lineLimit(1)
+                    }
                 }
                 .foregroundStyle(foreground)
-                .padding(.horizontal, 7)
-                .padding(.vertical, 4)
+                // iconOnly = 헤더 아이콘 클러스터 규격(22×22 · 이웃 파일 아이콘과 동일).
+                // 라벨 폭(한/영 길이 차)을 없애 기기 피커를 밀어내지 않는다.
+                .padding(.horizontal, iconOnly ? 0 : 7)
+                .padding(.vertical, iconOnly ? 0 : 4)
+                .frame(width: iconOnly ? 22 : nil, height: iconOnly ? 22 : nil)
                 .background(background, in: RoundedRectangle(cornerRadius: 6))
                 .overlay(
                     RoundedRectangle(cornerRadius: 6)

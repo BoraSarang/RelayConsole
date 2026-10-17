@@ -176,7 +176,11 @@ struct MenuBarPopoverView: View {
                         .foregroundStyle(d.isOnline ? OPColor.ok : OPColor.bad)
                         .lineLimit(1)
                     Spacer(minLength: 4)
-                    ScrcpyHeaderButton(serial: d.serial)
+                    // 헤더 액션 클러스터 — 기기 선택 바로 오른쪽에 자주 쓰는 두 동작(미러링·파일 탐색기)을
+                    // 아이콘으로 나란히. 폭 360 고정이라 라벨을 붙이면 기기 피커·시리얼 배지를 밀어낸다
+                    // (footer 주석과 같은 이유 — 한/영 라벨 길이 차). 툴팁·접근성 라벨로 대체.
+                    ScrcpyHeaderButton(serial: d.serial, iconOnly: true)
+                    headerIcon("folder", help: L10n.string("menubar.button.files"), action: openFiles)
                     Button {
                         withAnimation(.easeInOut(duration: 0.15)) {
                             showDeviceDetail.toggle()
@@ -963,6 +967,30 @@ struct MenuBarPopoverView: View {
                 Text(L10n.string("menubar.quit.body"))
             }
         }
+    }
+
+    /// 헤더 액션 아이콘 — 22×22 · footerIcon 과 같은 배경/보더 언어, 라벨 없이 툴팁.
+    /// 미러링 아이콘(`ScrcpyHeaderButton(iconOnly:)`)과 **동일 규격**이라 나란히 놓면 한 쌍으로 읽힌다.
+    private func headerIcon(
+        _ symbol: String,
+        help: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(OPColor.inkDim)
+                .frame(width: 22, height: 22)
+                .background(OPColor.card, in: RoundedRectangle(cornerRadius: 6))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6)
+                        .stroke(OPColor.border, lineWidth: 1)
+                )
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(help)
+        .accessibilityLabel(help)
     }
 
     private func footerIcon(
