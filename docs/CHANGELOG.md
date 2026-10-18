@@ -20,6 +20,10 @@
 
 ### Changed
 - **chore(macos)**: 버전 **1.20.0** — `Info.plist` · `README.md` · `McpProtocol.serverVersion` · `AGENTS.local.md` 4곳 동시 갱신
+- **chore(deps)**: `libimobiledevice` **1.4.0 → 1.4.0_2**(홈브루 리비전 · `libusbmuxd` 2.1.1_1 · `libplist` 2.8.0)
+  - 업그레이드 후 `idevice_id`/`ideviceinfo` 동작(1.4.0) · `idevice_id -l` **빈 목록 + exit 0**(Apple 기기 미연결 = 정상) · 심볼릭이 `Cellar/1.4.0_2` 로 갱신됨
+  - 앱은 `/opt/homebrew/bin/<tool>` 심볼릭으로만 탐지 → 리비전 업그레이드에 코드 영향 0 · `IdeviceParsingTests` **12/12** 회귀 없음
+  - 애플 실기 라이브 확인은 **기기 미연결로 불가**(TODO 「기기 확보 시」 유지) · 검증 버전을 `AGENTS.local.md` §4 에 기록
 
 ### 검증
 - `swift test` — Swift Testing **729/0** (`McpProtocolTests` +7) · XCTest **168/0**

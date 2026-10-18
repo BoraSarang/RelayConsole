@@ -48,6 +48,7 @@ swift test
 
 ## 4. 프로젝트 특화 예외 규칙
 - 외부 바이너리(adb, scrcpy, libimobiledevice)는 시스템 PATH 우선, 없으면 안내·사용자 확인 brew 설치만 (자동 다운로드 금지)
+- **검증된 의존성 버전** (2026-10-18 확인): `adb` 37.0.1(cask `android-platform-tools`) · `scrcpy` 5.0.1 · `libimobiledevice` **1.4.0_2**(+ `libusbmuxd` 2.1.1_1 · `libplist` 2.8.0) — 라이브러리는 `/opt/homebrew/bin` 심볼릭 경로로만 탐지하므로 홈브루 리비전 업그레이드에 영향받지 않는다
 - scrcpy **외부 프로세스 실행은 허용** (A안) · 내장 미러링·Android 설정 쓰기는 금지 — 감시(읽기) 전용
 - **Sites·Jobs 감시는 제거됨 (2026-10-05, `docs/DECISIONS.md` D1) — 부활 금지.** 경위는 git 히스토리에서 (`git log -- Sources/RelayConsole/Sites`)
 - **[표시 ①] 기기 식별이 가능하도록 정확하게 표시** — 화면·알림·내보내기·번들/파일명에서 기기를 지칭할 때 **식별 가능한 원문**을 쓴다

@@ -63,6 +63,15 @@
     `get_device_history {days:1}` **14행**(기기별 최신 1일) · `serial:"RFCM9059YBB"` 1행 · `list_events {serial}` 1건 ·
     요약 `diagnosedCrashes 263 · incidentBundles 389` · 없는 기기 `[]`
   - 육안: `docs/MANUAL_VERIFY.md` **§27(66~68)** ✅ 에이전트 실측
+- [x] **의존성 정비 — libimobiledevice 1.4.0 → 1.4.0_2** (P3 · Apple 단계 예방 정비 · bd `RelayConsole-5bh`)
+  - `brew outdated` 에 남아 있던 **홈브루 리비전** 업그레이드(업스트림 1.4.0 동일 · bottle 재빌드) — `libusbmuxd` **2.1.1_1** · `libplist` **2.8.0** 동반 정리
+  - 확인: 심볼릭 `/opt/homebrew/bin/idevice_id` → `Cellar/libimobiledevice/1.4.0_2` 갱신 · `ideviceinfo -v` = **1.4.0** ·
+    `idevice_id -l` = **빈 목록 + exit 0**(Apple 기기 미연결 = 정상) · `usbmuxd` 데몬·소켓(`/var/run/usbmuxd`) 정상 · 관련 formula **outdated 0건**
+  - 앱 영향 0: `IdeviceClient.locate` 는 `/opt/homebrew/bin/<tool>` 심볼릭만 보므로 리비전 교체에 견고 · `IdeviceParsingTests` **12/12** 회귀 없음
+  - **소스 변경 없음**(문서만) → 재빌드 불필요 · 앱 1.20.0 그대로
+  - 한계: **애플 실기 라이브 확인 불가**(기기 미연결) → TODO 「기기 확보 시」 유지 · 검증 버전은 `AGENTS.local.md` §4 에 기록
+
+
 
 
 
@@ -439,7 +448,7 @@
 - [ ] **A1 ntfy/Slack 실제 채널 테스트 전송** — RESEARCH §8 `148` · 설정→연동 테스트 (사용자)
 
 ### 기기 확보 시
-- [ ] **Apple 실기 Trust 육안** — iPad USB 데이터 불량(안드로이드 동일 케이블 OK·복구도 미인식). 기기 확보 후 `brew install libimobiledevice` → 배터리/스토리지 카드
+- [ ] **Apple 실기 Trust 육안** — iPad USB 데이터 불량(안드로이드 동일 케이블 OK·복구도 미인식). **libimobiledevice 는 이미 설치·검증됨**(2026-10-18 · 1.4.0_2) → 기기만 확보되면 배터리/스토리지 카드 확인. `idevice_id -l` 이 **빈 목록 + exit 0** 인지부터 본다(데몬·심볼릭 정상 신호)
 - [ ] **Apple Phase 2** — Developer Mode·sysmon 등 — 위 기기 확보 후 착수 (A9)
 - [ ] **Apple 크래시 리포트 수집 (반드시 해야 할 작업)** — `idevicecrashreport`로 iOS `.ips` crash/ANR를 IncidentBundle에 첨부. 기기 확보 시 1순위. Trust USB + `idevicecrashreport -u <udid> copy` 패턴. Android `logcat -b crash`/dropbox 대응 Apple 쪽 원재료 — **기기 확보 전 구현 불가, 반드시 기억할 것**
 
