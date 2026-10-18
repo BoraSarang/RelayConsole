@@ -55,7 +55,7 @@
 - `./scripts/build-macos.sh debug` **EXIT=0** · 번들 **1.19.0** · 서명 검증 통과 · L10n 812/812 · 한자·U+FFFD 0
 - 실기기 라이브(SM_S901N · Android 16): 앱과 동일 인자 순서 실행 → `mode 0 · level 255 · mWakefulness=Awake` →
   알림 **3회 게시 성공 · 1건만 유지**(`폰 찾기 (3/3)`) → **`level 49` 로 원복**(부작용 없음)
-- error_code 신규 없음 · cache/network 영향 없음 · 육안 `docs/MANUAL_VERIFY.md` **63~65** 대기 · **PR #113**
+- error_code 신규 없음 · cache/network 영향 없음 · 육안 `docs/MANUAL_VERIFY.md` **63~65 ✅ 사용자 확인 (2026-10-18)** · **PR #113**
 
 ---
 
