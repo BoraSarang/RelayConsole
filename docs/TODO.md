@@ -19,7 +19,7 @@
     (하드웨어 디코딩 덕분에 2대 동시가 두 배 부담이 아니다) · 종료 후 잔존 프로세스 **0**
     - 부수 확인: A 기기가 **일시적으로** `ERROR: Server connection failed` 2회 반복 — Wi-Fi 불안정(재시도 3회차 정상 연결). 코드 문제가 아님
   - **검증 [HARD]**: `swift test` **Swift Testing 711/0 · XCTest 168/0** · `./scripts/build-macos.sh debug` 완료 · 앱 **1.18.0** 재기동(pid 47731 · 바이너리 17:15)
-  - **육안 통과** ✅ — `docs/MANUAL_VERIFY.md` **61·62 사용자 확인** (2026-10-18 · "두개다 미러링 잘 됨")
+  - **육안 통과** ✅ — `docs/MANUAL_VERIFY.md` **61·62 사용자 확인** (2026-10-18 · "두개다 미러링 잘 됨") · **PR #111**
 
 - [x] **T-2026-10-17-6 scrcpy 옵션 노출 확대** (P2 · 리서치 v2 §4.1 G3·G10 · §5.2 P2-1 · `docs/plans/PLAN_scrcpy_options_relayconsole.md`)
   - 방식: **미러링 자체 구현 금지**(scrcpy 위임 유지) · 설정에 **플래그 노출만**
@@ -31,8 +31,8 @@
     - 안전장치: 값 검증 이중(**UI 선택 + 인자 검증**) — 허용 목록 밖 `hwdec`/`videoCodec` 은 옵션 생략, `videoBuffer` 는 숫자만 · 창 제목은 `ConsoleStore.identLabel` **공통 진입점만**([표시①])
     - 하위 호환: 새 옵션을 모두 끄면 **종전 인자와 정확히 동일**(테스트로 고정) · 기본 추가분은 `--background-color=#1c1f2a` 하나
     - 부수 발견: `--stay-awake` 는 **무선(TCP)에서 애초에 효과 없음**(Android 정책) · 기기 오디오가 기본 재생·기기 스피커 음소거(REMOTE_SUBMIX)
-  - **검증 [HARD]**: `swift test` **Swift Testing 711/0(+6)** · **XCTest 168/0** · `./scripts/build-macos.sh debug` **EXIT=0** · L10n **807키 en/ko 1:1** · 한자·U+FFFD 0 · 앱 **1.18.0**
-  - 육안 대기 → `docs/MANUAL_VERIFY.md` **56~60**
+  - **검증 [HARD]**: `swift test` **Swift Testing 711/0(+6)** · **XCTest 168/0** · `./scripts/build-macos.sh debug` **EXIT=0** · L10n **807키 en/ko 1:1** · 한자·U+FFFD 0 · 앱 **1.18.0** · **PR #111**
+  - 육안 대기 → `docs/MANUAL_VERIFY.md` **56~60** (설정 행 개별 동작)
 
 ## 완료 (2026-10-17)
 
