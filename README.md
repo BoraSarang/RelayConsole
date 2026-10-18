@@ -5,7 +5,7 @@
 
 - **플랫폼**: macOS 26.0+ (SwiftUI + AppKit `NSStatusItem`)
 - **번들 ID**: `com.borasarang.relayconsole`
-- **버전**: 1.18.0
+- **버전**: 1.19.0
 - **언어**: 한국어 · English
 
 ---

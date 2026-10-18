@@ -295,6 +295,10 @@
 "files.title" = "File Explorer";
 "files.transfer.cancel" = "Cancel transfer";
 "files.transfer.cancelled" = "Transfer cancelled";
+"findphone.notify.text" = "Find phone";
+"findphone.notify.title" = "RelayConsole";
+"findphone.status.failed" = "Could not send the signal — check the device connection";
+"findphone.status.sent" = "Find-phone signal sent";
 "float.close" = "Close";
 "float.collapse" = "Collapse";
 "float.expand" = "Expand";
@@ -399,6 +403,7 @@
 "menubar.alert.throttling" = "Throttling";
 "menubar.button.debug" = "Debug";
 "menubar.button.files" = "File Explorer";
+"menubar.button.findPhone" = "Find phone (wake screen + alert sound)";
 "menubar.button.openConsole" = "◧ Open Console";
 "menubar.button.quit" = "Quit Relay";
 "menubar.device.adb" = "ADB";

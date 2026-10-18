@@ -295,6 +295,10 @@
 "files.title" = "파일 탐색기";
 "files.transfer.cancel" = "전송 취소";
 "files.transfer.cancelled" = "전송을 취소했습니다";
+"findphone.notify.text" = "폰 찾기";
+"findphone.notify.title" = "RelayConsole";
+"findphone.status.failed" = "신호를 보내지 못했습니다 — 기기 연결을 확인하세요";
+"findphone.status.sent" = "폰 찾기 신호를 보냈습니다";
 "float.close" = "닫기";
 "float.collapse" = "접기";
 "float.expand" = "펴기";
@@ -399,6 +403,7 @@
 "menubar.alert.throttling" = "스로틀링";
 "menubar.button.debug" = "디버그";
 "menubar.button.files" = "파일 탐색기";
+"menubar.button.findPhone" = "폰 찾기 (화면 켜기 + 알림음)";
 "menubar.button.openConsole" = "◧ 콘솔 열기";
 "menubar.button.quit" = "Relay 종료";
 "menubar.device.adb" = "ADB";
