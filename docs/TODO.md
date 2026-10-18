@@ -32,7 +32,7 @@
     - 하위 호환: 새 옵션을 모두 끄면 **종전 인자와 정확히 동일**(테스트로 고정) · 기본 추가분은 `--background-color=#1c1f2a` 하나
     - 부수 발견: `--stay-awake` 는 **무선(TCP)에서 애초에 효과 없음**(Android 정책) · 기기 오디오가 기본 재생·기기 스피커 음소거(REMOTE_SUBMIX)
   - **검증 [HARD]**: `swift test` **Swift Testing 711/0(+6)** · **XCTest 168/0** · `./scripts/build-macos.sh debug` **EXIT=0** · L10n **807키 en/ko 1:1** · 한자·U+FFFD 0 · 앱 **1.18.0** · **PR #111**
-  - 육안 대기 → `docs/MANUAL_VERIFY.md` **56~60** (설정 행 개별 동작)
+  - **마감 (2026-10-18)** — 구현·검증·머지 완료 · 육안 **61·62 사용자 확인** · **56~60 사용자 지시 마감**(개별 실측 대신 — 사유는 `docs/MANUAL_VERIFY.md` §24 머리말)
 
 ## 완료 (2026-10-17)
 

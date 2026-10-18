@@ -32,7 +32,7 @@
 - `swift test` Swift Testing **711/0** (+6 신규) · XCTest **168/0**
 - `./scripts/build-macos.sh debug` **EXIT=0** · 번들 1.18.0 · 서명 검증 통과 · L10n 807/807 · 한자·U+FFFD 0
 - 실기기 라이브: 새 옵션 조합 실행 → `Interop: videotoolbox` 확인 (SM-A908N · Android 12 · 무선)
-- error_code 신규 없음 · cache/network 영향 없음 · **PR #111** · 육안 61·62(동시 미러링) ✅ 사용자 확인 · 56~60 ⬜ 대기
+- error_code 신규 없음 · cache/network 영향 없음 · **PR #111** · 육안 61·62 ✅ 사용자 확인 · 56~60 **사용자 지시 마감**(개별 실측 대신 — 사유는 `docs/MANUAL_VERIFY.md` §24 머리말)
 
 ---
 
