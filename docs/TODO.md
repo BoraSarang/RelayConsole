@@ -48,7 +48,7 @@
     - 실기기 검증에서 **결함 1건** 발견·수정: `adb shell` 은 인자를 **기기 셸이 재파싱**하므로 본문 괄호가 `sh: syntax error` 를 냈다 → 제목·본문 **단일 인용**(`shellQuoted`)
     - 한계 명시: **무음·방해 금지 모드면 소리는 나지 않는다**(adb 로 모드 전환 불가) — 툴팁·MANUAL_VERIFY §26 에 기재
   - **미채택 항목은 사유와 함께 문서화** — "폰 찾기/벨"을 지속 벨소리로 제공하는 것은 adb 표준 표면으로 불가
-  - **검증 [HARD]**: `swift test` · `./scripts/build-macos.sh debug` · 육안 `docs/MANUAL_VERIFY.md` **63~65**
+  - **검증 [HARD]**: `swift test` · `./scripts/build-macos.sh debug` · 육안 `docs/MANUAL_VERIFY.md` **63~65 ✅ 사용자 확인 (2026-10-18 — "그렇게 동작됨")**
 - [x] **T-2026-10-17-7 MCP 도구 확장 (읽기 전용 유지)** (P2 · 리서치 v2 §4.2 M4 · §5.2 P2-2 · `docs/plans/PLAN_local_mcp_relayconsole.md` §9)
   - 원칙 유지: **읽기 전용 · 쓰기/제어 도구 없음** — 차별 축은 "제어"가 아니라 **진단**
   - 도구 6종(추가 3 + 보강 2):
