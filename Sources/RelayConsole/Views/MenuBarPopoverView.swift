@@ -36,6 +36,8 @@ struct MenuBarPopoverView: View {
     @AppStorage("relay.popoverCardsMode") private var cardsMode = "list"
     /// 플로팅 On/Off 상태 표시 — 단일 진실원천(FloatingGraphController.isEnabled)
     @ObservedObject private var floating = FloatingGraphController.shared
+    /// 폰 찾기 진행 상태 — 헤더 아이콘이 진행 중엔 잠긴다 (T-2026-10-17-5)
+    @ObservedObject private var findPhone = FindPhoneController.shared
 
     /// 상단 배너 유지 시간 (초)
     private let topBannerTTL: TimeInterval = 300
@@ -180,6 +182,15 @@ struct MenuBarPopoverView: View {
                     // (footer 주석과 같은 이유 — 한/영 라벨 길이 차). 툴팁·접근성 라벨로 대체.
                     ScrcpyHeaderButton(serial: d.serial, iconOnly: true)
                     headerIcon("folder", help: L10n.string("menubar.button.files"), action: openFiles)
+                    // 폰 찾기 — 화면 깨우기 + 최대 밝기 + 알림음 (실측 근거: PLAN_find_phone_relayconsole)
+                    // 진행 중엔 잠그고 종 아이콘을 비운다(중복 탭 방지)
+                    headerIcon(
+                        findPhone.isBusy(d.serial) ? "bell.slash" : "bell.badge",
+                        help: L10n.string("menubar.button.findPhone"),
+                        disabled: findPhone.isBusy(d.serial)
+                    ) {
+                        FindPhoneController.shared.find(serial: d.serial)
+                    }
                     Button {
                         withAnimation(.easeInOut(duration: 0.15)) {
                             showDeviceDetail.toggle()
@@ -966,6 +977,7 @@ struct MenuBarPopoverView: View {
     private func headerIcon(
         _ symbol: String,
         help: String,
+        disabled: Bool = false,
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
@@ -981,6 +993,8 @@ struct MenuBarPopoverView: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .disabled(disabled)
+        .opacity(disabled ? 0.45 : 1)
         .help(help)
         .accessibilityLabel(help)
     }

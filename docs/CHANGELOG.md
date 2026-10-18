@@ -7,6 +7,31 @@
 
 ---
 
+## 1.19.0 — 2026-10-18
+
+### Added
+- **feat(macos)**: **폰 찾기** — 메뉴바 팝오버 헤더 아이콘 1회 = 화면 깨우기 + 최대 밝기 + 알림음 3회 → 밝기 원복 (T-2026-10-17-5 · `PLAN_find_phone_relayconsole`)
+  - adb 표면 **스파이크 후 부분 채택**: 지속 벨소리(재생기 없음) · 진동(`cmd vibrator` 부재) · 손전등 · 무음/진동 **모드 전환** ·
+    통화 인텐트(오발신) · 타이머 우회(시계 앱 권한·알림 꺼짐)는 **미채택** — 사유는 PLAN §2~3
+  - 알림은 같은 tag 재게시 → **알림 1건만 유지 · 본문 회차 표기로 다시 울림** · 반복 사이 2초 · 진행 중 중복 탭 잠금
+  - **밝기 원복**: 시작 전 `settings get` 으로 읽어 둔 모드/값을 마지막 알림 2초 뒤 되돌린다(읽기 실패면 그 키는 건드리지 않음)
+  - 안전장치: 인자는 `Process.arguments` · **제목·본문 단일 인용**(`adb shell` 재파싱 대응 — 실기기에서 잡은 결함) ·
+    tag 살균(영숫자·`-`·`_`) · 본문 제어문자 제거·120자 · 밝기 1~255 클램프
+  - **한계 명시**: 무음·방해 금지 모드면 소리는 나지 않는다(adb 로 모드 전환 불가) — 툴팁·MANUAL_VERIFY §26 기재
+  - L10n **807 → 812키** (en/ko 1:1)
+
+### Changed
+- **chore(macos)**: 버전 **1.19.0** — `Info.plist` · `README.md` · `McpProtocol.serverVersion` · `AGENTS.local.md` 4곳 동시 갱신(테스트가 일치 강제)
+
+### 검증
+- `swift test` — Swift Testing **722/0** (+11 신규 `FindPhoneTests`) · XCTest **168/0**
+- `./scripts/build-macos.sh debug` **EXIT=0** · 번들 **1.19.0** · 서명 검증 통과 · L10n 812/812 · 한자·U+FFFD 0
+- 실기기 라이브(SM_S901N · Android 16): 앱과 동일 인자 순서 실행 → `mode 0 · level 255 · mWakefulness=Awake` →
+  알림 **3회 게시 성공 · 1건만 유지**(`폰 찾기 (3/3)`) → **`level 49` 로 원복**(부작용 없음)
+- error_code 신규 없음 · cache/network 영향 없음 · 육안 `docs/MANUAL_VERIFY.md` **63~65** 대기 · **PR #113**
+
+---
+
 ## 1.18.0 — 2026-10-18
 
 ### Added
