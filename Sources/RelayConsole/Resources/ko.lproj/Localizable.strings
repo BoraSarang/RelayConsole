@@ -231,7 +231,6 @@
 "event.deviceConnected" = "기기 연결 %@";
 "event.deviceDisconnected" = "기기 연결 끊김 %@";
 "event.deviceState" = "%@ — %@";
-"event.dropbox.hits" = "dropbox 크래시/ANR %d건 발견";
 "event.load.clear" = "load 정상화";
 "event.load.enter" = "load 급증";
 "event.logcatHits" = "logcat 키워드 적중 +%d";
@@ -341,6 +340,14 @@
 "health.band.poor" = "나쁨";
 "health.throttle" = "스로틀";
 "incident.capture" = "Incident 번들 캡처";
+"incident.capture.failed" = "번들 캡처 실패";
+"incident.capture.failed.detail" = "번들 캡처에 실패했습니다: %@";
+"incident.export.exists" = "같은 이름이 이미 있습니다: %@";
+"incident.export.failed.detail" = "내보내기 실패: %@";
+"incident.export.help" = "번들 내보내기 (manifest·로그·스크린샷 복사)";
+"incident.export.nofiles" = "내보낼 파일이 없습니다";
+"incident.export.panel" = "선택한 위치에 번들 폴더를 만듭니다";
+"incident.export.path" = "번들 내보냄: %@ (파일 %d건)";
 "incident.open" = "Incident 번들";
 "incident.open.help" = "Incident 번들 폴더 열기";
 "insights.calendar.title" = "일자 캘린더";

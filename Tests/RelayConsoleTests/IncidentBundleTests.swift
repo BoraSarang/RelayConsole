@@ -174,12 +174,29 @@ struct IncidentBundleTests {
         ))
         let obj = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
         #expect(obj["appVersion"] as? String == "1.7.0")
-        #expect(obj["schema"] as? Int == 1)
+        #expect(obj["schema"] as? Int == 2)
         let files = obj["files"] as? [String]
         #expect(files == ["manifest.json", "logcat.txt"])
+        // 실패 없음 → 키 자체가 없다 (빈 배열도 남기지 않는다)
+        #expect(obj["failures"] == nil)
         let event = try #require(obj["event"] as? [String: Any])
         #expect(event["kind"] as? String == "crash")
         #expect(event["title"] as? String == "크래시 감지")
+    }
+
+    /// 첨부 실패 사유는 **번들 자체가 말한다** — `files` 는 있는 것만 나열하므로([표시②])
+    @Test func manifestEncodesFailuresWhenPresent() throws {
+        let e = WatchEvent(kind: .anr, severity: .critical, serial: "S1", title: "t", detail: "d")
+        let data = try #require(IncidentBundleLogic.manifestData(
+            event: e,
+            appVersion: "1.21.0",
+            files: ["manifest.json", "crash-logcat.txt"],
+            failures: ["screenshot.png: 캡처 실패 (adb 오류 또는 빈 응답)"]
+        ))
+        let obj = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let failures = try #require(obj["failures"] as? [String])
+        #expect(failures.count == 1)
+        #expect(failures[0].hasPrefix("screenshot.png: "))
     }
 
     @Test func manifestDataNeverNilForValidEvent() {

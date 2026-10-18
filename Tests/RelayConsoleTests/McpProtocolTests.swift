@@ -286,8 +286,35 @@ struct McpProtocolTests {
         #expect(!other.contains("090000"))
     }
 
-    @Test func deviceHistoryKeepsNewestDaysPerDevice() throws {
+    /// 첨부 실패 사유도 그대로 전달한다 — 에이전트가 "왜 스크린샷이 없는지"를 알 수 있어야 한다
+    @Test func listIncidentsSurfacesCaptureFailures() throws {
         let dir = try makeDiagnosticFixture()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let bundle = dir.appendingPathComponent("incidents/20261018-130000-anr-A-5555", isDirectory: true)
+        try FileManager.default.createDirectory(at: bundle, withIntermediateDirectories: true)
+        let manifest: [String: Any] = [
+            "appVersion": "1.21.0",
+            "capturedAt": "2026-10-18T13:00:00Z",
+            "event": [
+                "at": "2026-10-18T12:59:59Z", "kind": "anr", "serial": "A:5555",
+                "severity": "critical", "title": "ANR 감지",
+            ],
+            "files": ["manifest.json", "dropbox.txt"],
+            "failures": ["screenshot.png: 캡처 실패 (adb 오류 또는 빈 응답)"],
+        ]
+        try JSONSerialization.data(withJSONObject: manifest)
+            .write(to: bundle.appendingPathComponent("manifest.json"))
+
+        let store = McpDataStore(applicationSupportDir: dir, adbPath: nil, shellRunner: { _, _ in nil })
+        let anr = try store.call(tool: .listIncidents, arguments: .object(["kind": .string("anr")]))
+        #expect(anr.contains("\"failures\""))
+        #expect(anr.contains("screenshot.png"))
+        // 실패가 없는 번들에는 키를 만들지 않는다 (빈 배열도 남기지 않는다)
+        let crash = try store.call(tool: .listIncidents, arguments: .object(["kind": .string("crash")]))
+        #expect(!crash.contains("failures"))
+    }
+
+    @Test func deviceHistoryKeepsNewestDaysPerDevice() throws {        let dir = try makeDiagnosticFixture()
         defer { try? FileManager.default.removeItem(at: dir) }
         let store = McpDataStore(applicationSupportDir: dir, adbPath: nil, shellRunner: { _, _ in nil })
 

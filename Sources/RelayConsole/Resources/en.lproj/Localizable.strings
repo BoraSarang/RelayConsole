@@ -231,7 +231,6 @@
 "event.deviceConnected" = "Device connected %@";
 "event.deviceDisconnected" = "Device disconnected %@";
 "event.deviceState" = "%@ — %@";
-"event.dropbox.hits" = "Found %d crash/ANR in dropbox";
 "event.load.clear" = "Load normalized";
 "event.load.enter" = "Load spike";
 "event.logcatHits" = "logcat keyword hits +%d";
@@ -341,6 +340,14 @@
 "health.band.poor" = "Poor";
 "health.throttle" = "Throttle";
 "incident.capture" = "Capture incident bundle";
+"incident.capture.failed" = "Bundle capture failed";
+"incident.capture.failed.detail" = "Incident bundle capture failed: %@";
+"incident.export.exists" = "That name already exists: %@";
+"incident.export.failed.detail" = "Export failed: %@";
+"incident.export.help" = "Export bundle (copy manifest, logs, screenshot)";
+"incident.export.nofiles" = "Nothing to export";
+"incident.export.panel" = "Creates the bundle folder at the chosen location";
+"incident.export.path" = "Exported bundle: %@ (%d files)";
 "incident.open" = "Incident bundles";
 "incident.open.help" = "Open the incident bundles folder";
 "insights.calendar.title" = "Day calendar";

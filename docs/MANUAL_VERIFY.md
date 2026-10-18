@@ -417,3 +417,19 @@ swift scripts/ax-dump.swift "Relay Console" --click "기본값 복원"       # �
 | 66 | **도구 6종이 노출된다** | `printf '%s\n' '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' \| .build/debug/relay-mcp` | `list_devices` · `list_events` · **`list_diagnoses`** · **`list_incidents`** · **`get_device_history`** · `get_summary` 6종 | ✅ **에이전트 실측** (2026-10-18) |
 | 67 | **진단·인시던트가 실제 데이터를 반환한다** | `... "name":"list_diagnoses","arguments":{"kind":"crash","limit":2}` · `... "name":"list_incidents","arguments":{"limit":2}` | 크래시 기록(지문·시리얼·패키지·`count7d`)과 번들 요약(`files`·`sizeBytes`)이 **최신순**으로 나온다 | ✅ **에이전트 실측** (2026-10-18 — 실데이터 263건·389번들) |
 | 68 | **필터·빈 결과가 정상 동작** | `get_device_history` 에 `serial`(존재/미존재) · `days:1` · `list_events` 에 `serial` | 기기별 최신 N일만(오래된→최신 순, 소수 1자리) · 없는 기기는 **오류가 아니라 `[]`** · 이벤트는 시리얼로 걸러진다 | ✅ **에이전트 실측** (2026-10-18) |
+
+## 28. 인시던트 번들 보강 — dropbox 회수·첨부·내보내기 (T-2026-10-17-8 · 2026-10-18 · 앱 1.21.0)
+
+> 배경: logcat 은 링 버퍼라 롤아웃된 ANR·크래시가 사라진다. dropbox 는 영속 큐라 원문이 남는다 —
+> 종전 코드는 그 큐를 **건수 문자열 알림 1건**으로만 썼다(무엇이·어느 앱이·왜 를 말하지 않았다).
+> `docs/plans/PLAN_dropbox_recovery_relayconsole.md` · `PLAN_incident_bundle_relayconsole.md` §9 참조.
+>
+> **69~71 은 폰이 네트워크에 있어야 한다** (2026-10-18 19:20 실측 시점에 두 폰 모두 `No route to host`
+> — Wi-Fi ADB 재연결 후 확인).
+
+| # | 확인할 것 | 방법 | 기대 결과 | 상태 |
+|---|---|---|---|---|
+| 69 | **dropbox 회수가 실제로 뜬다** | 폰에서 앱 하나를 ANR/크래시시킨 뒤(`adb shell am crash <pkg>` — 그 앱은 강제 종료된다) **5분 안에** Alerts 확인 | Debug 패널에 `dropbox 스캔 <serial> — 대상 1건 · 기준선 <시각>` 이 남고, 그 앱에 대해 ANR/크래시 이벤트가 1건 뜬다(logcat 이 놓쳤어도 뜬다) | ⬜ |
+| 70 | **번들에 dropbox 원문이 붙는다** | 크래시 직후 Alerts 행 → `camera.viewfinder`(캡처) → 툴바 `Incident 번들` 로 Finder 열기 | `dropbox.txt` 가 있고 `===== <시각> data_app_crash =====` + `Process:`·`Package:`·예외 머리가 보인다. **없는 것이 정상일 때도 있다**(모든 크래시가 dropbox 에 남지는 않는다 — 그때는 실패로 적지 않는다) | ⬜ |
+| 71 | **번들 내보내기가 동작한다** | 번들이 있는 이벤트 행에 나타난 `square.and.arrow.up` → 저장 패널에서 위치 선택 → 같은 동작을 한 번 더(같은 이름) | 선택한 위치에 번들 폴더가 생기고 manifest·로그·스크린샷이 **원본 그대로** 복사된다. 두 번째는 **덮어쓰지 않고** "같은 이름이 이미 있습니다" 배너가 뜬다 | ⬜ |
+| 72 | **파서·커맨드가 실기기 출력과 일치한다** | (에이전트) 실기기 원문 `dumpsys dropbox` · `dumpsys dropbox --print '<정확한 시각>'` 으로 파서·선별 대조 | A908N **75건 중 대상 5건** · `since 04:50:23` → 발행 대상 **3건**(최신 우선) · 기준선 `04:53:00` · 크래시 블록 → pkg `com.borasarang.zenfreeproxy` 사유 `IllegalFormatConversionException…` · S901N **33건 중 대상 0건**(잡음만) → 기준선 없음 | ✅ **에이전트 실측** (2026-10-18) |

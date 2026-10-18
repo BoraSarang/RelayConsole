@@ -808,6 +808,8 @@ actor DeviceMonitor {
             }
 
             await pollLogcatWatch(serial: serial, state: &state)
+            // dropbox 회수 — logcat 이 놓친 ANR/크래시를 영속 큐에서 되살린다 (5분 쿨다운 내부)
+            await recoverFromDropbox(serial: serial)
         }
 
         snap.memoryUsedGB = snap.memoryUsedGB ?? state.cacheMemoryUsedGB
@@ -1071,7 +1073,6 @@ actor DeviceMonitor {
             ) {
                 await emitWatch(ev)
                 await enrichFatal(ev, serial: serial)
-                await readDropboxOnce(serial: serial, state: &state, package: enrichedCtx?.packageName)
             }
         }
         if let ts = AdbClient.lastLogcatTimestamp(output) {
@@ -1096,24 +1097,97 @@ actor DeviceMonitor {
         }
     }
 
-    /// crash 시점 dropbox 1회 스캔 — 5분 쿨다운 (actor 격리)
-    private func readDropboxOnce(serial: String, state: inout DeviceState, package: String?) async {
-        _ = state
-        _ = package
+    /// dropbox 회수 — logcat 이 놓친 ANR/크래시를 **구조화 이벤트**로 되살린다
+    ///
+    /// ## 왜 필요한가
+    ///
+    /// logcat 은 링 버퍼라 롤아웃되면 사라진다(초당 3만 줄 기기에서 500줄 ≈ 2초분).
+    /// dropbox 는 영속 큐(기본 1000건)라 **나중에라도 원문이 남는다.**
+    /// 종전 이 자리는 "dropbox 크래시/ANR N건 발견" **문자열 알림 1건**이 전부였다 —
+    /// 몇 건인지는 알려주고 **무엇이·어느 앱이·왜** 는 말하지 않았다(행동 불가).
+    ///
+    /// ## 중복 방지 (2중)
+    ///
+    /// 1. **시각 기준선**(`dropboxWatermark`) — 이미 본 시각 이하의 항목은 다시 보지 않는다.
+    ///    첫 스캔은 기준선만 잡는다(과거 전건 폭주 방지).
+    /// 2. **WatchEngine 5분 쿨다운** — logcat 이 같은 사건을 이미 발행했다면 여기서 걸린다.
+    ///    (그래서 logcat 이 먼저 보면 상세가 풍부한 logcat 이벤트가 남고,
+    ///     logcat 이 놓쳤을 때만 dropbox 이벤트가 산다)
+    ///
+    /// 5분 쿨다운은 `dumpsys dropbox`(3.8~10.5KB) **목록**에만 걸고, 본문(`--print`)은
+    /// 새 항목이 있을 때만 부른다 — 상시 실행 앱의 5초 폴링에서 비용이 새지 않게.
+    private func recoverFromDropbox(serial: String) async {
         if let last = dropboxScannedAt[serial],
            Date().timeIntervalSince(last) < 300 {
             return
         }
         dropboxScannedAt[serial] = Date()
-        guard let text = try? shell(serial, "dumpsys", "dropbox", "--print", "-n", "20"),
-              !text.isEmpty else { return }
-        let tags = AdbClient.parseDropboxRecentTags(text, limit: 10)
-        guard !tags.isEmpty else { return }
-        await notifyEvent(L10n.format("event.dropbox.hits", tags.count))
+        guard let list = try? shell(serial, DropboxLogLogic.dropboxListCommand),
+              !list.isEmpty else { return }
+        let plan = DropboxLogLogic.recoveryPlan(
+            entries: DropboxLogLogic.parseList(list),
+            since: dropboxWatermark[serial]
+        )
+        // 발행 여부와 무관하게 기준선은 전진시킨다 — 여기서 멈추면 다음 스캔이 같은 항목을 다시 본다
+        dropboxWatermark[serial] = plan.watermark
+        // 스캔 결과를 남긴다 — "왜 dropbox 회수가 안 떴나"를 로그만 보고 답할 수 있어야 한다 ([표시②])
+        await MainActor.run {
+            DebugLogger.shared.info(
+                "Watch",
+                "[INFO] [WATCH] dropbox 스캔 \(serial) — 대상 \(plan.stamps.count)건 · 기준선 \(plan.watermark ?? "없음")"
+            )
+        }
+        for stamp in plan.stamps {
+            guard let text = try? shell(
+                serial,
+                DropboxLogLogic.dropboxPrintCommand(stamp: stamp)
+            ), !text.isEmpty else { continue }
+            for block in DropboxLogLogic.parseBlocks(text) {
+                guard let kind = DropboxLogLogic.kind(forTag: block.tag) else { continue }
+                let pkg = DropboxLogLogic.packageName(inBlock: block.body)
+                    ?? DropboxLogLogic.packageName(forTag: block.tag)
+                let reason = DropboxLogLogic.reason(inBlock: block.body)
+                let detail = [pkg, reason].compactMap { $0 }.joined(separator: " · ")
+                // dropbox 시각이 곧 사건 시각이다(logcat 이벤트처럼 발행 시각을 쓰지 않는다).
+                // 미래 시각은 없다고 보고 now 로 자른다.
+                let at = min(DropboxLogLogic.date(fromStamp: block.stamp) ?? Date(), Date())
+                let event: WatchEvent?
+                switch kind {
+                case .anr:
+                    // exceptionClass 는 logcat 경로와 같은 "ANR" 고정값 — 패턴 집계가 갈라지지 않게.
+                    // 사유(Subject)는 detail 로만 싣는다.
+                    event = await WatchEngine.shared.feedAnr(
+                        serial: serial,
+                        detail: detail,
+                        packageName: pkg,
+                        exceptionClass: "ANR",
+                        now: at
+                    )
+                default:
+                    event = await WatchEngine.shared.feedCrash(
+                        serial: serial,
+                        detail: detail,
+                        packageName: pkg,
+                        exceptionClass: reason,
+                        now: at
+                    )
+                }
+                guard let event else { continue }
+                await MainActor.run {
+                    DebugLogger.shared.info(
+                        "Watch",
+                        "[INFO] [WATCH] dropbox 회수 \(block.tag) \(block.stamp) \(event.summary)"
+                    )
+                }
+                await emitWatch(event)
+            }
+        }
     }
 
-    /// dropbox 쿨다운 (actor 격리 상태)
+    /// dropbox 스캔 쿨다운 (actor 격리 상태)
     private var dropboxScannedAt: [String: Date] = [:]
+    /// dropbox 회수 기준선 — 마지막으로 본 **ANR/크래시 항목의 시각**
+    private var dropboxWatermark: [String: String] = [:]
 
     private func notifyEvent(_ text: String) async {
         await MainActor.run {
@@ -1249,6 +1323,7 @@ actor DeviceMonitor {
             // serial 키 자료구조 정리 — 네트워크 ADB 는 IP 가 바뀌면 새 키가 생겨
             // 이전 키가 영구 잔류했다(상시 실행 앱의 느린 누수)
             dropboxScannedAt.removeValue(forKey: s)
+            dropboxWatermark.removeValue(forKey: s)
             await MainActor.run {
                 ConsoleStore.shared.markDeviceOffline(s)
                 for e in WatchEngine.shared.forget(serial: s) {
