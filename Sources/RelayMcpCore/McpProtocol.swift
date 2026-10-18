@@ -106,6 +106,9 @@ public enum McpValue: Decodable, Sendable {
 public enum McpToolName: String, CaseIterable, Sendable {
     case listDevices = "list_devices"
     case listEvents = "list_events"
+    case listDiagnoses = "list_diagnoses"
+    case listIncidents = "list_incidents"
+    case getDeviceHistory = "get_device_history"
     case getSummary = "get_summary"
 }
 
@@ -114,7 +117,7 @@ public enum McpRouter {
     public static let serverName = "relay-console"
     /// relay-mcp는 앱과 별도 프로세스라 앱의 Info.plist를 읽을 수 없다.
     /// 앱 버전과 어긋나면 안 되므로 McpProtocolTests에서 Info.plist와 대조한다.
-    public static let serverVersion = "1.19.0"
+    public static let serverVersion = "1.20.0"
 
     /// tools/list 페이로드
     public static func toolsList() -> [[String: Any]] {
@@ -132,11 +135,26 @@ public enum McpRouter {
         }
         return [
             tool(.listDevices, "List Android devices visible to adb (serial, state, model when present)."),
-            tool(.listEvents, "List recent watch/alert events (newest first). Optional limit and severity filter.", props: [
+            tool(.listEvents, "List recent watch/alert events (newest first). Optional limit, severity and serial filter.", props: [
                 "limit": ["type": "integer", "description": "Max events (1-100), default 20"],
                 "severity": ["type": "string", "enum": ["info", "warning", "critical"], "description": "Filter by severity"],
+                "serial": ["type": "string", "description": "Filter by device serial (substring match)"],
             ]),
-            tool(.getSummary, "Aggregate summary: device count and active critical events."),
+            tool(.listDiagnoses, "Auto-diagnosed crashes and throttling findings from diagnoses.json (newest first).", props: [
+                "kind": ["type": "string", "enum": ["crash", "throttling"], "description": "Filter by diagnosis kind"],
+                "serial": ["type": "string", "description": "Filter by device serial (substring match)"],
+                "limit": ["type": "integer", "description": "Max entries (1-100), default 20"],
+            ]),
+            tool(.listIncidents, "Incident bundles captured by the app (manifest summary + bundle size), newest first.", props: [
+                "kind": ["type": "string", "description": "Filter by event kind (crash, anr, throttling, …)"],
+                "serial": ["type": "string", "description": "Filter by device serial (substring match)"],
+                "limit": ["type": "integer", "description": "Max bundles (1-100), default 20"],
+            ]),
+            tool(.getDeviceHistory, "Per-day rollups (CPU, memory, battery, network, event counts) for the newest N days per device.", props: [
+                "serial": ["type": "string", "description": "Filter by device serial (substring match)"],
+                "days": ["type": "integer", "description": "Newest days per device (1-90), default 7"],
+            ]),
+            tool(.getSummary, "Aggregate summary: device count, active critical/warning events, diagnosed crashes, incident bundles."),
         ]
     }
 

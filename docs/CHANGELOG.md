@@ -7,6 +7,29 @@
 
 ---
 
+## 1.20.0 — 2026-10-18
+
+### Added
+- **feat(mcp)**: **진단 축 MCP 도구 3종** — 읽기 전용 원칙 유지 (T-2026-10-17-7 · `PLAN_local_mcp_relayconsole` §9)
+  - `list_diagnoses`(`diagnoses.json` — crash·throttling · `kind`/`serial`/`limit` · 최신순)
+  - `list_incidents`(`incidents/*/manifest.json` — `files`·`sizeBytes` · 최신순 · **디렉터리 이름 정렬로 상한만 읽는다**)
+  - `get_device_history`(`device-daily.json` — 기기별 최신 N일 · 오래된→최신 순 · 소수 1자리)
+  - 보강: `list_events` **`serial` 필터** · `get_summary` **`diagnosedCrashes`·`incidentBundles`**
+  - 지문 파싱(`A:5555:crash:…` → 시리얼은 `<kind>` 앞부분) · 상한 1~100(`days` 1~90) · 없는 기기는 오류가 아니라 `[]`
+  - **쓰기·제어 도구는 추가하지 않는다**(mobile-mcp 계열과 다른 축 = 진단)
+
+### Changed
+- **chore(macos)**: 버전 **1.20.0** — `Info.plist` · `README.md` · `McpProtocol.serverVersion` · `AGENTS.local.md` 4곳 동시 갱신
+
+### 검증
+- `swift test` — Swift Testing **729/0** (`McpProtocolTests` +7) · XCTest **168/0**
+- `./scripts/build-macos.sh debug` **EXIT=0** · 번들 **1.20.0** · L10n 812/812 · 한자·U+FFFD 0
+- **stdio 실측**(실제 앱 데이터): 도구 6종 · 크래시 최신순 · 번들 `files` 3 + `sizeBytes` ·
+  `get_device_history {days:1}` 14행(기기별 최신 1일) · 시리얼 필터 동작 · 요약 `diagnosedCrashes 263 · incidentBundles 389`
+- error_code 신규 없음 · cache/network 영향 없음 · 육안 `MANUAL_VERIFY` **§27(66~68) ✅ 에이전트 실측** · **PR #114**
+
+---
+
 ## 1.19.0 — 2026-10-18
 
 ### Added
