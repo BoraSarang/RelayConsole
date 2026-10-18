@@ -354,7 +354,8 @@ final class ConsoleStore: ObservableObject {
     /// 앱 종료 정리 — applicationWillTerminate에서 호출
     func shutdown() {
         storeHealthTask?.cancel()
-        ScrcpyController.shared.stop()
+        // 동시 미러링 중이면 **전부** 끊는다 — 고아 scrcpy 가 남으면 화면이 떠 있는데 앱만 죽는다
+        ScrcpyController.shared.stopAll()
         DeviceDailyStore.shared.flushPending(force: true)
         ConnectionSessionStore.shared.flush()
         // CoalescingWriter 는 대기 중인 쓰기를 **대체**하므로, 종료 전에 진행 중 쓰기를
