@@ -39,7 +39,7 @@ swift test
 ## 2. 번들ID / 앱 ID
 - macOS bundleIdentifier: `com.borasarang.relayconsole` **확정** (AGENTS 플랫폼 규칙 `com.borasarang.{AppName}`)
 - 앱 표시명: Relay Console / 메뉴바: RELAY
-- **버전**: `1.17.0` (위젯 제거·미사용 자산 정리 — 이전 1.16.0 파일 탐색기 ADB 읽기·가져오기·전송)
+- **버전**: `1.18.0` (scrcpy 5.0.1 옵션 노출 8종 + 하드웨어 디코딩 — 이전 1.17.0 위젯 제거·미사용 자산 정리)
 - UserDefaults·설정 키 접두어: `relay.*` (구 `outpost.*` 계승 금지 — 코드 신규)
 
 ## 3. 성능 예산 Override

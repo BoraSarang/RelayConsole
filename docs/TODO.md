@@ -3,6 +3,37 @@
 > **육안 검증 대기는 `docs/MANUAL_VERIFY.md` 한 곳에 모았다** (2026-09-28) —
 > 여러 세션에 흩어져 있어 "남은 게 뭐였지" 를 한 번에 볼 수 없었다.
 
+## 완료 (2026-10-18)
+
+- [x] **T-2026-10-18-1 scrcpy 두 대 동시 미러링** (P2 · 실사용에서 발견 — "두 대 한꺼번에는 못하네?")
+  - 증상: 미러링 프로세스 슬롯이 **하나**라 두 번째 기기를 누르면 첫째가 `SIGTERM` 로 죽었다
+    (`ScrcpyController` L165 `private var process: Process?` · `launch` 의 `if process?.isRunning == true { stop() }`)
+  - 리서치엔 이미 있었다 — `docs/research/RESEARCH_competitive_v2.md` **P2-4 다중 동시 미러링**(QtScrcpy만 제공)
+  - 수정: 슬롯을 **`serial → Process` 딕셔너리** + `runningSerial: String?` → **`runningSerials: Set<String>`**
+    - `launch` 는 **자기 기기 잔해만** 교체 · terminationHandler 는 **자기 프로세스만** 정리(identity 판정 유지)
+    - `stop()` → **`stopAll()`**(앱 종료 `ConsoleStore.shutdown` 한 곳 호출) · 기기별 정지는 없다(창 닫기 경로가 정석)
+    - 타이머: 미러가 **하나도 없을 때만** 정지 + `launch` 가 재무장 — 살아 있는 미러가 있는데 멈추면 죽은 프로세스 상태가 영구히 어긋난다
+    - `WifiAdb` 정리 로직은 `mirroredSerial`(단수) → **`isMirroring(_:)`** 로 변경 — **둘 다 미러링 중이면 둘 다 보호**(Demuxer error 재발 방지)
+  - **UI 는 변경 0줄** — 원래 `isRunning(serial:)` 로 기기별 판정을 했고 `buttonState` 도 그대로라 버튼 상태가 기기마다 정확해졌다
+  - **실측 (2026-10-18)**: 두 대 동시 13초 유지 — `192.168.86.30:5555`(SM_A908N) **4.2% CPU** + `192.168.86.49:39775`(SM_S901N) **5.1% CPU**
+    (하드웨어 디코딩 덕분에 2대 동시가 두 배 부담이 아니다) · 종료 후 잔존 프로세스 **0**
+    - 부수 확인: A 기기가 **일시적으로** `ERROR: Server connection failed` 2회 반복 — Wi-Fi 불안정(재시도 3회차 정상 연결). 코드 문제가 아님
+  - **검증 [HARD]**: `swift test` **Swift Testing 711/0 · XCTest 168/0** · `./scripts/build-macos.sh debug` 완료 · 앱 **1.18.0** 재기동(pid 47731 · 바이너리 17:15)
+  - **육안 통과** ✅ — `docs/MANUAL_VERIFY.md` **61·62 사용자 확인** (2026-10-18 · "두개다 미러링 잘 됨") · **PR #111**
+
+- [x] **T-2026-10-17-6 scrcpy 옵션 노출 확대** (P2 · 리서치 v2 §4.1 G3·G10 · §5.2 P2-1 · `docs/plans/PLAN_scrcpy_options_relayconsole.md`)
+  - 방식: **미러링 자체 구현 금지**(scrcpy 위임 유지) · 설정에 **플래그 노출만**
+  - **실측 완료 (2026-10-18)** — scrcpy **4.1_1 → 5.0.1** 업그레이드 후 하드웨어 디코딩 A/B:
+    고부하(1920/8M/60fps) 프로세스 CPU **13.4% → 4.2%**(3.2×) · 앱 기본값(1024/2M/30fps) 4.6% → 3.0%(1.5×)
+    · CLI 옵션 diff **108 → 109 (추가 `--hwdec` 1개 · 제거 0)** · 앱이 넘기는 9종 옵션 전부 유효 → **드롭인**
+  - **구현 완료 (2026-10-18 · 앱 1.18.0)** — 사용자 결정: 오디오 **현행 유지(미노출)** · `--keep-active` **미노출** · 범위 **A+B**
+    - 코드: `ScrcpyController` 에 8종(`hwdec`·`videoCodec`·`videoBuffer`·`disableScreensaver`·`windowTitleIdent`·`alwaysOnTop`·`backgroundMatch`·`powerOffOnClose`) + `mirrorArgs` 인자 확장 · `SettingsView` 행 9개(선택 2 + 값 1 + 토글 5 + 안내 1) · L10n **13키**
+    - 안전장치: 값 검증 이중(**UI 선택 + 인자 검증**) — 허용 목록 밖 `hwdec`/`videoCodec` 은 옵션 생략, `videoBuffer` 는 숫자만 · 창 제목은 `ConsoleStore.identLabel` **공통 진입점만**([표시①])
+    - 하위 호환: 새 옵션을 모두 끄면 **종전 인자와 정확히 동일**(테스트로 고정) · 기본 추가분은 `--background-color=#1c1f2a` 하나
+    - 부수 발견: `--stay-awake` 는 **무선(TCP)에서 애초에 효과 없음**(Android 정책) · 기기 오디오가 기본 재생·기기 스피커 음소거(REMOTE_SUBMIX)
+  - **검증 [HARD]**: `swift test` **Swift Testing 711/0(+6)** · **XCTest 168/0** · `./scripts/build-macos.sh debug` **EXIT=0** · L10n **807키 en/ko 1:1** · 한자·U+FFFD 0 · 앱 **1.18.0** · **PR #111**
+  - 육안 대기 → `docs/MANUAL_VERIFY.md` **56~60** (설정 행 개별 동작)
+
 ## 완료 (2026-10-17)
 
 - [x] **T-2026-10-17-9 위젯 제거 + 미사용 자산 정리** — `docs/DECISIONS.md` D2 · PR #107
@@ -230,10 +261,6 @@
   - 1단계(경로 확실): 즉시 스크린샷(`screencap`) · 볼륨/무음(`input keyevent`) · 앱 강제 종료(`am force-stop`) — 이미 쓰는 adb 표면
   - 2단계(**스파이크 필요**): 폰 찾기/벨 — adb 경로 **미검증**(v2 §6 L3) → 실측 먼저, 채택 여부는 그 뒤
   - 완료 후 `docs/MANUAL_VERIFY.md` 에 항목 추가
-- **T-2026-10-17-6 scrcpy 옵션 노출 확대** (P2 · 리서치 v2 §4.1 G3·G10 · §5.2 P2-1)
-  - 대상: 오디오 포워딩(Android 11+) · 카메라 미러링(12+) · 가상 디스플레이 · 화면 끈 채 미러링 · 개별 앱 스트리밍(`--new-display --start-app`)
-  - 방식: **미러링 자체 구현 금지**(scrcpy 위임 유지 — 기존 결정) · 설정/컨텍스트 메뉴에 **플래그 노출만**
-  - 착수 시 scrcpy 5.x 실기기에서 옵션별 동작 실측 후 노출 목록 확정
 - **T-2026-10-17-7 MCP 도구 확장 (읽기 전용 유지)** (P2 · 리서치 v2 §4.2 M4 · §5.2 P2-2)
   - 후보: 앱별 트래픽 조회 · 감시 이벤트 이력 조회 · 진단 요약 · 인시던트 번들 목록
   - 원칙: **읽기 전용 유지**(쓰기·제어 도구 추가 금지) → mobile-mcp 계열(제어 자동화)과 다른 축 = **진단**

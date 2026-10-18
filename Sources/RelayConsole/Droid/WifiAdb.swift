@@ -962,7 +962,7 @@ final class WifiAdbController: ObservableObject {
         do {
             do {
                 // 미러링 중인 전송은 끊지 않는다 (Demuxer error 원인) — 붙어 있는 연결은 그대로 쓴다
-                if endpoint != mirroredSerial {
+                if !isMirroring(endpoint) {
                     try? WifiAdbRunner.run(adb, WifiAdbLogic.disconnectArgs(endpoint: endpoint))
                 }
                 try WifiAdbRunner.runConnect(adb, WifiAdbLogic.connectArgs(endpoint: endpoint))
@@ -974,7 +974,7 @@ final class WifiAdbController: ObservableObject {
                 }
                 statusMessage = L10n.string("wifi.reconnect.serverRestart")
                 await restartAdbServerOnce(adb: adb, serial: lostSerial)
-                if endpoint != mirroredSerial {
+                if !isMirroring(endpoint) {
                     try? WifiAdbRunner.run(adb, WifiAdbLogic.disconnectArgs(endpoint: endpoint))
                 }
                 try WifiAdbRunner.runConnect(adb, WifiAdbLogic.connectArgs(endpoint: endpoint))
@@ -1291,12 +1291,15 @@ final class WifiAdbController: ObservableObject {
     /// - 판별 근거가 모호하면 **아무것도 끊지 않는다** (조용히 남겨두는 편이 낫다)
     /// - `keep` (방금 연 엔드포인트) 는 절대 건드리지 않는다
     /// - 실패해도 연결 성 자체에는 영향이 없다 — 정리 실패는 경고로만 남긴다
-    /// 지금 scrcpy 가 화면을 띄우고 있는 전송 — **이걸 끊으면 미러링이 죽는다**
+    /// 지금 scrcpy 가 화면을 띄우고 있는 전송인가 — **이걸 끊으면 미러링이 죽는다**
     ///
     /// 실측(2026-10-17): S22 하나가 레거시 `:5555` 와 무선 디버깅 `:45325` 로 **동시에** 잡힌다.
     /// 정리 로직이 미러링 중인 전송을 disconnect 하면 화면이 즉시 죽고 scrcpy 는
     /// `ERROR: Demuxer error` 만 남긴다("미러링이 끊긴다"의 실제 경로).
-    private var mirroredSerial: String? { ScrcpyController.shared.runningSerial }
+    /// **동시 미러링**(2026-10-18) 이후 기기별 판정으로 바뀌어 **둘 다 미러링 중이면 둘 다 보호**된다.
+    private func isMirroring(_ endpoint: String) -> Bool {
+        ScrcpyController.shared.isRunning(serial: endpoint)
+    }
 
     private func disconnectStaleEndpoints(adb: String, keep: String) async {
         guard let list = try? WifiAdbRunner.runCapture(adb, ["devices"]) else {
@@ -1324,10 +1327,11 @@ final class WifiAdbController: ObservableObject {
         )
         // 미러링 중인 전송은 **정리 대상에서 빼낸다** — 정리는 중복 전송을 줄이는 편의일 뿐이고,
         // 사용자가 보고 있는 화면을 끊는 것보다 중복을 남기는 편이 낫다.
-        let mirroring = mirroredSerial
-        let targets = stale.filter { $0 != mirroring }
-        if targets.count != stale.count {
-            DebugLogger.shared.info("WifiAdb", "[INFO] 옛 IP 정리 보류 — 미러링 중 \(mirroring ?? "-")")
+        // (동시 미러링 · 2026-10-18 — 기기별 판정이라 **둘 다 미러링 중이면 둘 다 보류**된다)
+        let mirroring = stale.filter { isMirroring($0) }
+        let targets = stale.filter { !isMirroring($0) }
+        if !mirroring.isEmpty {
+            DebugLogger.shared.info("WifiAdb", "[INFO] 옛 IP 정리 보류 — 미러링 중 \(mirroring.joined(separator: ", "))")
         }
         guard !targets.isEmpty else { return }
         for endpoint in targets {
@@ -1386,7 +1390,7 @@ final class WifiAdbController: ObservableObject {
         for attempt in 1...WifiAdbLogic.connectAttempts {
             // 고아 연결 정리 — 남아 있으면 새 연결이 붙지 않는다.
             // 단 미러링 중인 전송은 예외다 — 끊으면 scrcpy 가 Demuxer error 로 죽는다.
-            if endpoint != mirroredSerial {
+            if !isMirroring(endpoint) {
                 try? WifiAdbRunner.run(adb, WifiAdbLogic.disconnectArgs(endpoint: endpoint))
             }
             do {
