@@ -49,6 +49,21 @@
     - 한계 명시: **무음·방해 금지 모드면 소리는 나지 않는다**(adb 로 모드 전환 불가) — 툴팁·MANUAL_VERIFY §26 에 기재
   - **미채택 항목은 사유와 함께 문서화** — "폰 찾기/벨"을 지속 벨소리로 제공하는 것은 adb 표준 표면으로 불가
   - **검증 [HARD]**: `swift test` · `./scripts/build-macos.sh debug` · 육안 `docs/MANUAL_VERIFY.md` **63~65**
+- [x] **T-2026-10-17-7 MCP 도구 확장 (읽기 전용 유지)** (P2 · 리서치 v2 §4.2 M4 · §5.2 P2-2 · `docs/plans/PLAN_local_mcp_relayconsole.md` §9)
+  - 원칙 유지: **읽기 전용 · 쓰기/제어 도구 없음** — 차별 축은 "제어"가 아니라 **진단**
+  - 도구 6종(추가 3 + 보강 2):
+    - **`list_diagnoses`**(`diagnoses.json` — crash·throttling · `kind`/`serial`/`limit`) · **`list_incidents`**(`incidents/*/manifest.json` — `files`·`sizeBytes`) ·
+      **`get_device_history`**(`device-daily.json` — 기기별 최신 N일 · 오래된→최신 순 · 소수 1자리)
+    - `list_events` 에 **`serial` 필터** · `get_summary` 에 **`diagnosedCrashes`·`incidentBundles`**
+  - 설계 메모: 지문이 시리얼을 품으므로(`A:5555:crash:…`) `<kind>` 토큰 **앞부분**을 시리얼로 파싱 ·
+    인시던트는 **디렉터리 이름 정렬로 상한만 읽는다**(389번들 전수 파싱 회피) · 상한 1~100(`days` 1~90) · 없는 기기는 `[]`(오류 아님)
+  - **검증 [HARD]**: `swift test` Swift Testing **729/0**(`McpProtocolTests` +7) · XCTest **168/0** · `./scripts/build-macos.sh debug` **EXIT=0** · 앱 **1.20.0**
+  - **에이전트 실측 (2026-10-18)** — `relay-mcp` stdio 파이프로 **실제 앱 데이터** 확인:
+    도구 6종 노출 · 크래시 최신순 · 번들 `20261018-174319-crash-192.168.86.30-5555`(files 3 · sizeBytes) ·
+    `get_device_history {days:1}` **14행**(기기별 최신 1일) · `serial:"RFCM9059YBB"` 1행 · `list_events {serial}` 1건 ·
+    요약 `diagnosedCrashes 263 · incidentBundles 389` · 없는 기기 `[]`
+  - 육안: `docs/MANUAL_VERIFY.md` **§27(66~68)** ✅ 에이전트 실측
+
 
 
 ## 완료 (2026-10-17)
@@ -273,9 +288,6 @@
     같은 폰 묶음 기준으로 고쳤다
   - 검증: `swift test` **695/0**(묶음 규칙 13개 신규) · L10n **790키 en/ko 1:1** · 한자·U+FFFD 0 · MANUAL_VERIFY **51 통과**(2026-10-17 사용자 실측 · 콘솔 `S22 · 무선 +1` · 파일 탐색기 "다른 연결 1개" → `192.168.86.49:5555`)
   - 남은 한계: 지표·일일 집계·이벤트는 아직 **전송(시리얼) 단위**로 저장된다 — 물리 기기 기준으로 합칠지는 별도 판단
-- **T-2026-10-17-7 MCP 도구 확장 (읽기 전용 유지)** (P2 · 리서치 v2 §4.2 M4 · §5.2 P2-2)
-  - 후보: 앱별 트래픽 조회 · 감시 이벤트 이력 조회 · 진단 요약 · 인시던트 번들 목록
-  - 원칙: **읽기 전용 유지**(쓰기·제어 도구 추가 금지) → mobile-mcp 계열(제어 자동화)과 다른 축 = **진단**
 - **T-2026-10-17-8 인시던트 번들 보강** (P2 · 리서치 v2 §4.2 M3 · §5.2 P2-3)
   - `dumpsys dropbox` 경로 보강(누락 ANR 회수) · 번들 내보내기(JSON + 이미지) · 생성 실패 케이스 로깅
 - **P3 후보 (미착수 · 필요 시 승격)** — 리서치 v2 §5.3

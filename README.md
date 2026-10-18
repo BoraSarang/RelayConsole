@@ -5,7 +5,7 @@
 
 - **플랫폼**: macOS 26.0+ (SwiftUI + AppKit `NSStatusItem`)
 - **번들 ID**: `com.borasarang.relayconsole`
-- **버전**: 1.19.0
+- **버전**: 1.20.0
 - **언어**: 한국어 · English
 
 ---
@@ -119,7 +119,7 @@ Sources/RelayConsole/
   Views/        메뉴바 팝오버 · 콘솔 · 설정 · Alerts · 인사이트
   DesignSystem/ 토큰 · 공통 컴포넌트
   Utils/        파서 · ThresholdGate · NotifyChannel · IssueLog · DebugLogger
-Sources/RelayMcpCore/   로컬 MCP 프로토콜·데이터 (읽기 전용 · 기기+이벤트만)
+Sources/RelayMcpCore/   로컬 MCP 프로토콜·데이터 (읽기 전용 · 기기+이벤트+진단 6도구)
 docs/         PLAN · RESEARCH · DESIGN · TODO · DECISIONS
 ```
 
