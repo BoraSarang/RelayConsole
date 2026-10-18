@@ -120,3 +120,67 @@ capture 세부 (ioUtility):
 ## 8. 버전 1.7.0 동기화처
 
 Info.plist · build-macos.sh(3) · AppDelegate · SettingsView · MenuBarPopoverView · AGENTS.local.md · README.md
+
+---
+
+## 9. 1.21.0 보강 (T-2026-10-17-8 · 2026-10-18)
+
+> bd `RelayConsole-r07` · 리서치 v2 §4.2 M3 "번들 export 없음" · §5.2 P2-3
+> dropbox **회수** 축은 `docs/plans/PLAN_dropbox_recovery_relayconsole.md` 로 분리했다.
+
+### 9.1 dropbox 원문 첨부 (`dropbox.txt`)
+
+logcat 이 놓친 ANR·크래시의 원문은 dropbox 에 남는다. 번들이 그 원문을 함께 갖도록 첨부를 추가했다.
+
+- 후보 선별: `dumpsys dropbox` 목록 → **같은 종류 + 이벤트 시각 앞뒤 창**(앞 600초 · 뒤 300초) 최대 2건
+- 본문: `--print '<정확한 시각>' | head -c 200000` — **앞을 남긴다**
+  (`Process`·`Package`·`Subject`·트레이스 머리가 전부 앞이다. logcat 덤프가 `-T` 기준으로 **뒤를
+  남기는** 것과 반대 방향인 이유)
+- "항목 없음"과 "조회 실패"를 구분한다 — 모든 크래시가 dropbox 에 남지는 않으므로
+  항목 없음은 정상이고 `failures` 에 적지 않는다(`DropboxBundleOutcome`).
+
+### 9.2 실패 케이스 로깅 ([표시②])
+
+종전 캡처는 `try?` 로 쓰기 오류를 **조용히 삼켰다.** 번들은 첨부가 없는데도 이유를 말하지 않았다.
+
+| 자리 | 변경 |
+|---|---|
+| 첨부 쓰기 | 실패마다 `failures` 에 `"<파일>: <사유>"` 누적 |
+| 스크린샷 | 캡처 실패·PNG 아님을 명시적으로 기록(조용한 누락 금지) |
+| manifest | `schema` **2** + `failures: [String]?` — `files` 는 있는 것만 말하므로 **없는 이유**는 여기에만 있다 |
+| manifest 쓰기 실패 | 번들의 **인덱스**가 없으면 목록·MCP 가 읽지 못한다 → 디렉터리를 되돌리고 실패 기록 |
+| 로그 | `DebugLogger` warn(실패 n건 + 사유) / info(파일 n건) — Debug 패널에서 보인다 |
+| 사용자 알림 | `lastCaptureError` → Alerts 배너(제목 "번들 캡처 실패", 본문에 사유 그대로) |
+| MCP | `list_incidents` 가 `failures` 를 그대로 전달(있을 때만 키 생성) |
+
+### 9.3 번들 내보내기
+
+- Alerts 행에서 **캡처된 번들이 있을 때만** `square.and.arrow.up` 버튼이 함께 뜬다
+  (디렉터리명이 이벤트에서 결정적으로 나오므로 행 → 번들 매칭이 정확하다).
+- `NSSavePanel` 로 위치를 고르면 그 자리에 **번들 폴더를 만들어 파일을 복사**한다
+  (원본은 그대로 — 내보내기가 원본을 옮기면 감시 이력이 사라진다).
+- 이미 있는 이름이면 **덮어쓰지 않고** 사유를 띄운다.
+- **zip 은 의도적으로 OUT** — 단일 아카이브는 `ditto` 같은 새 외부 프로세스를 요구한다.
+  이 앱의 외부 프로세스는 adb·scrcpy 둘로 못 박혀 있다(공격면 관리).
+  내보내기 목적은 "다른 곳에서 열어보기"이므로 원본 파일 그대로가 가장 정직하다.
+
+### 9.4 검증
+
+- 순수: `DropboxLogTests`(30건) · `IncidentBundleExportTests`(5건) · `IncidentBundleTests` manifest `schema 2`·`failures` · `McpProtocolTests` `list_incidents` failures
+- 실기기: 픽스처·커맨드 대조(`PLAN_dropbox_recovery_relayconsole.md` §2·§5)
+- 육안: `docs/MANUAL_VERIFY.md` §28 (69~72)
+
+### 9.5 파일 변경 (1.21.0)
+
+| 파일 | 변경 |
+|------|------|
+| `Incident/DropboxLog.swift` | **신규** — 목록·본문 파싱, 태그/패키지/사유 해석, 회수·창 선별, 커맨드 조립 |
+| `Incident/IncidentBundleExport.swift` | **신규** — 폴더 복사 내보내기(덮어쓰기 금지) |
+| `Incident/IncidentBundle.swift` | `failures` 누적 · `dropbox.txt` 첨부 · manifest `schema 2` |
+| `Droid/DeviceMonitor.swift` | dropbox 회수(구조화 이벤트) — 종전 건수 알림 대체 |
+| `Droid/AdbClient.swift` | `shellQuoted` 공용화 · `parseDropboxRecentTags` 제거(대체) |
+| `Droid/FindPhone.swift` | `shellQuoted` → `AdbClient.shellQuoted` 위임 |
+| `Views/AlertsView.swift` | 내보내기 버튼 · 배너(캡처 실패 포함) · `bundles` 관찰 |
+| `RelayMcpCore/McpDataStore.swift` | `list_incidents` `failures` |
+| i18n 2처 | `incident.export.*` · `incident.capture.failed*` (819/819) |
+

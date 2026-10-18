@@ -112,24 +112,30 @@ enum IncidentBundleLogic {
     }
 
     /// manifest.json 본문 — 이벤트 + 캡처 시각 + 앱 버전 + 첨부 파일
+    ///
+    /// `schema` 2 (2026-10-18): `failures` 추가 — **무엇이 왜 빠졌는지**를 번들 자체가 말한다.
+    /// (`files` 는 있는 것만 나열하므로, 없는 이유는 이 필드에만 있다. [표시②])
     static func manifestData(
         event: WatchEvent,
         capturedAt: Date = .now,
         appVersion: String,
-        files: [String] = ["manifest.json"]
+        files: [String] = ["manifest.json"],
+        failures: [String]? = nil
     ) -> Data? {
         struct Manifest: Encodable {
-            let schema = 1
+            let schema = 2
             let appVersion: String
             let capturedAt: Date
             let event: WatchEvent
             let files: [String]
+            let failures: [String]?
         }
         let m = Manifest(
             appVersion: appVersion,
             capturedAt: capturedAt,
             event: event,
-            files: files
+            files: files,
+            failures: failures
         )
         let enc = JSONEncoder()
         enc.dateEncodingStrategy = .iso8601
@@ -154,6 +160,16 @@ struct IncidentBundleEntry: Identifiable, Equatable, Sendable {
     /// crash 버퍼 덤프 — 스택 트레이스가 사는 곳 (없으면 "왜 죽었는지"를 볼 수 없다)
     let hasCrashLogcat: Bool
     let hasScreenshot: Bool
+}
+
+/// dropbox 첨부 결과 — **"항목 없음"과 "조회 실패"를 구분**한다
+///
+/// 항목 없음은 정상이다(모든 크래시가 dropbox 에 남지는 않는다). 실패로 적으면
+/// 정상 번들이 매번 "실패"로 보인다 — 그러면 표시가 신호를 잃는다.
+enum DropboxBundleOutcome: Equatable, Sendable {
+    case text(String)
+    case noEntries
+    case failed(String)
 }
 
 /// Incident 번들 저장소 — Application Support/RelayConsole/incidents/
@@ -241,6 +257,31 @@ final class IncidentBundleStore: ObservableObject {
             }
 
             var files = ["manifest.json"]
+            // 실패는 **모은다** — 종전엔 `try?` 로 조용히 삼켰고, 번들은 첨부가 없는데도
+            // 아무 흔적을 남기지 않았다([표시②] 위반). 이제 manifest `failures` + 로그 + 배너로 말한다.
+            var failures: [String] = []
+
+            func writeText(_ text: String, _ fileName: String) {
+                do {
+                    try Data(text.utf8).write(
+                        to: dir.appendingPathComponent(fileName),
+                        options: .atomic
+                    )
+                    files.append(fileName)
+                } catch {
+                    failures.append("\(fileName): \(error.localizedDescription)")
+                }
+            }
+
+            func writeData(_ data: Data, _ fileName: String) {
+                do {
+                    try data.write(to: dir.appendingPathComponent(fileName), options: .atomic)
+                    files.append(fileName)
+                } catch {
+                    failures.append("\(fileName): \(error.localizedDescription)")
+                }
+            }
+
             if let adb {
                 // ① crash 버퍼 — **스택 트레이스가 실제로 사는 곳**.
                 //    main 버퍼는 수십 초 만에 밀려나지만 crash 버퍼는 크래시 원문이 남는다.
@@ -248,6 +289,9 @@ final class IncidentBundleStore: ObservableObject {
                 //    실측 (2026-09-27, SM-S901N): 이 기기는 **crash 버퍼가 비어 있다**(0줄).
                 //    그래도 덤프는 건다 — 비어 있는 기기에서만 놓치고,
                 //    버퍼를 쓰는 기기에서는 여기에 스택이 실제로 남는다.
+                //
+                //    빈 버퍼는 실패가 아니다(정상 상태) → `failures` 에 넣지 않는다.
+                //    첨부 유무는 manifest `files` 가 그대로 말한다.
                 if let got = Self.runCaptureTail(
                     adb: adb,
                     args: ["-s", event.serial, "logcat", "-d", "-b", "crash",
@@ -260,9 +304,7 @@ final class IncidentBundleStore: ObservableObject {
                             maxBytes: IncidentBundleLogic.mainLogcatMaxBytes
                         ) + "\n" + got.text
                         : got.text
-                    try? Data(body.utf8)
-                        .write(to: dir.appendingPathComponent("crash-logcat.txt"), options: .atomic)
-                    files.append("crash-logcat.txt")
+                    writeText(body, "crash-logcat.txt")
                 }
 
                 // ② main 버퍼 — **이벤트 시각 이후**를 덤프해야 크래시 전후 문맥이 남는다.
@@ -272,33 +314,69 @@ final class IncidentBundleStore: ObservableObject {
                 //    = 크래시 라인이 이미 롤아웃돼 번들에 스택이 하나도 안 들어갔다.
                 let main = Self.captureMainLogcat(adb: adb, serial: event.serial, at: event.at)
                 if !main.isEmpty {
-                    try? Data(main.utf8)
-                        .write(to: dir.appendingPathComponent("logcat.txt"), options: .atomic)
-                    files.append("logcat.txt")
+                    writeText(main, "logcat.txt")
                 }
 
-                if let png = Self.runCaptureData(adb: adb, args: ["-s", event.serial, "exec-out", "screencap", "-p"]),
-                   !png.isEmpty,
-                   NSImage(data: png) != nil {
-                    try? png.write(to: dir.appendingPathComponent("screenshot.png"), options: .atomic)
-                    files.append("screenshot.png")
+                // ③ dropbox — logcat 이 놓친 원문 보강 (ANR 은 logcat 보다 여기가 더 오래 남는다)
+                switch Self.captureDropbox(adb: adb, serial: event.serial, kind: event.kind, at: event.at) {
+                case .text(let body):
+                    writeText(body, "dropbox.txt")
+                case .noEntries:
+                    break // 창 안에 항목이 없는 건 정상 — 실패로 적지 않는다
+                case .failed(let reason):
+                    failures.append("dropbox.txt: \(reason)")
+                }
+
+                if let png = Self.runCaptureData(
+                    adb: adb,
+                    args: ["-s", event.serial, "exec-out", "screencap", "-p"]
+                ) {
+                    if !png.isEmpty, NSImage(data: png) != nil {
+                        writeData(png, "screenshot.png")
+                    } else {
+                        failures.append("screenshot.png: PNG 아님 (\(png.count) bytes)")
+                    }
+                } else {
+                    failures.append("screenshot.png: 캡처 실패 (adb 오류 또는 빈 응답)")
                 }
             }
             if let manifest = IncidentBundleLogic.manifestData(
                 event: event,
                 appVersion: appVersion,
-                files: files
+                files: files,
+                failures: failures.isEmpty ? nil : failures
             ) {
-                try? manifest.write(to: dir.appendingPathComponent("manifest.json"), options: .atomic)
+                do {
+                    try manifest.write(to: dir.appendingPathComponent("manifest.json"), options: .atomic)
+                } catch {
+                    // manifest 는 번들의 **인덱스**다 — 없으면 목록·MCP 가 이 디렉터리를
+                    // 번들로 읽지 못한다. 반쪽짜리 디렉터리를 남기지 않고 되돌린다.
+                    try? fm.removeItem(at: dir)
+                    failures.append("manifest.json: \(error.localizedDescription)")
+                }
+            } else {
+                try? fm.removeItem(at: dir)
+                failures.append("manifest.json: 인코딩 실패")
             }
 
+            let failureDetail = failures.isEmpty ? nil : failures.joined(separator: " / ")
+            let failureCount = failures.count
             await MainActor.run {
                 self.capturing.remove(name)
                 self.reload()
-                DebugLogger.shared.info(
-                    "Incident",
-                    "[INFO] [INCIDENT] 번들 캡처 \(name)"
-                )
+                if let failureDetail {
+                    DebugLogger.shared.warn(
+                        "Incident",
+                        "[WARN] [INCIDENT] 번들 캡처 \(name) — 실패 \(failureCount)건: \(failureDetail)"
+                    )
+                } else {
+                    DebugLogger.shared.info(
+                        "Incident",
+                        "[INFO] [INCIDENT] 번들 캡처 \(name) — 파일 \(files.count)건"
+                    )
+                }
+                // 실패 사유를 **그대로** 알린다 (Alerts 가 배너로 띄운다)
+                self.lastCaptureError = failureDetail
             }
         }
     }
@@ -346,6 +424,54 @@ final class IncidentBundleStore: ObservableObject {
         f.timeZone = .current
         return f
     }()
+
+    /// dropbox 원문 덤프 — 같은 종류이면서 이벤트 시각 앞뒤 창에 든 항목만 모은다
+    ///
+    /// 목록(`dumpsys dropbox`, 3.8~10.5KB)으로 후보를 고르고 **후보에 대해서만** 본문을 받는다.
+    /// `--print` 전건은 수백 KB 이고 무관한 항목까지 실린다(실측 2026-10-18: 206KB / 33건).
+    nonisolated private static func captureDropbox(
+        adb: String,
+        serial: String,
+        kind: WatchKind,
+        at: Date
+    ) -> DropboxBundleOutcome {
+        guard let list = runCaptureTail(
+            adb: adb,
+            args: ["-s", serial, "shell", DropboxLogLogic.dropboxListCommand],
+            maxBytes: 256 * 1024
+        )?.text, !list.isEmpty else {
+            return .failed("목록 조회 실패")
+        }
+        let targets = DropboxLogLogic.selectEntries(
+            DropboxLogLogic.parseList(list),
+            kind: kind,
+            eventAt: at
+        )
+        guard !targets.isEmpty else { return .noEntries }
+
+        var blocks: [DropboxLogLogic.Block] = []
+        var failed: [String] = []
+        for target in targets {
+            let args = [
+                "-s", serial, "shell",
+                DropboxLogLogic.dropboxPrintCommand(stamp: target.stamp),
+            ]
+            // 본문 상한은 **기기 쪽 `head -c`** 가 건다 (앞 = 사건의 정체가 남는 쪽)
+            guard let text = runCaptureTail(
+                adb: adb,
+                args: args,
+                maxBytes: DropboxLogLogic.printMaxBytes
+            )?.text, !text.isEmpty else {
+                failed.append("\(target.stamp) 조회 실패")
+                continue
+            }
+            blocks.append(contentsOf: DropboxLogLogic.parseBlocks(text))
+        }
+        if let body = DropboxLogLogic.captureText(blocks: blocks, kind: kind) {
+            return .text(body)
+        }
+        return failed.isEmpty ? .noEntries : .failed(failed.joined(separator: " / "))
+    }
 
     nonisolated private static func runCaptureData(adb: String, args: [String]) -> Data? {
         let proc = Process()

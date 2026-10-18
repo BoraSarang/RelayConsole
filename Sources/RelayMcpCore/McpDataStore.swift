@@ -230,6 +230,10 @@ public struct McpDataStore: Sendable {
                 "sizeBytes": Self.bundleSize(dir, files: files),
             ]
             if let package = event["packageName"] as? String, !package.isEmpty { row["package"] = package }
+            // 첨부 실패 사유 — `files` 는 있는 것만 말하므로, **없는 이유**는 여기에만 있다 ([표시②])
+            if let failures = manifest["failures"] as? [String], !failures.isEmpty {
+                row["failures"] = failures
+            }
             rows.append(row)
             if rows.count >= cap { break }
         }

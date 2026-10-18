@@ -7,6 +7,36 @@
 
 ---
 
+## 1.21.0 — 2026-10-18
+
+### Added
+- **feat(macos)**: **dropbox 경로 보강 — 놓친 ANR·크래시 회수** (T-2026-10-17-8 · `PLAN_dropbox_recovery_relayconsole`)
+  - logcat 은 링 버퍼라 롤아웃된 ANR·크래시가 사라진다(실측: 초당 3만 줄 기기에서 500줄 ≈ 2초분). dropbox 는 영속 큐(1000건)라 원문이 남는다
+  - 종전에는 **"크래시/ANR N건 발견" 문자열 알림 1건**이 전부였다 → 이제 **구조화 이벤트**로 Alerts·알림·자동 번들·진단 파이프라인에 편입
+    - 목록(`dumpsys dropbox` · 3.8~10.5KB) → 새 시각만 `--print '<정확한 시각>' | head -c 200000` (**정확 일치 필터** · 시각 인용 필수)
+    - 첫 스캔은 기준선만 설정(과거 폭주 방지) · 사건 시각 = dropbox 시각(정렬·집계가 정확해진다) · 스캔 결과 로그
+    - 중복 2중 차단: 시각 기준선 + `WatchEngine` 5분 쿨다운 (logcat 이 먼저 보면 logcat 이벤트가 남고, 놓쳤을 때만 산다)
+- **feat(macos)**: **번들 내보내기** — 캡처된 번들 행의 `square.and.arrow.up` → 위치 선택 → 번들 폴더를 만들어 **원본 그대로 복사**
+  - 이미 있는 이름은 **덮어쓰지 않는다** · zip 은 의도적 OUT(새 외부 프로세스 불필요 — 외부 프로세스는 adb·scrcpy 둘로 못 박음)
+
+### Changed
+- **fix(macos)**: **번들 생성 실패를 더 이상 삼키지 않는다** ([표시②])
+  - `try?` 로 조용히 사라지던 첨부·스크린샷 실패를 모아 manifest **`schema 2` + `failures`** · `DebugLogger` warn · **Alerts 배너**(사유 그대로)로 노출
+  - manifest(번들의 인덱스) 쓰기 실패 시 디렉터리를 되돌린다(반쪽 번들 방지) · MCP `list_incidents` 가 `failures` 전달
+- **feat(macos)**: 번들에 **`dropbox.txt` 첨부** — 같은 종류 + 이벤트 앞 600초·뒤 300초 창, 최대 2건 (logcat 에 없던 원문 확보)
+  - 본문은 **앞을 남긴다**(`Process`·`Package`·`Subject`·트레이스 머리) · "항목 없음"(정상)과 "조회 실패"를 구분
+- **chore(macos)**: 버전 **1.21.0** — `Info.plist` · `README.md` · `McpProtocol.serverVersion` · `AGENTS.local.md` 4곳 동시 갱신
+- **chore(macos)**: `AdbClient.shellQuoted` 공용화(폰 찾기 중복 제거) · `parseDropboxRecentTags` 제거(새 파서 대체 — 픽스처가 실기기 형식과 달랐다) · L10n `event.dropbox.hits` 제거
+
+### 검증
+- `swift test` — Swift Testing **759/0** (+30: `DropboxLogTests` · `IncidentBundleExportTests` · manifest `failures` · MCP `failures`) · XCTest **168/0**
+- `./scripts/build-macos.sh debug` 완료 · 번들 **1.21.0** · L10n **819/819** · 한자·U+FFFD 0
+- **실기기 대조**(실측 원문): A908N 75건 중 대상 5건 · `since 04:50:23` → 발행 3건(최신 우선) · 기준선 `04:53:00` ·
+  실제 크래시 블록 → `pkg=com.borasarang.zenfreeproxy` 사유 `IllegalFormatConversionException…` · S901N 33건 중 대상 0건(잡음만)
+- error_code 신규 없음 · cache/network 영향 없음(5분 쿨다운 · 목록만 매 스캔, 본문은 새 항목에만) · 육안 `MANUAL_VERIFY` **§28(69~72)** — 72 ✅ 실측 · 69~71 ⬜(폰 네트워크 복귀 후)
+
+---
+
 ## 1.20.0 — 2026-10-18
 
 ### Added

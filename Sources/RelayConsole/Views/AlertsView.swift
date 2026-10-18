@@ -6,6 +6,8 @@ import UniformTypeIdentifiers
 /// PLAN_alerts · 벤치마크 Kandji/Intune/Zabbix/Grafana
 struct AlertsView: View {
     @ObservedObject var store: ConsoleStore
+    /// 번들 목록 관찰 — 캡처가 끝나면 **내보내기 버튼이 나타난다**
+    @ObservedObject private var bundles = IncidentBundleStore.shared
     @AppStorage("relay.alerts.defaultPeriod") private var defaultPeriodRaw = "24h"
 
     @State private var tab: AlertsState = .active
@@ -19,6 +21,8 @@ struct AlertsView: View {
     @State private var editingNote: UUID?
     @State private var exportMessage: String?
     @State private var exportFailed = false
+    /// 알림 제목 키 — nil 이면 내보내기 결과(성공/실패) 문구를 쓴다
+    @State private var noticeTitleKey: String?
     /// 캘린더 연동 결과 — **실패 사유를 그대로** 보여준다 ([표시②])
     @State private var calendarState: CalendarBridgeState?
 
@@ -62,6 +66,11 @@ struct AlertsView: View {
             } else {
                 Text(exportMessage ?? "")
             }
+        }
+        // 번들 캡처 실패 — **사유를 그대로** 띄운다 (조용히 삼키면 번들이 왜 비었는지 알 길이 없다)
+        .onChange(of: bundles.lastCaptureError) { _, error in
+            guard let error else { return }
+            showNotice("incident.capture.failed", L10n.format("incident.capture.failed.detail", error), failed: true)
         }
     }
 
@@ -427,7 +436,15 @@ struct AlertsView: View {
 
     private var resultAlertTitle: String {
         if calendarState != nil { return calendarAlertTitle }
+        if let noticeTitleKey { return L10n.string(noticeTitleKey) }
         return L10n.string(exportFailed ? "alerts.export.failed" : "alerts.export.done")
+    }
+
+    /// 배너 한 곳으로 모은다 — 제목 키·본문·성공/실패를 **함께** 세팅해야 어긋나지 않는다
+    private func showNotice(_ titleKey: String?, _ message: String, failed: Bool) {
+        noticeTitleKey = titleKey
+        exportMessage = message
+        exportFailed = failed
     }
 
     private var calendarAlertTitle: String {
@@ -467,6 +484,21 @@ struct AlertsView: View {
             .help(L10n.string("calendar.add"))
 
             if IncidentBundleLogic.captures(kind: e.kind) && !e.isClear {
+                // 캡처가 끝난 번들이 있으면 **내보내기**가 함께 뜬다 (이름은 이벤트에서 결정적으로 나온다)
+                let bundleName = IncidentBundleLogic.directoryName(event: e)
+                if bundles.bundles.contains(where: { $0.id == bundleName }) {
+                    Button {
+                        exportBundle(bundleName)
+                    } label: {
+                        Image(systemName: "square.and.arrow.up")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(OPColor.cta)
+                            .frame(width: 22, height: 22)
+                            .background(OPColor.cta.opacity(0.12), in: RoundedRectangle(cornerRadius: 5))
+                    }
+                    .buttonStyle(.plain)
+                    .help(L10n.string("incident.export.help"))
+                }
                 Button {
                     IncidentBundleStore.shared.capture(
                         event: e,
@@ -567,8 +599,7 @@ struct AlertsView: View {
 
     private func exportJSON() {
         guard let data = store.exportWatchEventsJSON(filtered) else {
-            exportFailed = true
-            exportMessage = L10n.string("alerts.export.failed.convert")
+            showNotice(nil, L10n.string("alerts.export.failed.convert"), failed: true)
             return
         }
         savePanel(data: data, name: "relay-alerts.json", isJSON: true)
@@ -577,8 +608,7 @@ struct AlertsView: View {
     private func exportCSV() {
         let csv = store.exportWatchEventsCSV(filtered)
         guard let data = csv.data(using: .utf8) else {
-            exportFailed = true
-            exportMessage = L10n.string("alerts.export.failed.convert")
+            showNotice(nil, L10n.string("alerts.export.failed.convert"), failed: true)
             return
         }
         savePanel(data: data, name: "relay-alerts.csv", isJSON: false)
@@ -594,11 +624,38 @@ struct AlertsView: View {
             guard response == .OK, let url = panel.url else { return }
             do {
                 try data.write(to: url, options: .atomic)
-                exportFailed = false
-                exportMessage = L10n.format("alerts.export.path", url.lastPathComponent)
+                showNotice(nil, L10n.format("alerts.export.path", url.lastPathComponent), failed: false)
             } catch {
-                exportFailed = true
-                exportMessage = L10n.format("alerts.export.failed.detail", error.localizedDescription)
+                showNotice(nil, L10n.format("alerts.export.failed.detail", error.localizedDescription), failed: true)
+            }
+        }
+    }
+
+    /// 인시던트 번들 내보내기 — 고른 위치에 **폴더를 만들어** 파일을 복사한다
+    ///
+    /// 번들 원본은 그대로 두고 사본을 만든다(내보내기가 원본을 옮기면 감시 이력이 사라진다).
+    private func exportBundle(_ name: String) {
+        guard let entry = bundles.bundles.first(where: { $0.id == name }) else { return }
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = name
+        panel.message = L10n.string("incident.export.panel")
+        panel.canCreateDirectories = true
+        NSApp.activate(ignoringOtherApps: true)
+        panel.begin { response in
+            guard response == .OK, let url = panel.url else { return }
+            do {
+                let files = try IncidentBundleExport.export(entry: entry, to: url)
+                showNotice(
+                    nil,
+                    L10n.format("incident.export.path", url.lastPathComponent, files.count),
+                    failed: false
+                )
+            } catch IncidentBundleExport.Failure.destinationExists {
+                showNotice(nil, L10n.format("incident.export.exists", url.lastPathComponent), failed: true)
+            } catch IncidentBundleExport.Failure.noFiles {
+                showNotice(nil, L10n.string("incident.export.nofiles"), failed: true)
+            } catch {
+                showNotice(nil, L10n.format("incident.export.failed.detail", error.localizedDescription), failed: true)
             }
         }
     }

@@ -84,8 +84,10 @@ enum FindPhoneLogic {
     }
 
     /// 기기 셸용 단일 인용 — 내부 `'` 는 `'\''` 로 이어 붙인다
+    ///
+    /// 구현은 `AdbClient.shellQuoted` 하나만 둔다(같은 규칙이 두 벌이면 갈라진다).
     static func shellQuoted(_ text: String) -> String {
-        "'" + text.replacingOccurrences(of: "'", with: "'\\''") + "'"
+        AdbClient.shellQuoted(text)
     }
 
     /// 알림 반복 — 같은 tag 라 알림은 한 건만 남고, 본문이 회차마다 달라 **다시 울린다**

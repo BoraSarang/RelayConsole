@@ -39,7 +39,7 @@ swift test
 ## 2. 번들ID / 앱 ID
 - macOS bundleIdentifier: `com.borasarang.relayconsole` **확정** (AGENTS 플랫폼 규칙 `com.borasarang.{AppName}`)
 - 앱 표시명: Relay Console / 메뉴바: RELAY
-- **버전**: `1.20.0` (MCP 진단 도구 3종 — 진단·인시던트·일일 추이. 이전 1.19.0 폰 찾기, 1.18.0 scrcpy 옵션 8종 + 두 대 동시 미러링)
+- **버전**: `1.21.0` (인시던트 번들 보강 — dropbox 경로로 누락 ANR 회수 · 번들 내보내기 · 실패 로깅. 이전 1.20.0 MCP 진단 도구 3종, 1.19.0 폰 찾기, 1.18.0 scrcpy 옵션 8종 + 두 대 동시 미러링)
 - UserDefaults·설정 키 접두어: `relay.*` (구 `outpost.*` 계승 금지 — 코드 신규)
 
 ## 3. 성능 예산 Override

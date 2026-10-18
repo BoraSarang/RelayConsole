@@ -5,6 +5,31 @@
 
 ## 완료 (2026-10-18)
 
+- [x] **T-2026-10-17-8 인시던트 번들 보강 — dropbox 회수·첨부·내보내기·실패 로깅** (P2 · 리서치 v2 §4.2 M3 · §5.2 P2-3 · bd `RelayConsole-r07`)
+  - 문제: logcat 은 **링 버퍼**라 롤아웃된 ANR·크래시가 사라진다(실측: 초당 3만 줄 기기에서 500줄 ≈ 2초분).
+    `dropbox` 는 영속 큐(기본 1000건)라 원문이 남는데, 종전 코드는 그 큐를 **"크래시/ANR N건 발견" 문자열 알림 1건**으로만 썼다 — 무엇이·어느 앱이·왜 를 말하지 않았다(행동 불가)
+  - **① dropbox 회수(구조화 이벤트)** — `DropboxLogLogic`(신규) + `DeviceMonitor.recoverFromDropbox`(매 폴링 · 5분 쿨다운)
+    - 목록(`dumpsys dropbox` · 3.8~10.5KB) → `recoveryPlan` → 새 시각만 `--print '<정확한 시각>' | head -c 200000`
+    - 첫 스캔은 **기준선만** 설정(과거 전건 폭주 방지) · 기준선은 **해당 태그 항목 기준**이라 잡음 태그가 쌓여도 안 밀림 · 같은 초 항목은 1회 조회로 처리
+    - 사건 시각 = **dropbox 시각**(logcat 경로의 발행 시각과 달리 정확) → Alerts 정렬·일자 집계가 정확해진다
+    - 중복 2중 차단: 시각 기준선 + 기존 `WatchEngine` 5분 쿨다운(→ logcat 이 먼저 보면 logcat 이벤트가 남고, 놓쳤을 때만 dropbox 이벤트가 산다)
+    - 스캔 결과를 로그로 남긴다 — `dropbox 스캔 <serial> — 대상 N건 · 기준선 <시각>` ([표시②])
+  - **② 번들에 dropbox 원문 첨부(`dropbox.txt`)** — 같은 종류 + 이벤트 앞 600초·뒤 300초 창, 최대 2건
+    - 본문은 **앞을 남긴다**(`Process`·`Package`·`Subject`·트레이스 머리) — logcat 이 `-T` 기준으로 뒤를 남기는 것과 반대인 이유를 주석에 적었다
+    - "항목 없음"(정상 — 모든 크래시가 dropbox 에 남지는 않는다)과 "조회 실패"를 구분해 실패로 오인하지 않는다
+  - **③ 실패 케이스 로깅** — 종전 `try?` 삼킴 제거: 첨부·스크린샷·dropbox 실패를 모아
+    manifest **`schema 2` + `failures`** · `DebugLogger` warn · **Alerts 배너**(사유 그대로) 로 노출 ·
+    manifest(번들의 인덱스) 쓰기 실패면 디렉터리를 되돌린다 · MCP `list_incidents` 가 `failures` 전달
+  - **④ 번들 내보내기** — 번들이 있는 이벤트 행에 `square.and.arrow.up` → `NSSavePanel` 위치 선택 → 그 자리에 **번들 폴더를 만들어 원본 그대로 복사**
+    (원본 유지 · 이미 있는 이름은 **덮어쓰지 않고** 사유 표시) · **zip 은 의도적 OUT**(새 외부 프로세스 `ditto` 불필요 — 외부 프로세스는 adb·scrcpy 둘로 못 박음)
+  - **정리**: `AdbClient.shellQuoted` 공용화(폰 찾기 중복 제거 — 같은 규칙 두 벌 방지) · `AdbClient.parseDropboxRecentTags` 제거(새 파서로 대체 · 픽스처가 실기기 형식과 달랐다) · L10n `event.dropbox.hits` 제거
+  - **검증 [HARD]**: `swift test` Swift Testing **759/0**(+30) · XCTest **168/0** · `./scripts/build-macos.sh debug` 완료 · 앱 **1.21.0** · L10n **819키 en/ko 1:1**
+  - **실기기 대조(에이전트 실측 · 2026-10-18)**: 실측 원문으로 파서·선별 검증 —
+    A908N **75건 중 회수 대상 5건** · `since 04:50:23` → **발행 대상 3건**(최신 우선) · 기준선 `04:53:00` ·
+    실제 크래시 블록 → `pkg=com.borasarang.zenfreeproxy` · 사유 `java.util.IllegalFormatConversionException…` ·
+    S901N **33건 중 대상 0건**(잡음만 → 기준선 없음) · `--print '<시각>'` **정확 일치 필터**·인용 필수·`head -c` 지원 확인
+  - 육안: `docs/MANUAL_VERIFY.md` **§28(69~72)** — 72 ✅ 에이전트 실측 · **69~71 ⬜**(19:20 실측 시점에 두 폰 모두 `No route to host` → 복귀 후 확인)
+
 - [x] **T-2026-10-18-1 scrcpy 두 대 동시 미러링** (P2 · 실사용에서 발견 — "두 대 한꺼번에는 못하네?")
   - 증상: 미러링 프로세스 슬롯이 **하나**라 두 번째 기기를 누르면 첫째가 `SIGTERM` 로 죽었다
     (`ScrcpyController` L165 `private var process: Process?` · `launch` 의 `if process?.isRunning == true { stop() }`)
@@ -297,8 +322,6 @@
     같은 폰 묶음 기준으로 고쳤다
   - 검증: `swift test` **695/0**(묶음 규칙 13개 신규) · L10n **790키 en/ko 1:1** · 한자·U+FFFD 0 · MANUAL_VERIFY **51 통과**(2026-10-17 사용자 실측 · 콘솔 `S22 · 무선 +1` · 파일 탐색기 "다른 연결 1개" → `192.168.86.49:5555`)
   - 남은 한계: 지표·일일 집계·이벤트는 아직 **전송(시리얼) 단위**로 저장된다 — 물리 기기 기준으로 합칠지는 별도 판단
-- **T-2026-10-17-8 인시던트 번들 보강** (P2 · 리서치 v2 §4.2 M3 · §5.2 P2-3)
-  - `dumpsys dropbox` 경로 보강(누락 ANR 회수) · 번들 내보내기(JSON + 이미지) · 생성 실패 케이스 로깅
 - **P3 후보 (미착수 · 필요 시 승격)** — 리서치 v2 §5.3
   - 앱별 트래픽 CSV/JSON export · 배터리 건강 장기 추이 · 다국어 확대 · 폰 저장소 SFTP 브라우저(G8)
   - SMS·미디어 제어(G6·G9): **권한이 허용되는 기기 한정 스파이크** 후 결정 (전면 구현 아님)

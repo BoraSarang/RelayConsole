@@ -1148,19 +1148,14 @@ enum AdbClient {
         return nil
     }
 
-    /// dropbox 최신 항목 타임라인 — `dumpsys dropbox` 출력에서 crash/ANR 시각 라인
-    static func parseDropboxRecentTags(_ text: String, limit: Int = 20) -> [String] {
-        var out: [String] = []
-        for line in text.split(separator: "\n") {
-            let s = line.trimmingCharacters(in: .whitespaces)
-            // `09-24 19:46:03 com.borasarang.droidrelay@1234.crash (age=…)` 형식
-            if s.contains(".crash") || s.contains(".anr") || s.contains("system_app_crash") ||
-                s.contains("system_app_anr") || s.contains("data_app_crash") || s.contains("data_app_anr") {
-                out.append(s)
-                if out.count >= limit { break }
-            }
-        }
-        return out
+    /// 기기 셸용 단일 인용 — 내부 `'` 는 `'\''` 로 이어 붙인다
+    ///
+    /// `adb shell` 은 argv 를 **공백으로 이어 붙여** 기기 셸에 넘긴다(재파싱).
+    /// 그래서 괄호·공백·`;`·`|` 가 든 값은 인용하지 않으면 쪼개지거나 문법 오류가 난다.
+    /// (실측 2026-10-18: 폰 찾기 알림 제목의 괄호가 `sh: syntax error: unexpected '('` 를 냈다.
+    ///  dropbox 본문 조회의 `--print '2026-10-18 04:50:23'` 도 같은 이유로 인용이 필수다)
+    static func shellQuoted(_ text: String) -> String {
+        "'" + text.replacingOccurrences(of: "'", with: "'\\''") + "'"
     }
 
     // MARK: - CPU cores (cpufreq sysfs + /proc/stat per-core)

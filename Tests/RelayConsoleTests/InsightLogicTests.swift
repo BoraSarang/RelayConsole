@@ -570,17 +570,6 @@ struct AdbEnhancedParserTests {
         #expect(AdbClient.parseForegroundPackage(text) == "com.borasarang.droidrelay")
     }
 
-    @Test func parseDropboxRecentTags() {
-        let text = """
-        2026-09-24 19:46:03 com.borasarang.droidrelay@123.crash (age=12s)
-        2026-09-24 18:00:00 system_app_anr (age=2h)
-        unrelated line
-        """
-        let tags = AdbClient.parseDropboxRecentTags(text)
-        #expect(tags.count == 2)
-        #expect(tags[0].contains(".crash"))
-    }
-
     @MainActor
     @Test func feedAnrPassesPackageName() {
         WatchEngine.shared.resetAll()
