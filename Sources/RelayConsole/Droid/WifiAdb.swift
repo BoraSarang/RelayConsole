@@ -187,6 +187,24 @@ enum WifiAdbLogic {
         return out
     }
 
+    /// 재연결 base 후보 — **기억된 엔드포인트의 포트를 보존**한다
+    ///
+    /// `reconnectCandidateOrder` 는 IP만 돌려주는 순수 함수다. 그 값을 그대로
+    /// `defaultEndpoint` 로 감싸면 **기억된 무선 디버깅 포트가 5555 로 덮인다.**
+    /// Android 11+ 폰은 5555 를 닫아 두므로, mDNS 조회가 0건인 틱(실측 10회 중 1회)에는
+    /// 살아있는 포트가 기억에 있는데도 반드시 실패한다 (2026-10-19 실측).
+    static func reconnectBaseEndpoints(remembered: String?, hosts: [String]) -> [String] {
+        var out: [String] = []
+        func add(_ endpoint: String) {
+            let v = endpoint.trimmingCharacters(in: .whitespaces)
+            guard !v.isEmpty, !out.contains(v) else { return }
+            out.append(v)
+        }
+        if let remembered, isNetworkEndpoint(remembered) { add(remembered) }
+        for ip in hosts { add(defaultEndpoint(ip: ip)) }
+        return out
+    }
+
     /// 첫 후보 — 후보가 하나일 때 쓰는 편의 (기존 호출부 호환)
     static func resolveIp(
         gateway: String?,
@@ -574,12 +592,22 @@ enum WifiAdbLogic {
     /// 헤더·빈 줄은 버리고, 열 구분은 **공백/탭 가변**이므로 토큰 분리로 읽는다.
     static func parseMdnsServices(_ text: String) -> [MdnsService] {
         text.split(separator: "\n").compactMap { raw in
-            let tokens = raw.split(whereSeparator: { $0 == " " || $0 == "\t" })
-            guard tokens.count == 3 else { return nil }
-            let instance = String(tokens[0])
-            let type = String(tokens[1])
+            let line = raw.trimmingCharacters(in: .whitespaces)
+            guard !line.isEmpty, !line.hasPrefix("List of") else { return nil }
+            // ★ 토큰 수를 3개로 고정하지 않는다 — **인스턴스 이름에 공백이 들어갈 수 있다**.
+            //   macOS mDNSResponder 는 같은 인스턴스가 중복 등록되면 두 번째를 `" (2)"` 로 개명한다.
+            //   실측(2026-10-19): 살아있는 무선 포트(46249)가 `... (2)` 줄에 있었고,
+            //   3토큰만 받던 종전 파서는 **그 줄을 통째로 버려** 죽은 옛 포트만 남겼다.
+            //   → 마지막 = host:port, 그 앞 = 서비스 종류, 나머지 전체 = 인스턴스 이름.
+            let tokens = line.split(whereSeparator: { $0 == " " || $0 == "\t" })
+            guard tokens.count >= 3 else { return nil }
+            let endpointToken = String(tokens[tokens.count - 1])
+            let type = String(tokens[tokens.count - 2])
+            let instance = tokens[..<(tokens.count - 2)]
+                .map(String.init)
+                .joined(separator: " ")
             guard !instance.isEmpty, type.hasPrefix("_adb") else { return nil }
-            guard let hp = splitHostPort(String(tokens[2])), isIPv4(hp.host) else { return nil }
+            guard let hp = splitHostPort(endpointToken), isIPv4(hp.host) else { return nil }
             return MdnsService(instance: instance, type: type, host: hp.host, port: hp.port)
         }
     }
@@ -1080,7 +1108,7 @@ final class WifiAdbController: ObservableObject {
         )
         return WifiAdbLogic.mergeDiscovered(
             discovered: discovered,
-            base: order.map { WifiAdbLogic.defaultEndpoint(ip: $0) }
+            base: WifiAdbLogic.reconnectBaseEndpoints(remembered: ownEndpoint, hosts: order)
         )
     }
 
@@ -1356,13 +1384,30 @@ final class WifiAdbController: ObservableObject {
     }
 
     /// `adb devices` 출력에서 정상 상태인 기기만 뽑는다 (순수 파싱)
+    ///
+    /// ★ serial 과 상태는 **TAB** 으로 구분된다. mDNS 자동 연결 serial 은 공백을 포함한다:
+    ///   `adb-R5CT215F4QK-iL8Q9e (2)._adb-tls-connect._tcp<TAB>device`
+    ///   공백으로 자르면 serial 이 `adb-R5CT215F4QK-iL8Q9e` 로 잘리고
+    ///   상태가 `(2)...` 가 되어 **연결된 기기를 device 로 못 읽는다** (2026-10-19 실측).
     nonisolated static func parseDeviceList(_ text: String) -> [String] {
         text.split(separator: "\n").compactMap { raw in
             let line = raw.trimmingCharacters(in: .whitespaces)
             guard !line.isEmpty, !line.hasPrefix("List of devices") else { return nil }
-            let parts = line.split(whereSeparator: \.isWhitespace)
-            guard let serial = parts.first, parts.contains("device") else { return nil }
-            return String(serial)
+            let parts = line.split(separator: "\t", maxSplits: 1, omittingEmptySubsequences: false)
+            let serial: String
+            let state: String
+            if parts.count == 2 {
+                serial = String(parts[0]).trimmingCharacters(in: .whitespaces)
+                state = String(parts[1]).trimmingCharacters(in: .whitespaces)
+            } else {
+                // 비정형(구형) 출력 — 첫 공백 기준 폴백
+                let tokens = line.split(whereSeparator: \.isWhitespace)
+                guard let first = tokens.first else { return nil }
+                serial = String(first)
+                state = tokens.dropFirst().joined(separator: " ")
+            }
+            guard !serial.isEmpty, state.hasPrefix("device") else { return nil }
+            return serial
         }
     }
 

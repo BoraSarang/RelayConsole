@@ -122,4 +122,31 @@ final class WifiReconnectCandidateTests: XCTestCase {
         XCTAssertEqual(c.first, "10.166.169.252", "알려진 IP 가 먼저")
         XCTAssertEqual(c.filter { $0 == "10.166.169.252" }.count, 1, "중복 제거")
     }
+
+    // MARK: - 기억된 무선 포트 보존 (2026-10-19)
+
+    /// 재연결 base 후보가 기억된 `IP:무선포트` 를 `IP:5555` 로 덮으면,
+    /// Android 11+ 폰(5555 닫힘)에서는 mDNS 조회가 0건인 틱에 **반드시** 실패한다.
+    func testReconnectBaseKeepsRememberedWirelessPort() {
+        let base = WifiAdbLogic.reconnectBaseEndpoints(
+            remembered: "192.168.86.49:39775",
+            hosts: ["192.168.86.49", "192.168.86.1"]
+        )
+        XCTAssertEqual(base.first, "192.168.86.49:39775", "살아있는 후보 포트가 5555 로 덮이면 안 된다")
+        XCTAssertTrue(base.contains("192.168.86.49:5555"), "레거시 tcpip 폴백도 남긴다")
+        XCTAssertEqual(base.filter { $0 == "192.168.86.49:39775" }.count, 1, "중복 제거")
+    }
+
+    func testReconnectBaseWithoutRememberedEndpointUsesDefaultPort() {
+        let base = WifiAdbLogic.reconnectBaseEndpoints(
+            remembered: nil,
+            hosts: ["10.0.0.5", "10.0.0.5"]
+        )
+        XCTAssertEqual(base, ["10.0.0.5:5555"])
+    }
+
+    func testReconnectBaseIgnoresNonNetworkRememberedValue() {
+        let base = WifiAdbLogic.reconnectBaseEndpoints(remembered: "R5CT215F4QK", hosts: ["10.0.0.5"])
+        XCTAssertEqual(base, ["10.0.0.5:5555"], "USB 시리얼은 TCP 후보가 아니다")
+    }
 }

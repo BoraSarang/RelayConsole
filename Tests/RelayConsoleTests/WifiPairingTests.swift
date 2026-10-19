@@ -199,6 +199,34 @@ struct WifiPairingTests {
         #expect(a.id != b.id)
     }
 
+    // MARK: - 중복 등록 `" (2)"` (2026-10-19 실측)
+
+    /// macOS mDNSResponder 가 같은 인스턴스의 두 번째 등록을 `" (2)"` 로 개명한다.
+    /// 실측: 살아있는 무선 포트(46249)가 `" (2)"` 줄에 있고, 죽은 옛 포트(39775)가 첫 줄이었다.
+    private let duplicateInstance = """
+    List of discovered mdns services
+    adb-R5CT215F4QK-iL8Q9e\t_adb-tls-connect._tcp\t192.168.86.49:39775
+    adb-R5CT215F4QK-iL8Q9e (2)\t_adb-tls-connect._tcp\t192.168.86.49:46249
+    """
+
+    @Test func parsesDuplicateInstanceNameWithSpaceSuffix() {
+        let services = WifiAdbLogic.parseMdnsServices(duplicateInstance)
+        #expect(services.count == 2)
+        #expect(services.map(\.endpoint) == ["192.168.86.49:39775", "192.168.86.49:46249"])
+        #expect(services[1].instance == "adb-R5CT215F4QK-iL8Q9e (2)")
+    }
+
+    @Test func duplicateInstanceStillBelongsToSameDevice() {
+        let services = WifiAdbLogic.parseMdnsServices(duplicateInstance)
+        let hit = WifiAdbLogic.matchingConnectEndpoints(
+            services: services,
+            physicalId: "R5CT215F4QK",
+            knownHosts: []
+        )
+        #expect(hit == ["192.168.86.49:39775", "192.168.86.49:46249"],
+                "살아있는 (2) 포트가 후보에서 사라지면 안 된다")
+    }
+
     @Test func pairingRowIsShownFirst() {
         let ordered = WifiAdbLogic.displayOrdered(WifiAdbLogic.parseMdnsServices(realS22))
         #expect(ordered.first?.isPairing == true)

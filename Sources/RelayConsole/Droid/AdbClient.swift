@@ -5,11 +5,20 @@ enum AdbClient {
     // MARK: - Connection (USB vs network)
 
     /// serial에 `:` 포함 → network(`IP:PORT`), 아니면 USB
+    ///
+    /// ★ mDNS 자동 연결 serial 은 콜론이 없지만 **네트워크 기기**다:
+    ///   `adb-R5CT215F4QK-iL8Q9e (2)._adb-tls-connect._tcp`
+    ///   USB 로 분류하면 신규 감지 경로가 `tcpip` 을 걸어 **지금 붙어 있는 무선 연결을 끊는다**.
     static func parseConnection(_ serial: String) -> (kind: ConnectionKind, label: String) {
-        if serial.contains(":") {
+        if serial.contains(":") || isMdnsSerial(serial) {
             return (.network, serial)
         }
         return (.usb, "USB")
+    }
+
+    /// adb 의 mDNS 자동 연결 serial — `adb-<serial>[-random] (N)._adb-tls-connect._tcp`
+    static func isMdnsSerial(_ serial: String) -> Bool {
+        serial.hasSuffix("._adb-tls-connect._tcp") || serial.hasSuffix("._adb._tcp")
     }
 
     /// `settings get global device_name` — null/empty → nil
