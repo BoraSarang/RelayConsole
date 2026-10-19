@@ -152,6 +152,25 @@ adb-R5CT215F4QK-iL8Q9e  _adb-tls-pairing._tcp   192.168.86.49:45673
 | 끊긴 뒤에도 **"다시 연결했습니다"** 가 남음 (사용자 신고) | 상태 줄은 "지금 상태"처럼 보이는데 유실을 조용히 기록만 했다(다음 재시도 실패까지 ≈1분) | 유실 순간 `연결이 끊겼습니다 — 다시 찾는 중` (자동모드 OFF면 다른 문구) |
 | 페어링 안내의 **재부팅 문장이 잘려 안 보임** (스크린샷) | 한 문장으로 이어 붙여 창 폭에서 뒤 문장이 밀렸다 | `wifi.pair.hint`(약속) + `wifi.pair.rebootNote`(한계) **두 줄**로 분리 |
 
+### 4.6 중복 mDNS 인스턴스 `" (2)"` — 살아있는 포트가 사라진 경로 (2026-10-19 실측)
+
+```
+adb-R5CT215F4QK-iL8Q9e       _adb-tls-connect._tcp  192.168.86.49:39775   ← 죽음 (refused)
+adb-R5CT215F4QK-iL8Q9e (2)   _adb-tls-connect._tcp  192.168.86.49:46249   ← 살아있음
+```
+
+| 관측 | 사실 | 반영 |
+|---|---|---|
+| 무선 디버깅이 켜져 있는데 앱은 "연결 끊김" | 폰은 정상 — 46249 `adb connect` 성공 · `device` · 5555는 닫힘(`service.adb.tcp.port` 빈 값) | `:5555`는 Android 11+에서 열리지 않는다 — USB `adb tcpip 5555` 전용. UI/문서 약속 아님 |
+| 같은 인스턴스가 두 번 광고됨 | macOS mDNSResponder가 두 번째를 `" (2)"`로 개명(4토큰) | `parseMdnsServices`가 마지막=host:port · 그 앞=type · **나머지=instance**로 파싱 |
+| `adb devices`에 `adb-... (2)._adb-tls-connect._tcp` | 첫 공백으로 자르면 상태가 `(2)...` → device 오판 | `DeviceMonitor.parseDeviceLine`(TAB 우선) · `parseDeviceList` 동일 |
+| 기억 `R5CT215F4QK → 192.168.86.49:39775`(죽은 포트) | 재연결 base가 포트를 버리고 `:5555`로 재구성 | `reconnectBaseEndpoints` — 기억된 포트를 보존 |
+| `adb mdns services`가 간헐적으로 0건(10회 중 1회) | 그 틱에는 폴백이 5555뿐 → 반드시 실패 | 위 포트 보존 + 다음 틱 재조회 |
+| mDNS 자동 연결 serial | 콜론이 없어 USB로 오분류 → `tcpip` 경로 | `AdbClient.isMdnsSerial` → **network** |
+
+**실기기 검증(앱 자체 기록)**: `10:24:58Z` mDNS serial `network` 연결 · `10:25:10Z` `192.168.86.49:46249` 연결 ·
+기억 `46249` 갱신. 테스트: `swift test` 767/0 · `AdbDevicesLineTests` 신규.
+
 ---
 
 ## 5. 리스크 · 한계 (거짓 약속 금지)

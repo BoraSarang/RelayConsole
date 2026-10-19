@@ -3,6 +3,25 @@
 > **육안 검증 대기는 `docs/MANUAL_VERIFY.md` 한 곳에 모았다** (2026-09-28) —
 > 여러 세션에 흩어져 있어 "남은 게 뭐였지" 를 한 번에 볼 수 없었다.
 
+## 완료 (2026-10-19)
+
+- [x] **T-2026-10-19-1 S22 무선 재연결 — mDNS 중복 인스턴스 `" (2)"` · 포트 보존** (P1 · bd `RelayConsole-rym` · PR #121)
+  - 증상: S22(SM-S901N · `R5CT215F4QK` · `192.168.86.49`)에서 **무선 디버깅도 `:5555`도 안 된다**고 보였다
+  - 실측: 무선 포트 **46249 열림**(`adb connect` 성공 · `device`) · **5555 닫힘**(`service.adb.tcp.port` 빈 값 · `nc` refused)
+    — Android 11+ 무선 디버깅은 랜덤 포트를 쓰고, 5555는 USB `adb tcpip 5555` 전용이다
+  - 원인:
+    ① macOS mDNSResponder가 같은 인스턴스의 두 번째 등록을 `" (2)"`로 개명 → **3토큰 고정 파서가 살아있는 46249 줄을 통째로 버림**
+    ② `adb devices`를 첫 공백으로 잘라 mDNS serial(`adb-... (2)._adb-tls-connect._tcp`)의 상태가 `(2)...`로 오염
+    ③ 재연결 base가 기억된 포트를 `:5555`로 덮음(기억은 죽은 `39775`) · mDNS 조회 0건이 10회 중 1회
+    ④ mDNS serial을 USB로 오분류 → 신규 감지 경로가 `tcpip`을 걸어 무선 연결을 끊을 수 있었다
+  - 수정: `parseMdnsServices` 역방향 파싱(마지막=host:port · 그 앞=type · 나머지=instance) ·
+    `DeviceMonitor.parseDeviceLine`(TAB 우선) · `WifiAdbController.parseDeviceList`(TAB) ·
+    `reconnectBaseEndpoints`(기억된 포트 보존) · `AdbClient.isMdnsSerial`(network 분류)
+  - **검증 [HARD]**: `swift test` **767/0** · `./scripts/build-macos.sh debug` 완료 · 앱 재시작
+  - **실기기(앱 자체 기록)**: `10:24:58Z` `adb-R5CT215F4QK-iL8Q9e (2)._adb-tls-connect._tcp · network` 연결 ·
+    `10:25:10Z` `192.168.86.49:46249 · network` 연결 · 기억 갱신 `R5CT215F4QK → 192.168.86.49:46249`(기존 39775)
+  - 문서: `DECISIONS` D5 · `PLAN_wifi_pairing` §4.6 · `MANUAL_VERIFY` §23-56 · 신규 테스트 `AdbDevicesLineTests`
+
 ## 완료 (2026-10-18)
 
 - [x] **T-2026-10-17-8 인시던트 번들 보강 — dropbox 회수·첨부·내보내기·실패 로깅** (P2 · 리서치 v2 §4.2 M3 · §5.2 P2-3 · bd `RelayConsole-r07`)
