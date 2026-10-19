@@ -241,6 +241,20 @@ struct WifiStaleTests {
         #expect(WifiAdbController.parseDeviceList("adb server version (41) doesn't match").isEmpty)
     }
 
+    /// mDNS 자동 연결 serial 은 **공백을 포함**한다 — TAB 으로 잘라야 serial 이 보존된다
+    @Test func parseDeviceListKeepsMdnsSerialWithSpace() {
+        let text = """
+        List of devices attached
+        adb-R5CT215F4QK-iL8Q9e (2)._adb-tls-connect._tcp\tdevice
+        192.168.86.49:46249\tdevice
+        """
+        let parsed = WifiAdbController.parseDeviceList(text)
+        #expect(parsed == [
+            "adb-R5CT215F4QK-iL8Q9e (2)._adb-tls-connect._tcp",
+            "192.168.86.49:46249"
+        ])
+    }
+
     @Test func networkEndpointDetection() {
         #expect(WifiAdbLogic.isNetworkEndpoint("10.38.120.211:5555"))
         #expect(WifiAdbLogic.isNetworkEndpoint("192.168.1.5:5037"))

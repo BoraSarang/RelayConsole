@@ -1221,6 +1221,32 @@ actor DeviceMonitor {
 
     // MARK: - Device list
 
+    /// `adb devices` 한 줄 → (serial, 상태). 실패하면 nil (헤더·빈 줄·이상 출력)
+    ///
+    /// ★ serial 과 상태는 **TAB** 으로 구분된다. mDNS 자동 연결 serial 은 공백을 포함한다:
+    ///   `adb-R5CT215F4QK-iL8Q9e (2)._adb-tls-connect._tcp<TAB>device`
+    ///   첫 공백에서 자르면 상태가 `(2)...` 가 되어 **연결된 기기를 device 로 못 읽는다**
+    ///   (2026-10-19 실측 — 앱에는 S22 가 '연결 끊김'으로 보였고 adb 에는 붙어 있었다).
+    nonisolated static func parseDeviceLine(_ raw: String) -> (serial: String, state: String)? {
+        let line = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !line.isEmpty,
+              !line.hasPrefix("List of devices"),
+              !line.hasPrefix("*"),
+              !line.hasPrefix("adb server") else { return nil }
+        if let tab = line.firstIndex(of: "\t") {
+            let serial = String(line[..<tab]).trimmingCharacters(in: .whitespaces)
+            let state = String(line[line.index(after: tab)...]).trimmingCharacters(in: .whitespaces)
+            guard !serial.isEmpty, !state.isEmpty else { return nil }
+            return (serial, state)
+        }
+        // 비정형(구형) 출력 — 첫 공백 기준 폴백
+        guard let idx = line.firstIndex(where: { $0.isWhitespace }) else { return nil }
+        let serial = String(line[..<idx])
+        let state = String(line[line.index(after: idx)...]).trimmingCharacters(in: .whitespaces)
+        guard !serial.isEmpty, !state.isEmpty else { return nil }
+        return (serial, state)
+    }
+
     private func resolveDevices() async {
         if adbPath == nil {
             adbPath = findAdb()
@@ -1248,12 +1274,8 @@ actor DeviceMonitor {
         }
         var adbStates: [String: String] = [:]
         for rawLine in list.split(separator: "\n") {
-            let line = String(rawLine)
-            guard let idx = line.firstIndex(where: { $0.isWhitespace }) else { continue }
-            let name = String(line[..<idx])
-            let st = line[line.index(after: idx)...].trimmingCharacters(in: .whitespaces)
-            guard !name.isEmpty, name != "List", name != "adb", !name.hasPrefix("*"), !st.isEmpty else { continue }
-            adbStates[name] = st
+            guard let parsed = Self.parseDeviceLine(String(rawLine)) else { continue }
+            adbStates[parsed.serial] = parsed.state
         }
         let found = adbStates.filter { $0.value.hasPrefix("device") }.map(\.key)
         let foundSet = Set(found)

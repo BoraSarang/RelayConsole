@@ -590,6 +590,16 @@ struct AdbParsingTests {
         #expect(c.label == "USB")
     }
 
+    /// mDNS 자동 연결 serial 은 콜론이 없지만 네트워크 기기다.
+    /// USB 로 오분류하면 신규 감지 경로가 `tcpip` 을 걸어 무선 연결을 끊는다 (2026-10-19 실측).
+    @Test func parseConnectionMdnsSerial() {
+        let c = AdbClient.parseConnection("adb-R5CT215F4QK-iL8Q9e (2)._adb-tls-connect._tcp")
+        #expect(c.kind == .network)
+        #expect(c.label == "adb-R5CT215F4QK-iL8Q9e (2)._adb-tls-connect._tcp")
+        #expect(AdbClient.isMdnsSerial("adb-14141FDF600081-QXjCrW._adb-tls-connect._tcp"))
+        #expect(!AdbClient.isMdnsSerial("R5CT10ABCDE"))
+    }
+
     @Test func parseDeviceNameFromSettings() {
         #expect(AdbClient.parseDeviceName("S22\n") == "S22")
         #expect(AdbClient.parseDeviceName("null") == nil)
