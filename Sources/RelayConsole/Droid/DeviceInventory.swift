@@ -228,6 +228,10 @@ struct DeviceSnapshot: Sendable, Equatable {
         batteryAsocPct = batt.batteryAsocPct
         batteryTechnology = batt.batteryTechnology
         batteryCurrentMA = batt.batteryCurrentMA
+        // sysfs 대체값 — 여기 빠지면 파싱해도 매 틱 버려진다 (2026-11-05 S7: '만충 mAh' 공백)
+        batteryFullCapNomMAh = batt.batteryFullCapNomMAh
+        batteryKernelHealth = batt.batteryKernelHealth
+        batterySysCycle = batt.batterySysCycle
     }
 
     /// ≥40°C or thermal Status≥2 (V0-2 Surface A)

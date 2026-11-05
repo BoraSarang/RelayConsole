@@ -171,10 +171,18 @@ struct AdbParsingTests {
         mSavedBatteryUsage: [81185]
         mSavedBatteryBsoh: 91
         mSavedBatteryAsoc: [93]
+        rlysysfs_fg_fullcapnom: 1374
+        rlysysfs_fg_asoc: 92
+        rlysysfs_fg_cycle: 0
+        rlysysfs_health: Good
         """
         let parsed = AdbClient.parseBatteryEx(sample)
         var applied = DeviceSnapshot()
         applied.applyBattery(parsed)
+        // sysfs 대체값이 표본에서 빠지면 화이트리스트 누락을 못 잡는다 (2026-11-05 S7 실측)
+        #expect(parsed.batteryFullCapNomMAh == 1374)
+        #expect(parsed.batteryKernelHealth == "Good")
+        #expect(parsed.batterySysCycle == nil)  // 0 은 값이 아니라 미보고
         let appliedMirror = Mirror(reflecting: applied)
         var checked = 0
         for child in Mirror(reflecting: parsed).children {
