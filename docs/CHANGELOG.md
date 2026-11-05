@@ -7,7 +7,7 @@
 
 ---
 
-## Unreleased
+## Unreleased (PR #125 머지 · `dd60a71` · 버전 미정)
 
 ### Fixed
 - **fix(macos)**: **LineageOS(S7)에서 scrcpy 미러가 즉시 죽던 문제** — scrcpy 5.0.1 은 오디오를 기본 opus 로 보내는데, `herolte` LineageOS 21 빌드에는 opus 인코더가 없어 서버가 `Could not create default audio encoder for opus` 로 실패하고 **오디오 demuxer 오류가 영상 스트림까지** 끊었다 (2026-11-05 실측)
