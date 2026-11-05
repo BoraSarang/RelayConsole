@@ -147,6 +147,12 @@ final class ScrcpyController: ObservableObject {
         let timeout = screenOffTimeout.trimmingCharacters(in: .whitespaces)
         if !timeout.isEmpty { args.append("--screen-off-timeout=\(timeout)") }
         if turnScreenOff { args.append("--turn-screen-off") }
+        // 기본 오디오(opus)가 없는 기기에서도 미러가 살아남게 한다.
+        // scrcpy 5.0.1 은 오디오를 기본으로 켜고 opus 로 인코딩하는데, LineageOS herolte(S7)에는
+        // opus 인코더가 없어 서버가 오디오 초기화에 실패하고 **영상 세션까지** 죽었다(2026-11-05 실측).
+        // AAC 는 AOSP 공통 인코더라 어느 기기에서도 열린다. 사용자 customOpts 는 뒤에 붙으므로
+        // `--no-audio` 등으로 덮어쓸 수 있다.
+        args.append("--audio-codec=aac")
         // scrcpy 5.0.1 노출 옵션 — 허용 값·숫자만 통과 (자유 입력으로 scrcpy를 깨뜨리지 않는다)
         if hwdecModes.contains(hwdec), !hwdec.isEmpty { args.append("--hwdec=\(hwdec)") }
         if videoCodecs.contains(videoCodec), !videoCodec.isEmpty { args.append("--video-codec=\(videoCodec)") }

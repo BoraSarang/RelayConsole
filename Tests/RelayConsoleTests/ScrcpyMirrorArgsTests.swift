@@ -8,7 +8,7 @@ struct ScrcpyMirrorArgsTests {
     private let serial = "10.0.0.1:5555"
 
     @Test func defaultsMatchLegacyOptsPlusAppBackground() {
-        // 종전 고정 9종과 동일 순서·동일 값 + 새 기본값(창 여백색 통일)만 추가된다
+        // 종전 고정 옵션 + 오디오 AAC 고정 + 새 기본값(창 여백색 통일)
         #expect(ScrcpyController.mirrorArgs(serial: serial, noControl: false) == [
             "-s", serial,
             "--show-touches",
@@ -19,12 +19,22 @@ struct ScrcpyMirrorArgsTests {
             "--max-fps=30",
             "--screen-off-timeout=3600",
             "--turn-screen-off",
+            "--audio-codec=aac",
             "--background-color=#1c1f2a",
         ])
     }
 
+    @Test func audioCodecIsAACForDevicesWithoutOpus() {
+        // LineageOS herolte(S7)에는 opus 인코더가 없다 — 기본 opus 로 두면 영상까지 죽는다.
+        #expect(ScrcpyController.mirrorArgs(serial: serial, noControl: false)
+            .contains("--audio-codec=aac"))
+        // customOpts 는 뒤에 붙으므로 사용자가 `--no-audio` 로 덮어쓸 수 있다
+        let args = ScrcpyController.mirrorArgs(serial: serial, noControl: false, customOpts: "--no-audio")
+        #expect(args.last == "--no-audio")
+    }
+
     @Test func legacyParityWhenNewOptionsOff() {
-        // 새 옵션을 모두 끄면 종전과 정확히 같은 인자 — 하위 호환 계약
+        // 새 옵션을 모두 끄면 기본값(오디오 AAC 포함)만 남는다
         let args = ScrcpyController.mirrorArgs(serial: serial, noControl: false, backgroundMatch: false)
         #expect(args == [
             "-s", serial,
@@ -36,6 +46,7 @@ struct ScrcpyMirrorArgsTests {
             "--max-fps=30",
             "--screen-off-timeout=3600",
             "--turn-screen-off",
+            "--audio-codec=aac",
         ])
     }
 
@@ -100,7 +111,8 @@ struct ScrcpyMirrorArgsTests {
                          "--max-size=1024",
                          "--video-bit-rate=2M",
                          "--max-fps=30",
-                         "--screen-off-timeout=3600"])
+                         "--screen-off-timeout=3600",
+                         "--audio-codec=aac"])
     }
 
     @Test func emptyValueOmitsThatOpt() {
