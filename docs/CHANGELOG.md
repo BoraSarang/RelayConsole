@@ -10,6 +10,12 @@
 ## Unreleased (PR #125 머지 · `dd60a71` · 버전 미정)
 
 ### Fixed
+- **fix(macos)**: **S7 배터리 카드에 `만충 …mAh` 가 안 뜨던 문제** — `bb66f49` 이 파서·merge 에만 sysfs 대체 필드를 추가하고 `DeviceSnapshot.applyBattery` 화이트리스트에는 넣지 않아, 매 틱 파싱값이 그 자리에서 버려졌다 (2026-11-05 실측)
+  - `batteryFullCapNomMAh` · `batteryKernelHealth` · `batterySysCycle` 3필드를 복사에 추가
+  - 기존 가드는 표본에 `rlysysfs_*` 줄이 없어 누락을 못 잡았다 → 표본에 실제 S7 4줄을 넣어 회귀 시 실패하게 했다
+  - 실측(S7 실제 덤프): `만충 1374mAh · 92%` · 사이클 `미보고` (`fg_cycle=0` 은 값이 아니다)
+- **fix(macos)**: **배터리 요약 그리드가 첫 실행 후 통째로 비던 문제** — 카드 안 `LazyVGrid` 가 첫 레이아웃에서 높이 0 으로 측정된 뒤 다시 재지 않아 6칸(건강·전압·사이클·온도·전류·유형)이 사라졌고, 같은 경로에서 `EXC_BAD_ACCESS`(LazyVGridLayout 값 복사)로 **앱이 죽기도 했다** (2026-11-05 실측 · 크래시 리포트 3건)
+  - 6칸짜리라 게으를 이유가 없다 — 일반 `VStack` + `HStack` 행으로 바꿨다. 재실행 후 그리드가 즉시 보이고 크래시 없음
 - **fix(macos)**: **LineageOS(S7)에서 scrcpy 미러가 즉시 죽던 문제** — scrcpy 5.0.1 은 오디오를 기본 opus 로 보내는데, `herolte` LineageOS 21 빌드에는 opus 인코더가 없어 서버가 `Could not create default audio encoder for opus` 로 실패하고 **오디오 demuxer 오류가 영상 스트림까지** 끊었다 (2026-11-05 실측)
   - 실행 인자에 `--audio-codec=aac` 를 고정한다 — AAC 는 AOSP 공통 인코더라 어느 기기에서도 열린다. 사용자 `customOpts` 는 뒤에 붙으므로 `--no-audio` 등으로 덮어쓸 수 있다
   - 실측 대조: 기본(opus) 즉시 종료 · `--audio-codec=aac` 8초 유지 · `--no-audio` 12초 유지(720x1280 렌더)
