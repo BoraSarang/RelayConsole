@@ -39,6 +39,8 @@ final class AppIconStore: ObservableObject {
     private var active = 0
     private var loading = Set<String>()
     private var pending: [(serial: String, package: String, versionCode: Int64)] = []
+    /// 설치 중에는 새 pull 을 시작하지 않는다 (APK 전송과 대역폭 경쟁 금지)
+    private var suspended = 0
     /// 이번 실행에서 이미 시도한 `package-versionCode` — 실패한 앱을 행이 보일 때마다
     /// 다시 pull 하지 않는다(네트워크 ADB 에서 APK 하나가 수백 MB 다).
     private var attempted = Set<String>()
@@ -120,7 +122,21 @@ final class AppIconStore: ObservableObject {
         pump()
     }
 
+    /// 설치 중에는 새 아이콘 pull 을 멈춘다 — APK 전송과 같은 ADB 대역폭을 쓰면
+    /// 설치가 느려지고 진행이 멈춘 것처럼 보인다. 이미 시작된 pull(최대 2개)은 그대로 둔다.
+    func suspend() {
+        suspended += 1
+    }
+
+    /// 설치가 끝나면 밀린 요청을 다시 시작한다 (중첩 호출 대비 카운터)
+    func resume() {
+        suspended = max(0, suspended - 1)
+        guard suspended == 0 else { return }
+        pump()
+    }
+
     private func pump() {
+        guard suspended == 0 else { return }
         while active < concurrency, !pending.isEmpty {
             let job = pending.removeFirst()
             active += 1

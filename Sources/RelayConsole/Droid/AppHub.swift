@@ -450,6 +450,11 @@ final class AppHubController: ObservableObject {
     /// (detached 작업에서도 읽어야 하므로 nonisolated)
     nonisolated static let installTimeout: TimeInterval = 600
 
+    /// 단계 로그용 경과 시간 — 화면의 초 표시와 같은 기준
+    nonisolated static func elapsedMillis(since start: Date) -> Int {
+        max(0, Int(Date().timeIntervalSince(start) * 1000))
+    }
+
     private let installHandle = ProcessCancelHandle()
     private var installCancelled = false
 
@@ -631,6 +636,9 @@ final class AppHubController: ObservableObject {
 
         let fileName = file.lastPathComponent
         installing = true
+        // 설치 중에는 새 아이콘 pull 을 멈춘다 — 같은 네트워크 ADB 대역폭을 나눠 쓰면
+        // APK 전송이 느려져 "설치가 안 끝나는 것처럼" 보인다 (2026-11-05 사용자 신고)
+        AppIconStore.shared.suspend()
         installCancelled = false
         installHandle.reset()
         installFileName = fileName
@@ -645,10 +653,24 @@ final class AppHubController: ObservableObject {
             ? L10n.format("apphub.install.many.running", fileName, targets.count)
             : L10n.format("apphub.install.running", fileName)
 
+        let installClock = Date()
+        let flags = AppHubLogic.installFlags(options)
+        DebugLogger.shared.info(
+            "AppHub",
+            "[INFO] 설치 시작 — \(fileName) (\(size) bytes) · \(targets.count)대 · 옵션 \(flags.isEmpty ? "없음" : flags.joined(separator: " "))"
+        )
+
         Task {
+            defer { AppIconStore.shared.resume() }
+            let shaClock = Date()
             let sha = await Task.detached(priority: .utility) {
                 FileDigest.sha256Hex(path: path) ?? "-"
             }.value
+            // 지문 계산은 큰 APK 에서 수 초 걸린다 — 단계 문구가 "준비 중…"에 머무는 이유를 로그로 남긴다
+            DebugLogger.shared.info(
+                "AppHub",
+                "[INFO] 지문 — \(fileName) \(sha.prefix(16)) · \(Self.elapsedMillis(since: shaClock))ms"
+            )
 
             // 번들 추출물은 프로필별 1회 — 여러 기기가 같은 ABI·밀도면 재사용한다
             let tempRoot = FileManager.default.temporaryDirectory
@@ -660,10 +682,17 @@ final class AppHubController: ObservableObject {
                 if installCancelled { break }
                 installSerial = target.serial
                 installProgress = 0
-                installPhase = L10n.format("apphub.install.phase.device", index + 1, targets.count)
+                installPhase = targets.count == 1
+                    ? L10n.string("apphub.install.phase.device.one")
+                    : L10n.format("apphub.install.phase.device", index + 1, targets.count)
 
                 // 설치 전 스냅샷 — 성공 후 어느 패키지가 새로 생겼/바뀌었는지 찾기 위한 원재료
+                let targetClock = Date()
                 let before = await Self.versionCodesAsync(adb: adb, serial: target.serial)
+                DebugLogger.shared.info(
+                    "AppHub",
+                    "[INFO] 설치 전 확인 — \(target.serial) 서드파티 \(before.count)개 · \(Self.elapsedMillis(since: targetClock))ms"
+                )
 
                 var report: InstallReport
                 if kind == .apk {
@@ -736,10 +765,23 @@ final class AppHubController: ObservableObject {
                     name: "apphub"
                 )
                 if report.ok {
-                    DebugLogger.shared.info("AppHub", "[INFO] 설치 — \(target.serial) \(report.detail)")
+                    DebugLogger.shared.info(
+                        "AppHub",
+                        "[INFO] 설치 — \(target.serial) \(report.detail) · \(Self.elapsedMillis(since: targetClock))ms"
+                    )
                 } else {
-                    DebugLogger.shared.error("AppHub", "[ERROR] E-MAC-ADB-0007 설치 실패 — \(target.serial) \(report.detail)")
+                    DebugLogger.shared.error(
+                        "AppHub",
+                        "[ERROR] E-MAC-ADB-0007 설치 실패 — \(target.serial) \(report.detail) · \(Self.elapsedMillis(since: targetClock))ms"
+                    )
                 }
+            }
+
+            if self.installCancelled {
+                DebugLogger.shared.warn(
+                    "AppHub",
+                    "[WARN] 설치 취소 — \(fileName) · \(Self.elapsedMillis(since: installClock))ms"
+                )
             }
 
             self.installing = false
@@ -789,19 +831,31 @@ final class AppHubController: ObservableObject {
         options: AppInstallOptions,
         before: [String: Int64]
     ) async -> InstallReport {
+        // adb 는 설치 중 진행률을 주지 않는다. 그래도 **무엇을 하는 중인지**는 말해야 한다
+        // (종전에는 "기기 준비 중…"에 멈춰 있어 24초짜리 설치가 멈춘 것처럼 보였다 — 2026-11-05)
+        installPhase = L10n.string("apphub.install.phase.install")
+        let clock = Date()
         let out = await Self.captureAsync(
             adb,
             ["-s", serial] + AppHubLogic.installArgs(path: path, options: options),
             timeout: Self.installTimeout,
             handle: installHandle
         )
-        return await applyInstallResult(
+        let outcome = out.map { $0.timedOut ? "timeout" : "exit=\($0.exitCode)" } ?? "실행 실패"
+        DebugLogger.shared.info(
+            "AppHub",
+            "[INFO] adb install — \(serial) \(outcome) · \(Self.elapsedMillis(since: clock))ms"
+        )
+        let report = await applyInstallResult(
             out: out,
             adb: adb,
             serial: serial,
             before: before,
             cancelled: installCancelled
         )
+        // 진행률 막대를 끝까지 채운 뒤 배너가 사라진다 (0 에 머물다 툭 사라지지 않게)
+        if report.ok { installProgress = 1 }
+        return report
     }
 
     /// 번들(.apks/.xapk/.apkm) — push → `pm install-multiple` → OBB (추출은 호출측이 끝냈다)
@@ -990,10 +1044,22 @@ final class AppHubController: ObservableObject {
         }
         switch parsed {
         case .installed:
+            // 설치는 끝났지만 **어떤 패키지가 바뀌었는지** 확인하는 단계가 남아 있다.
+            // 이 문구가 없으면 마지막 몇 초가 다시 "멈춘 화면"처럼 보인다.
+            installPhase = L10n.string("apphub.install.phase.verify")
+            let verifyClock = Date()
             let after = await Self.versionCodesAsync(adb: adb, serial: serial)
             let changed = AppHubLogic.changedPackages(before: before, after: after)
+            var version: String?
             if changed.count == 1, let pkg = changed.first {
-                let version = await Self.versionNameAsync(adb: adb, serial: serial, package: pkg)
+                version = await Self.versionNameAsync(adb: adb, serial: serial, package: pkg)
+            }
+            let versionNote = version.map { " v\($0)" } ?? ""
+            DebugLogger.shared.info(
+                "AppHub",
+                "[INFO] 설치 확인 — \(serial) 변경 \(changed.count)개\(versionNote) · \(Self.elapsedMillis(since: verifyClock))ms"
+            )
+            if changed.count == 1, let pkg = changed.first {
                 return InstallReport(
                     ok: true,
                     message: L10n.format("apphub.install.done.version", pkg, version ?? L10n.na),
