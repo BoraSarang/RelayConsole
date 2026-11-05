@@ -92,9 +92,12 @@ enum PollBatch {
             case .activity: return "dumpsys activity activities"
             case .ipWlan: return "ip -f inet addr show swlan0; ip -f inet addr show wlan0"
             case .df: return "df -h /data"
-            case .gpuBusy: return "cat /sys/class/kgsl/kgsl-3d0/gpu_busy_percentage"
+            // kgsl 은 Qualcomm 전용 — Exynos(Mali) 기기는 mali0 노드로 폴백한다.
+            // adb 호출 수는 늘지 않는다(같은 셸에서 `||` 로 이어 붙임).
+            case .gpuBusy: return "cat /sys/class/kgsl/kgsl-3d0/gpu_busy_percentage 2>/dev/null || cat /sys/class/misc/mali0/device/norm_utilization 2>/dev/null"
             case .gpuGpubusy: return "cat /sys/class/kgsl/kgsl-3d0/gpubusy"
-            case .gpuClk: return "cat /sys/class/kgsl/kgsl-3d0/gpuclk"
+            // kgsl `gpuclk`=Hz, mali `clock`=MHz — parseGpuClkMHz 가 둘 다 처리한다
+            case .gpuClk: return "cat /sys/class/kgsl/kgsl-3d0/gpuclk 2>/dev/null || cat /sys/class/misc/mali0/device/clock 2>/dev/null"
             case .sensors:
                 return "dumpsys sensorservice | grep -E 'Total [0-9]+ h/w sensors|active-count|\\) type 0x|active connections|Sensor Device|Sensor List'"
             case .diskstats: return "cat /proc/diskstats"

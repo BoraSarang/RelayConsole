@@ -3,6 +3,15 @@
 > **육안 검증 대기는 `docs/MANUAL_VERIFY.md` 한 곳에 모았다** (2026-09-28) —
 > 여러 세션에 흩어져 있어 "남은 게 뭐였지" 를 한 번에 볼 수 없었다.
 
+## 진행 중 (2026-11-05)
+
+- [ ] **T-2026-11-05-1 [P2] LineageOS(S7) scrcpy 오디오 · Exynos GPU 폴백** (1.25.0+ · 코드/테스트/빌드 완료 → **실기기 확인 대기** · bd `RelayConsole-50u`)
+  - 증상: S7(LineageOS 21 `herolte`)에서 미러를 누르면 창이 뜨지 않음 · GPU 카드 사용률 공백
+  - 원인: scrcpy 5.0.1 기본 오디오 `opus` 인코더가 이 ROM 에 없음 → 오디오 초기화 실패가 **영상 세션까지** 종료. GPU 는 Qualcomm `kgsl` 경로만 폴링
+  - 수정: `mirrorArgs` 에 `--audio-codec=aac` 고정(customOpts 로 덮어쓰기 가능) · `PollBatch` GPU busy/clk 를 `kgsl || mali0` 폴백으로(adb 호출 수 동일)
+  - 검증 [HARD]: `swift test` **868/0**(+2) · `./scripts/build-macos.sh debug` 완료 · 앱 **1.25.0** 재시작 — 실기기는 `MANUAL_VERIFY` §34
+  - 실측: 기본(opus) 즉시 종료 / `--audio-codec=aac`·`--no-audio` 정상 · S7 GPU util idle `0` → 스와이프 중 `6`
+
 ## 진행 중 (2026-11-03)
 
 - [ ] **T-2026-11-03-1 [P2] LineageOS 배터리 건강·사이클 대체 표시** (1.25.0 · PR #123 머지 · 코드/테스트/빌드 완료 → **실기기 육안 대기**)

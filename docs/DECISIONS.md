@@ -176,3 +176,26 @@
   애니메이션 벡터(AVD) 재생, 테마별(다크/라이트) 아이콘 선택.
 - **다시 보지 않는다**: "PNG 아이콘만 있으면 되지 않나"·"아이콘을 못 찾으면 패키지명만 보여주자"·
   "희소 표는 예외 상황이니 무시하자"는 이 D9를 먼저 읽는다. 구글 포토·Gboard 는 실제로 희소 표를 쓴다.
+
+## D10 — scrcpy 오디오 코덱은 **AAC 고정** (2026-11-05)
+
+- **결정**: 미러 실행 인자에 `--audio-codec=aac` 를 항상 넣는다. 사용자 `customOpts` 는 뒤에 붙으므로
+  `--no-audio`·`--audio-codec=opus` 로 덮어쓸 수 있다(자유 입력은 여전히 뒤에서 우선).
+- **사유**: scrcpy 5.0.1 기본값은 opus 인데, LineageOS `herolte`(S7)에는 opus 인코더가 없어
+  `Could not create default audio encoder for opus` 로 **오디오 초기화 실패가 영상 세션까지** 죽였다.
+  AAC 는 AOSP 공통 인코더(OMX.google.aac.encoder)라 커스텀 ROM 에서도 열린다. 화질 손실은
+  관제용 미러에서 문제되지 않고, 오디오를 아예 끄는 것보다 사용자 선택 폭이 넓다.
+- **하지 않는 것**: 기기별 오디오 인코더 사전 탐지, opus 우선 후 실패 시 재시도(복잡도 대비 이득 없음).
+  오디오 3택(그대로/끄기/기기에서도 재생)은 `PLAN_scrcpy_options` B급 후보로 남긴다.
+- **다시 보지 않는다**: "기본 opus 로 두고 기기에서 실패하면 사용자가 옵션을 빼면 되지 않나" —
+  실패하면 **영상까지** 안 나와서 사용자가 원인을 알 수 없다.
+
+## D11 — GPU 사용률은 **kgsl → mali0 폴백** (2026-11-05)
+
+- **결정**: `gpuBusy`·`gpuClk` 폴링을 `cat kgsl… 2>/dev/null || cat mali0… 2>/dev/null` 한 셸로 보낸다.
+  Qualcomm 은 종전 그대로 `kgsl` 이 먼저 읽히고, Exynos 는 `norm_utilization`(0~100)으로 폴백한다.
+- **사유**: GPU 카드가 `kgsl` 경로만 읽어 Exynos(Mali-T88x) 기기에서 사용률이 영구 공백이었다.
+  sysfs 읽기 한 줄을 `||` 로 이어 붙이므로 **adb 호출 수는 늘지 않는다**(PollBatch 마커 계약 유지).
+- **하지 않는 것**: `devfreq`·`mali0/clock` 의 0 값을 억지로 표시하지 않는다(이 커널은 클럭을 0 으로
+  보고한다). Adreno/Mali 외(GPU 없음)는 종전처럼 공백으로 둔다.
+- **다시 보지 않는다**: "GPU 는 Qualcomm 만 지원하면 된다" — 사용자의 관제 대상에 Exynos 기기가 있다.

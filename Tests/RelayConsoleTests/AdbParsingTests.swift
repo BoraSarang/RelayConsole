@@ -913,6 +913,8 @@ struct AdbParsingTests {
     @Test func parseGpuBusyPercentAndGpubusy() {
         #expect(AdbClient.parseGpuBusyPercent("12 %\n") == 12)
         #expect(AdbClient.parseGpuBusyPercent("0 %") == 0)
+        // Exynos mali `norm_utilization` — % 숫자 하나 (0~100)
+        #expect(AdbClient.parseGpuBusyPercent("6") == 6)
         // busy idle jiffies → ratio
         let b = AdbClient.parseGpuBusyPercent("100 900")
         #expect(b != nil)

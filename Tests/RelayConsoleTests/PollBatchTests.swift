@@ -62,6 +62,19 @@ struct PollBatchTests {
         #expect(s.contains("; "))
     }
 
+    /// GPU 는 Qualcomm(kgsl) → Exynos(mali) 순서로 폴백한다 — adb 호출은 1회 그대로
+    @Test func gpuCommandsFallBackFromKgslToMali() {
+        let busy = PollBatch.Cmd.gpuBusy.shell
+        #expect(busy.contains("/sys/class/kgsl/kgsl-3d0/gpu_busy_percentage"))
+        #expect(busy.contains("/sys/class/misc/mali0/device/norm_utilization"))
+        #expect(busy.contains("||"))
+        let clk = PollBatch.Cmd.gpuClk.shell
+        #expect(clk.contains("/sys/class/kgsl/kgsl-3d0/gpuclk"))
+        #expect(clk.contains("/sys/class/misc/mali0/device/clock"))
+        // gpubusy(kgsl 전용)는 그대로 둔다 — busy 폴백이 이미 사용률을 커버한다
+        #expect(PollBatch.Cmd.gpuGpubusy.shell == "cat /sys/class/kgsl/kgsl-3d0/gpubusy")
+    }
+
     // MARK: - parse
 
     /// 마커로 잘라낸 결과가 종전 개별 호출과 **동일한 문자열**이어야 한다
