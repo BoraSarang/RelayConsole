@@ -168,6 +168,13 @@ struct DeviceSnapshot: Sendable, Equatable {
     var appNetStats: [AppNetStat]?
     /// uid별 앱 네트워크 속도 (MB/s) — 15s delta
     var appNetRates: [AppNetRate]?
+    /// 이 기기가 **UID별 트래픽을 보고할 수 없는 상태**인지 (nil = 이번 틱 판단 없음 → 캐시 유지).
+    ///
+    /// 실측(2026-11-05 · LineageOS 21 `herolte`/S7): netd 가 BPF map 을 pin 하지 못해
+    /// `dumpsys netstats detail` 이 `map is not pinned` + 덤프 예외로 끝나고, UID stats 에는
+    /// op 만 있고 바이트는 0 인 항목 1건뿐이었다. 인터페이스 합계(그래프)는 정상이므로
+    /// "아직 트래픽 없음" 이라고 표시하면 거짓말이 된다 — 그 경우를 구분하는 플래그.
+    var appNetUnsupported: Bool?
     // ── P2 카드 필드 (PLAN_v0.4) ──
     /// SurfaceFlinger GLES 렌더러 (예: Adreno (TM) 730)
     var gpuRenderer: String?
@@ -397,6 +404,7 @@ struct DeviceInventory: Equatable {
                 merged.cellPci = merged.cellPci ?? prev.cellPci
                 merged.appNetStats = merged.appNetStats ?? prev.appNetStats
                 merged.appNetRates = merged.appNetRates ?? prev.appNetRates
+                merged.appNetUnsupported = merged.appNetUnsupported ?? prev.appNetUnsupported
                 merged.wifiSsid = merged.wifiSsid ?? prev.wifiSsid
                 merged.wifiRssi = merged.wifiRssi ?? prev.wifiRssi
                 merged.ipV4 = merged.ipV4 ?? prev.ipV4

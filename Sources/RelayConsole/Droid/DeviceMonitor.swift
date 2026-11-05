@@ -90,6 +90,8 @@ actor DeviceMonitor {
         /// shell(uid 2000) 속도 스무딩값 — 합계(live)에서 뺄 adb(내부 폴링) 기여분
         var cacheShellUp: Double = 0
         var cacheShellDown: Double = 0
+        /// 이 기기가 UID별 트래픽을 보고할 수 없는 상태인지 (netstats 덤프 근거, 기기별 캐시)
+        var cacheAppNetUnsupported: Bool?
         /// shell 추정 링 (오래된 순, 최대 5개 = 약 60초) — 차감은 이 중 **최소값**을 쓴다.
         /// 창 스무딩값을 그대로 빼면 사용자 파일 전송 1회가 60초 동안 합계를 0으로 눌렀다
         /// (2026-10-17 `adb push` 100MB 실측 — `AdbClient.steadyShellRate`).
@@ -593,7 +595,12 @@ actor DeviceMonitor {
 
             // ── 앱(UID) 네트워크 사용량 — 60s 윈도우, shell 제외 (PLAN_net_truespeed)
             if let statsText = batch[.netstats] {
-                let parsed = AdbClient.parseUidNetStats(statsText)
+                // 이 ROM 이 UID 회계를 아예 못 하면(BPF map 미핀) 파싱 결과는 쓰레기다 —
+                // 0 바이트 행을 이력 링에 넣으면 "트래픽 없음" 이라는 거짓 상태가 굳는다.
+                let unsupported = AdbClient.netStatsUnsupported(statsText)
+                state.cacheAppNetUnsupported = unsupported
+                snap.appNetUnsupported = unsupported
+                let parsed = unsupported ? [] : AdbClient.parseUidNetStats(statsText)
                 if !parsed.isEmpty {
                     if state.packageUids == nil,
                        let pkgText = try? shell(serial, "pm", "list", "packages", "-U") {
@@ -668,6 +675,7 @@ actor DeviceMonitor {
                 }
             }
             if snap.appNetRates == nil { snap.appNetRates = state.cacheAppNetRates }
+            if snap.appNetUnsupported == nil { snap.appNetUnsupported = state.cacheAppNetUnsupported }
 
             // 프로세스 NET 열 — 패키지명 == 프로세스명 매핑
             if let rates = snap.appNetRates, var procRows = snap.processList {

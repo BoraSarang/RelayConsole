@@ -47,13 +47,31 @@ struct AppNetworkContent: View {
 
             if sorted.isEmpty {
                 VStack(spacing: 8) {
-                    Text(L10n.string("droid.appnet.empty"))
-                        .font(OPFont.body(12))
-                        .foregroundStyle(OPColor.inkDim)
-                    Text(L10n.string("droid.appnet.emptyHint"))
-                        .font(OPFont.number(10))
-                        .foregroundStyle(OPColor.inkDim.opacity(0.8))
-                        .multilineTextAlignment(.center)
+                    if device?.appNetUnsupported == true {
+                        // 기기가 앱별 통계를 아예 못 주는 상태 — "아직 트래픽 없음" 은 거짓말이다.
+                        // 합계(그래프)는 정상이므로 그 사실을 같이 보여준다.
+                        Text(L10n.string("droid.appnet.unsupported"))
+                            .font(OPFont.body(12))
+                            .foregroundStyle(OPColor.ink)
+                        Text(L10n.string("droid.appnet.unsupportedHint"))
+                            .font(OPFont.number(10))
+                            .foregroundStyle(OPColor.inkDim.opacity(0.8))
+                            .multilineTextAlignment(.center)
+                        if let info = device?.networkInfo {
+                            Text(L10n.format("droid.appnet.unsupportedNow", info))
+                                .font(OPFont.number(11))
+                                .foregroundStyle(OPColor.inkDim)
+                                .padding(.top, 2)
+                        }
+                    } else {
+                        Text(L10n.string("droid.appnet.empty"))
+                            .font(OPFont.body(12))
+                            .foregroundStyle(OPColor.inkDim)
+                        Text(L10n.string("droid.appnet.emptyHint"))
+                            .font(OPFont.number(10))
+                            .foregroundStyle(OPColor.inkDim.opacity(0.8))
+                            .multilineTextAlignment(.center)
+                    }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .padding(OPSpace.lg)

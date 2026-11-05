@@ -518,6 +518,26 @@ enum AdbClient {
         return uid
     }
 
+    /// 이 기기가 **UID별 트래픽을 보고할 수 없는 상태**인지 — `dumpsys netstats detail` 원문만 보고 판단.
+    ///
+    /// ## 왜 필요한가 (2026-11-05 실측)
+    /// LineageOS 21 `herolte`(S7)는 netd 가 BPF map 을 pin 하지 못한다:
+    /// ```
+    /// IfaceIndexNameMap: NULL(map is not pinned to /sys/fs/bpf/netd_shared/…: No such file or directory)
+    /// Exception occurred while dumping: java.lang.NullPointerException …
+    /// ```
+    /// 그래서 `UID stats:` 에는 op 카운트만 있고 **바이트는 전부 0 인 uid 1건**뿐이었다
+    /// (`/proc/net/xt_qtaguid/stats` 도 헤더 1줄 · 0바이트 → 대체 경로도 없음).
+    /// 같은 명령이 정상인 S22 는 uid **283건**에 실제 바이트가 들어 있다.
+    ///
+    /// 이 상태에서 "아직 트래픽 없음" 이라고 말하면 **거짓말**이다 — 인터페이스 합계(그래프)는
+    /// 정상인데 앱별 통계만 없는 경우이므로, 화면이 그 사실을 말해 줘야 한다.
+    static func netStatsUnsupported(_ text: String) -> Bool {
+        if text.contains("map is not pinned") { return true }          // BPF map 미핀 → UID 회계 불가
+        if text.contains("Exception occurred while dumping") { return true }
+        return !text.contains("uid=")                                   // UID 구획 자체가 없음
+    }
+
     /// `pm list packages -U` — `package:com.foo uid:10277` → [10277: "com.foo"]
     /// 동일 uid에 복수 패키지(shared uid)가 있으면 첫 패키지를 유지.
     static func parsePackageUids(_ text: String) -> [Int: String] {
