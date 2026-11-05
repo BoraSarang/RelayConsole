@@ -1,6 +1,6 @@
 # PLAN_app_manage_relayconsole.md — 앱 설치·삭제 + 아이콘 (A/B/C)
 
-> 생성일: 2026-10-24 | 상태: **PR #123 — A·B·C + 배터리 표시(1.25.0) 머지, 실기기 확인 대기** | 앱: Relay Console
+> 생성일: 2026-10-24 | 상태: **PR #123 머지(`fbd2fd5`) — A·B·C + 배터리 표시(1.25.0), 실기기 확인 대기** | 앱: Relay Console
 > 목표 버전: A **1.22.0** → B **1.23.0** → C **1.24.0** | 최소 OS: macOS 26.0
 > 선행: `PLAN_app_hub_relayconsole.md` (목록·런치·강제종료·삭제 — 설치/백업은 OUT 이었음)
 
