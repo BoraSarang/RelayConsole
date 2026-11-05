@@ -5,6 +5,12 @@
 
 ## 완료 (2026-11-05)
 
+- [x] **T-2026-11-05-5 [P3] 앱 재시작 시 선택한 기기가 다른 기기로 바뀜** (1.25.0+ · PR #136 머지 `aabfb10` · **`MANUAL_VERIFY` §37 112~113 ✅** · bd `RelayConsole-h8k` closed)
+  - 증상: S7 을 선택해 두고 앱을 재시작하면 S22/A90 이 선택됨. `relay.selectedSerial` 도 덮어써져 다음 재시작도 틀림
+  - 원인: `ingest` 의 `selectedSerial == nil || inventory.device(serial:) == nil` 이 **"아직 리포트 전"과 "없는 기기"를 구분하지 않음** → 시작 직후 빈 인벤토리에서 저장값이 즉시 폐기
+  - 수정: `DeviceInventory.SelectionStep`(`visible`/`wait`/`adopt`) · `ConsoleStore.selectionGrace` **60초** · `select()` 는 대기 타이머 해제 (D14)
+  - 검증 [HARD]: `swift test` **878/0**(+9) · `./scripts/build-macos.sh debug` 1.25.0 · 실측 S7 유지 · 없는 serial 은 t=60s까지 유지 후 t=75s에 S22 로 전환 — `MANUAL_VERIFY` §37
+
 - [x] **T-2026-11-05-4 [P2] S7 배터리 '만충 mAh' 공백 + 배터리 요약 그리드 소실/크래시** (1.25.0+ · PR #134 머지 `8e3b50c` · **`MANUAL_VERIFY` §33 102~104 ✅** · bd `RelayConsole-x30` closed)
   - 증상: S7 카드에 `건강 92%` 만 표시(만충 용량 없음) · 재실행 후 6칸 요약이 통째로 사라지고 같은 경로에서 앱이 `EXC_BAD_ACCESS` 로 죽음
   - 원인 ①: `applyBattery` 화이트리스트에 `batteryFullCapNomMAh`/`batteryKernelHealth`/`batterySysCycle` 누락 → 파싱값이 매 틱 버려짐. 기존 가드 표본에 sysfs 줄이 없어 못 잡음

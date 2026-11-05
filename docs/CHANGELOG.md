@@ -7,9 +7,13 @@
 
 ---
 
-## Unreleased (PR #125 머지 · `dd60a71` · 버전 미정)
+## Unreleased (PR #136 머지 · `aabfb10` · 버전 미정)
 
 ### Fixed
+- **fix(macos)**: **앱을 재시작하면 선택한 기기가 다른 기기로 바뀌던 문제** — 시작 직후 인벤토리가 비어 있는데 저장된 선택(S7)이 있다는 이유로 첫 온라인 기기(S22/A90)로 덮어썼고, 그 값이 UserDefaults 에 다시 저장됐다 (2026-11-05 실측)
+  - `DeviceInventory.SelectionStep`(`visible`/`wait`/`adopt`)으로 **"아직 안 옴"과 "없어짐"을 구분**한다. 목록에 있으면 유지, 아직 리포트 전이면 기다리고, **60초** 동안 끝내 안 나타나면 그때 첫 온라인 기기를 따른다
+  - `ConsoleStore.select()` 는 대기 타이머를 해제한다 — 사용자가 직접 고른 선택은 기다리지 않는다
+  - 실측: S7 선택 후 재시작 → `relay.selectedSerial` 유지 · 팝오버 헤더 SM-G930S · 없는 serial(`9.9.9.9:5555`)은 t=60s까지 유지, t=75s에 S22 로 전환
 - **fix(macos)**: **S7 배터리 카드에 `만충 …mAh` 가 안 뜨던 문제** — `bb66f49` 이 파서·merge 에만 sysfs 대체 필드를 추가하고 `DeviceSnapshot.applyBattery` 화이트리스트에는 넣지 않아, 매 틱 파싱값이 그 자리에서 버려졌다 (2026-11-05 실측)
   - `batteryFullCapNomMAh` · `batteryKernelHealth` · `batterySysCycle` 3필드를 복사에 추가
   - 기존 가드는 표본에 `rlysysfs_*` 줄이 없어 누락을 못 잡았다 → 표본에 실제 S7 4줄을 넣어 회귀 시 실패하게 했다
