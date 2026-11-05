@@ -3,16 +3,14 @@
 > **육안 검증 대기는 `docs/MANUAL_VERIFY.md` 한 곳에 모았다** (2026-09-28) —
 > 여러 세션에 흩어져 있어 "남은 게 뭐였지" 를 한 번에 볼 수 없었다.
 
-## 진행 중 (2026-11-05)
+## 완료 (2026-11-05)
 
-- [ ] **T-2026-11-05-2 [P2] 앱 네트워크 — "보고하지 않음" 과 "아직 없음" 구분** (1.25.0+ · 코드/테스트/빌드 완료 → **실기기 확인 대기** · bd `RelayConsole-8u4`)
+- [x] **T-2026-11-05-2 [P2] 앱 네트워크 — "보고하지 않음" 과 "아직 없음" 구분** (1.25.0+ · PR #130 머지 `dfb0151` · **`MANUAL_VERIFY` §35 108~109 ✅** · bd `RelayConsole-8u4` closed)
   - 증상: S7(LineageOS 21)에서 NETWORK 카드는 `↑48.1 ↓72.3 KB/s` 그래프가 정상인데 '앱 네트워크' 창은 **"아직 트래픽 없음"**
   - 원인: ROM — netd 가 BPF map 을 pin 하지 못해 `dumpsys netstats detail` 에 UID별 바이트가 없다(`/proc/net/xt_qtaguid/stats` 도 0바이트). 정상 S22 는 uid 283건
   - 수정: `AdbClient.netStatsUnsupported`(덤프 원문 판정) → `DeviceSnapshot.appNetUnsupported` → 창이 **"이 기기는 앱별 트래픽을 보고하지 않습니다"** + `지금 인터페이스 합계` 표시. 미지원 기기에서는 0바이트 행을 이력에 넣지 않는다
   - 검증 [HARD]: `swift test` **869/0**(+1) · `./scripts/build-macos.sh debug` 완료 · L10n **924/924** — 실기기는 `MANUAL_VERIFY` §35
   - 한계: 이 ROM 에서 앱별 수치를 얻는 경로는 없다(root/BPF 부재) — 숨기지 않고 말한다
-
-## 완료 (2026-11-05)
 
 - [x] **T-2026-11-05-1 [P2] LineageOS(S7) scrcpy 오디오 · Exynos GPU 폴백** (1.25.0+ · PR #125 머지 `dd60a71` · 검증 PR #127 · **`MANUAL_VERIFY` §34 105~107 ✅** · bd `RelayConsole-50u` closed)
   - 증상: S7(LineageOS 21 `herolte`)에서 미러를 누르면 창이 뜨지 않음 · GPU 카드 사용률 공백
