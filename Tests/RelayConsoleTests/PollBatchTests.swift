@@ -70,6 +70,8 @@ struct PollBatchTests {
         #expect(busy.contains("||"))
         let clk = PollBatch.Cmd.gpuClk.shell
         #expect(clk.contains("/sys/class/kgsl/kgsl-3d0/gpuclk"))
+        // gpuclk 는 root 0600 → world-readable clock_mhz 로 먼저 폴백한다 (2026-11-05 S22/A90)
+        #expect(clk.contains("/sys/class/kgsl/kgsl-3d0/clock_mhz"))
         #expect(clk.contains("/sys/class/misc/mali0/device/clock"))
         // gpubusy(kgsl 전용)는 그대로 둔다 — busy 폴백이 이미 사용률을 커버한다
         #expect(PollBatch.Cmd.gpuGpubusy.shell == "cat /sys/class/kgsl/kgsl-3d0/gpubusy")

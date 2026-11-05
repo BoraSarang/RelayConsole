@@ -96,8 +96,10 @@ enum PollBatch {
             // adb 호출 수는 늘지 않는다(같은 셸에서 `||` 로 이어 붙임).
             case .gpuBusy: return "cat /sys/class/kgsl/kgsl-3d0/gpu_busy_percentage 2>/dev/null || cat /sys/class/misc/mali0/device/norm_utilization 2>/dev/null"
             case .gpuGpubusy: return "cat /sys/class/kgsl/kgsl-3d0/gpubusy"
-            // kgsl `gpuclk`=Hz, mali `clock`=MHz — parseGpuClkMHz 가 둘 다 처리한다
-            case .gpuClk: return "cat /sys/class/kgsl/kgsl-3d0/gpuclk 2>/dev/null || cat /sys/class/misc/mali0/device/clock 2>/dev/null"
+            // kgsl `gpuclk`=Hz 는 root 전용(0600)이라 일반 셸에서 Permission denied 다 (2026-11-05 S22/A90 실측).
+            // 같은 디렉터리의 `clock_mhz` 는 world-readable(0444) 이고 이미 MHz — 그쪽으로 먼저 폴백한다.
+            // mali `clock`=MHz. parseGpuClkMHz 가 Hz/MHz 를 모두 처리한다.
+            case .gpuClk: return "cat /sys/class/kgsl/kgsl-3d0/gpuclk 2>/dev/null || cat /sys/class/kgsl/kgsl-3d0/clock_mhz 2>/dev/null || cat /sys/class/misc/mali0/device/clock 2>/dev/null"
             case .sensors:
                 return "dumpsys sensorservice | grep -E 'Total [0-9]+ h/w sensors|active-count|\\) type 0x|active connections|Sensor Device|Sensor List'"
             case .diskstats: return "cat /proc/diskstats"
