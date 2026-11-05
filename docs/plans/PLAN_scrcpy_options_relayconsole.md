@@ -60,6 +60,7 @@ hw   : INFO: Interop: videotoolbox  INFO: Video decoding: videotoolbox
 > **2026-11-05 갱신** — 오디오는 `--audio-codec=aac` 고정으로 바뀌었다(DECISIONS D10).
 > LineageOS `herolte`(S7)에 opus 인코더가 없어 오디오 초기화 실패가 **영상까지** 죽였다.
 > 3택 UI(그대로/끄기/기기에서도 재생)는 여전히 미구현이며, `customOpts` 로 `--no-audio` 를 줄 수 있다.
+> 머지: **PR #125**(`dd60a71`, 2026-11-05) — 실기기 확인은 `MANUAL_VERIFY` §34.
 
 ### B급 — 실사용 이득
 | 옵션 | 이유 | 제안 기본 |
