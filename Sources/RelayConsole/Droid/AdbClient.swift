@@ -52,6 +52,26 @@ enum AdbClient {
             switch key {
             case "level":
                 snap.batteryLevel = Int(value)
+            case "health":
+                // AOSP 숫자 enum (1 unknown · 2 good · 3 overheat · 4 dead · 5 over voltage · 6 failure · 7 cold).
+                // sysfs 원문 라벨이 뒤에서 오면 그쪽이 우선한다(아래 rlysysfs_health).
+                if snap.batteryKernelHealth == nil, let e = Int(value) {
+                    snap.batteryKernelHealth = Self.healthEnumLabel(e)
+                }
+            case "rlysysfs_health":
+                let t = value.trimmingCharacters(in: .whitespaces)
+                if !t.isEmpty { snap.batteryKernelHealth = t }
+            case "rlysysfs_fg_fullcapnom":
+                // 삼성 Exynos fuelgauge 의 학습된 만충 용량(mAh). LineageOS 에서 BSOH 대체 표시에 쓴다.
+                if let v = Int(value), v > 0 { snap.batteryFullCapNomMAh = v }
+            case "rlysysfs_fg_asoc":
+                // 삼성 프레임워크 mSavedBatteryAsoc 이 없을 때의 대체 잔량(%)
+                if let v = Int(value), (0...100).contains(v) {
+                    snap.batteryAsocPct = snap.batteryAsocPct ?? v
+                }
+            case "rlysysfs_fg_cycle":
+                // 0·-1 은 "미보고" — 사이클 수로 표시하지 않는다
+                if let v = Int(value), v > 0 { snap.batterySysCycle = v }
             case "temperature":
                 // 0.1°C 단위
                 if let raw = Double(value) { snap.batteryTempC = raw / 10.0 }
@@ -93,8 +113,20 @@ enum AdbClient {
         return snap
     }
 
-    // MARK: - Thermal
+    /// AOSP `health` enum → 원문 라벨. sysfs `health` 노드가 없는 기기에서만 쓰인다.
+    static func healthEnumLabel(_ value: Int) -> String? {
+        switch value {
+        case 2: return "Good"
+        case 3: return "Overheat"
+        case 4: return "Dead"
+        case 5: return "Over voltage"
+        case 6: return "Failure"
+        case 7: return "Cold"
+        default: return nil
+        }
+    }
 
+    // MARK: - Thermal
     struct ThermalSample: Equatable, Sendable {
         var status: Int?
         var apTempC: Double?

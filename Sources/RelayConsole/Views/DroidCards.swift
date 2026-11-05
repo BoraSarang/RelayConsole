@@ -373,7 +373,7 @@ enum DroidCards {
         let cells: [(String, String)] = [
             (L10n.string("droid.battery.health"), healthValue(d)),
             (L10n.string("droid.battery.voltage"), d?.voltageMV.map { String(format: "%.2fV", Double($0) / 1000) } ?? L10n.na),
-            (L10n.string("droid.battery.cycles"), d?.cycleEstimate.map(String.init) ?? L10n.na),
+            (L10n.string("droid.battery.cycles"), cyclesValue(d)),
             (L10n.string("droid.battery.temp"), d?.batteryTempC.map { String(format: "%.1f°C", $0) } ?? L10n.na),
             (L10n.string("droid.battery.current"), d?.batteryCurrentMA.map { String(format: "%.2fA", $0 / 1000) } ?? L10n.na),
             (L10n.string("droid.battery.type"), d?.batteryTechnology ?? L10n.na)
@@ -807,13 +807,40 @@ enum DroidCards {
     }
 
     /// 건강 요약 — "BSOH · ASOC" 순 (예: "91 · 93"). 둘 다 %이며 순서 고정.
-    /// 하나만 있으면 그것만, 둘 다 없으면 미측정. 순서 약속은 호출부가 아닌 여기서 고정.
+    /// 하나만 있으면 그것만, 둘 다 없으면 **대체 표시**(sysfs 만충 용량 → 커널 health → 미지원).
+    ///
+    /// 삼성 One UI 프레임워크 필드(`mSavedBatteryBsoh`/`mSavedBatteryAsoc`)가 없는 기기
+    /// (LineageOS/AOSP 커스텀 ROM)에서는 이 값들이 통째로 비어 "—" 만 남았다.
+    /// 그래서 배터리 폴링에 sysfs(`fg_fullcapnom`/`fg_asoc`/`health`)를 덧붙이고,
+    /// 여기서 **무엇을 근거로 표시했는지**까지 구분한다([표시②]).
     static func healthValue(_ device: DeviceSnapshot?) -> String {
-        var parts: [String] = []
-        if let b = device?.batteryHealthPct { parts.append("\(b)") }
-        if let a = device?.batteryAsocPct { parts.append("\(a)") }
-        guard !parts.isEmpty else { return L10n.na }
-        return parts.joined(separator: " · ") + "%"
+        let bsoh = device?.batteryHealthPct
+        let asoc = device?.batteryAsocPct
+
+        if let b = bsoh {
+            var parts = ["\(b)"]
+            if let a = asoc { parts.append("\(a)") }
+            return parts.joined(separator: " · ") + "%"
+        }
+        if let cap = device?.batteryFullCapNomMAh {
+            // %d 는 Locale 천단위 구분(1,401)이 붙어 좁은 셀에서 잘린다 → 문자열로 넘긴다
+            let base = L10n.format("droid.battery.health.fullcap", String(cap))
+            guard let a = asoc else { return base }
+            return base + " · \(a)%"
+        }
+        if let a = asoc { return "\(a)%" }
+        if let h = device?.batteryKernelHealth, !h.isEmpty {
+            let ok = h.caseInsensitiveCompare("Good") == .orderedSame
+            return L10n.string(ok ? "droid.battery.health.state.good" : "droid.battery.health.state.problem")
+        }
+        return L10n.string("droid.battery.health.unsupported")
+    }
+
+    /// 사이클 — 삼성 `mSavedBatteryUsage` 추정 → sysfs `fg_cycle` → **미보고**(0·-1 은 값이 아니다)
+    static func cyclesValue(_ device: DeviceSnapshot?) -> String {
+        if let c = device?.cycleEstimate { return String(c) }
+        if let c = device?.batterySysCycle { return String(c) }
+        return L10n.string("droid.battery.cycles.unsupported")
     }
 
     static func batteryValue(_ device: DeviceSnapshot?) -> String {

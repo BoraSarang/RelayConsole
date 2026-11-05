@@ -7,6 +7,23 @@
 
 ---
 
+## 1.25.0 — 2026-11-05
+
+### Fixed
+- **fix(macos)**: **LineageOS/AOSP 기기에서 배터리 건강·사이클이 "—" 로만 남던 문제** — 삼성 One UI 전용 `dumpsys` 필드가 없는 기기를 sysfs 로 대체 (2026-11-03 Galaxy S7 `herolte` 실측)
+  - 배경: `mSavedBatteryBsoh`/`mSavedBatteryAsoc`/`mSavedBatteryUsage` 는 삼성 프레임워크 값이라, LineageOS 21 에서는 세 필드가 통째로 비어 건강·사이클 셀이 미측정으로 굳었다
+  - 배터리 폴링 1회에 `fg_fullcapnom`·`fg_asoc`·`fg_cycle`·`health` 를 덧붙인다 — 기존 마커 프로토콜 그대로라 **adb 호출 수는 늘지 않고** `cat` 4회만 추가된다
+  - 건강 셀 우선순위: `mSavedBatteryBsoh`(삼성) → `fg_fullcapnom`(만충 mAh) → 커널 `health` 라벨 → **미지원**(`—` 대신 무엇이 없는지 말한다)
+  - 사이클 셀 우선순위: `mSavedBatteryUsage` 추정 → `fg_cycle` → **미보고** (`0`·`-1` 은 값이 아니라 "드라이버가 안 센다"로 판정)
+  - AOSP 숫자 enum `health`(2=Good · 3=Overheat · 4=Dead …)는 sysfs 원문 라벨이 있으면 라벨이 우선한다
+  - L10n 5키 추가(en·ko 1:1): `droid.battery.health.fullcap` · `.state.good` · `.state.problem` · `.unsupported` · `droid.battery.cycles.unsupported`
+  - 검증: `swift test` **866/0**(+8) · `./scripts/build-macos.sh debug` 완료 — 실기기 확인은 `MANUAL_VERIFY` §33
+
+### Changed
+- **fix(macos)**: 만충 용량은 `%d` 대신 문자열(`%@`)로 포맷 — Locale 천단위 구분(`1,401`)이 좁은 셀에서 잘리지 않는다
+
+---
+
 ## 1.24.0 — 2026-11-05
 
 ### Added

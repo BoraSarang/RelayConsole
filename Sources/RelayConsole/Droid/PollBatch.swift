@@ -61,7 +61,16 @@ enum PollBatch {
         /// - 파이프/리다이렉션은 기기측 `sh`가 처리한다.
         var shell: String {
             switch self {
-            case .battery: return "dumpsys battery"
+            case .battery:
+                // `dumpsys battery`(코어 + 삼성 One UI 확장 필드) 뒤에 **sysfs 대체값**을 붙인다.
+                // LineageOS/AOSP 기기에는 `mSavedBatteryBsoh`/`mSavedBatteryAsoc`/`mSavedBatteryUsage`
+                // 가 없어 건강·사이클 셀이 계속 "—" 로 남았다(2026-11-03 S7 실측).
+                // 삼성 3.18 커널도 이 노드들은 `battery` 디렉터리에 그대로 노출한다.
+                let nodes = ["fg_fullcapnom", "fg_asoc", "fg_cycle", "health"]
+                let fallback = nodes.map { name in
+                    "; echo \"rlysysfs_\(name): $(cat /sys/class/power_supply/battery/\(name) 2>/dev/null)\""
+                }.joined()
+                return "dumpsys battery" + fallback
             case .thermal: return "dumpsys thermalservice"
             case .loadavg: return "cat /proc/loadavg"
             case .procStat: return "cat /proc/stat"

@@ -39,7 +39,7 @@ swift test
 ## 2. 번들ID / 앱 ID
 - macOS bundleIdentifier: `com.borasarang.relayconsole` **확정** (AGENTS 플랫폼 규칙 `com.borasarang.{AppName}`)
 - 앱 표시명: Relay Console / 메뉴바: RELAY
-- **버전**: `1.24.0` (앱 관리 C — 다기기 순차 설치·기기별 결과표, 시스템 앱 `--user 0` 비활성/복원 + 핵심 구성요소 하드 블록, 설치 중 폴링 완화. B 1.23.0 분할·번들(.apks/.xapk/.apkm)·OBB·APK 백업·아이콘, A 1.22.0 APK 설치·삭제 교정)
+- **버전**: `1.25.0` (LineageOS/AOSP 배터리 건강·사이클 sysfs 대체 표시. 1.24.0 앱 관리 C — 다기기 순차 설치·시스템 앱 `--user 0` 비활성/복원·하드 블록·폴링 완화, B 1.23.0 분할·번들(.apks/.xapk/.apkm)·OBB·APK 백업·아이콘, A 1.22.0 APK 설치·삭제 교정)
 - UserDefaults·설정 키 접두어: `relay.*` (구 `outpost.*` 계승 금지 — 코드 신규)
 
 ## 3. 성능 예산 Override

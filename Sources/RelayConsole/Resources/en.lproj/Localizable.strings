@@ -222,7 +222,12 @@
 "droid.appnet.titleShort" = "App network";
 "droid.battery.current" = "Current";
 "droid.battery.cycles" = "Cycles";
+"droid.battery.cycles.unsupported" = "Not reported";
 "droid.battery.health" = "Health";
+"droid.battery.health.fullcap" = "Full %@ mAh";
+"droid.battery.health.state.good" = "Good";
+"droid.battery.health.state.problem" = "Check";
+"droid.battery.health.unsupported" = "Unsupported";
 "droid.battery.temp" = "Temp";
 "droid.battery.type" = "Type";
 "droid.battery.voltage" = "Voltage";

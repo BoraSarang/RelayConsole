@@ -3,6 +3,15 @@
 > **육안 검증 대기는 `docs/MANUAL_VERIFY.md` 한 곳에 모았다** (2026-09-28) —
 > 여러 세션에 흩어져 있어 "남은 게 뭐였지" 를 한 번에 볼 수 없었다.
 
+## 진행 중 (2026-11-03)
+
+- [ ] **T-2026-11-03-1 [P2] LineageOS 배터리 건강·사이클 대체 표시** (1.25.0 · 코드/테스트/빌드 완료 → **실기기 육안 대기**)
+  - 증상: S7 을 LineageOS 21 로 바꾼 뒤 건강·사이클이 `—`. 원인은 삼성 One UI 전용 `dumpsys` 필드만 읽던 것
+  - 수정: 배터리 폴링에 `rlysysfs_*` 프로브 4종 추가(`fg_fullcapnom`·`fg_asoc`·`fg_cycle`·`health`) → `parseBatteryEx` 파싱 → `DeviceSnapshot` merge → 카드 폴백 표시
+  - 표시 규칙: `—` 금지 · 건강은 **BSOH → 만충 mAh → 커널 health → 미지원**, 사이클은 **추정 → sysfs → 미보고**(0 은 값이 아님)
+  - 검증 [HARD]: `swift test` **866/0**(+8) · `./scripts/build-macos.sh debug` 완료 · 앱 재시작 · L10n **921/921** — 실기기는 `MANUAL_VERIFY` §33
+  - 남은 확인: 방전 실측으로 `fg_fullcapnom` 단위(mAh) 확정 — 1401 은 설계 3000mAh 대비 47% 라 **값 자체가 노후**일 수도 있다
+
 ## 진행 중 (2026-10-24)
 
 > `docs/plans/PLAN_app_manage_relayconsole.md` — A/B/C. 사용자 결정: 범위 전부 · 삭제 기본 **완전 삭제** · 번들 전부 · 아이콘 **기본 ON(B 포함)**

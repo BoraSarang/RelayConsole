@@ -222,7 +222,12 @@
 "droid.appnet.titleShort" = "앱 네트워크";
 "droid.battery.current" = "전류";
 "droid.battery.cycles" = "사이클";
+"droid.battery.cycles.unsupported" = "미보고";
 "droid.battery.health" = "건강";
+"droid.battery.health.fullcap" = "만충 %@mAh";
+"droid.battery.health.state.good" = "정상";
+"droid.battery.health.state.problem" = "점검";
+"droid.battery.health.unsupported" = "미지원";
 "droid.battery.temp" = "온도";
 "droid.battery.type" = "유형";
 "droid.battery.voltage" = "전압";
