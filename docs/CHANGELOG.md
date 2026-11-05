@@ -7,9 +7,18 @@
 
 ---
 
-## Unreleased (PR #136 머지 · `aabfb10` · 버전 미정)
+## Unreleased (PR #136·#139 머지 · `9da9114` · 버전 미정)
 
 ### Fixed
+- **fix(macos)**: **APK 설치가 "1/1대 기기 준비 중…"에 멈춘 것처럼 보이던 문제** — 실기기 설치가 24초 걸리는 동안 배너 문구가 **설치 전 단계에 고정**돼 있었고, 그 구간 로그가 없어 사용자가 두 번 취소했다(2026-11-05 23:04·23:05 `app.install` `cancelled` 2건 → 23:26 `adb install -r` 24초 성공)
+  - `runSingleInstall` 이 `adb install` 직전에 **"설치 중…"** 으로 전환하고, `applyInstallResult` 가 끝나기 전 **"설치 확인 중…"**(패키지 변경·버전 확인)을 표시한다. 종전에는 번들 설치만 `install`/`obb` 단계가 있었다
+  - 단일 APK 는 진행률이 없어 0 에 머물렀다 → 배너가 **불확정(움직이는) 진행 막대**를 보여 주고, 끝나면 1 로 채운다. 성공 직후 `installProgress` 가 0 인 채 사라지던 것도 함께 정리
+  - 단계 로그(`DebugLogger` › `AppHub`): **설치 시작(파일·바이트·대상·옵션) → SHA-256(ms) → 설치 전 패키지 확인(개수·ms) → adb install(exit/timeout·ms) → 설치 확인(변경 수·버전·ms) → 성공/실패(ms)**, 취소 시 경과 시간. 로그 창(`relayconsole://logs`)에서 설치 중에도 흐른다
+  - 아이콘 pull(동시 2개)이 같은 ADB 대역폭을 나눠 쓰지 않도록 **설치 중 새 pull 을 멈추고** 끝나면 재개(`AppIconStore.suspend/resume`)
+  - 1대일 때 문구를 `1/1대 기기 준비 중…` → **`기기 준비 중…`** 으로 정리(`apphub.install.phase.device.one`, 한/영)
+  - 검증: `swift test` **879/879**(신규 1 — 단계 문구 키) · `./scripts/build-macos.sh debug` BUILD SUCCEEDED · **사용자 확인(2026-11-06)** — 설치가 정상 동작하고 로그 창에서 단계 로그가 보인다 · `MANUAL_VERIFY` §38 114~115 ✅
+  - **PR #139 → squash merge `9da9114`**
+
 - **fix(macos)**: **앱을 재시작하면 선택한 기기가 다른 기기로 바뀌던 문제** — 시작 직후 인벤토리가 비어 있는데 저장된 선택(S7)이 있다는 이유로 첫 온라인 기기(S22/A90)로 덮어썼고, 그 값이 UserDefaults 에 다시 저장됐다 (2026-11-05 실측)
   - `DeviceInventory.SelectionStep`(`visible`/`wait`/`adopt`)으로 **"아직 안 옴"과 "없어짐"을 구분**한다. 목록에 있으면 유지, 아직 리포트 전이면 기다리고, **60초** 동안 끝내 안 나타나면 그때 첫 온라인 기기를 따른다
   - `ConsoleStore.select()` 는 대기 타이머를 해제한다 — 사용자가 직접 고른 선택은 기다리지 않는다
