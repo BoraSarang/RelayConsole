@@ -484,6 +484,39 @@ struct DeviceInventory: Equatable {
         }?.serial
     }
 
+    /// 저장된 선택을 **언제 포기할지** 판단 — "아직 안 옴"과 "없어짐"을 구분한다.
+    ///
+    /// ## 왜 필요한가 (2026-11-05 실측)
+    /// 앱을 켜면 인벤토리가 비어 있는데 `selectedSerial` 은 저장값(S7)이 들어 있다.
+    /// 종전 코드는 `inventory.device(serial:) == nil` 하나로 "없는 기기"라 판단해
+    /// **첫 온라인 기기(S22/A90)로 덮어썼고**, 그 값이 UserDefaults 에 다시 저장됐다.
+    /// 사용자는 기기를 고를 때마다 재시작 후 선택이 바뀌는 것을 보게 된다.
+    ///
+    /// 그래서 **저장된 선택은 먼저 기다린다**(`.wait`). 기기가 실제로 나타나면 `.visible`,
+    /// `grace`(60초) 동안 끝내 안 나타나면 그때 `.adopt` 로 첫 온라인 기기를 따른다.
+    enum SelectionStep: Equatable {
+        /// 인벤토리에 있음 — 대기 타이머 해제
+        case visible
+        /// 아직 안 옴 — 선택을 유지하고 기다린다
+        case wait
+        /// 이 serial 로 전환
+        case adopt(String)
+    }
+
+    static func selectionStep(
+        selected: String?,
+        devices: [DeviceSnapshot],
+        unseenFor: TimeInterval?,
+        grace: TimeInterval
+    ) -> SelectionStep {
+        guard let first = devices.first(where: { $0.isOnline }) ?? devices.first else { return .wait }
+        guard let selected, !selected.isEmpty else { return .adopt(first.serial) }
+        if devices.contains(where: { $0.serial == selected }) { return .visible }
+        // 저장된 선택이 아직 리포트 전 — 곧 올 기기일 수 있으므로 덮어쓰지 않는다
+        guard let unseenFor else { return .wait }
+        return unseenFor >= grace ? .adopt(first.serial) : .wait
+    }
+
     // MARK: - 화면용 묶음 (2026-10-17 · T-2026-10-17-10)
 
     /// 표시용 기기 묶음 — **한 폰이 여러 전송으로 잡혀도 한 줄**로 보여준다

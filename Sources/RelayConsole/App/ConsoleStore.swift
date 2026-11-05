@@ -26,6 +26,11 @@ final class ConsoleStore: ObservableObject {
     @Published var appleLastError: String?
 
     private let selectedKey = "relay.selectedSerial"
+    /// 저장된 선택이 인벤토리에 **아직 안 보이는** 상태가 시작된 시각.
+    /// nil = 정상(보이거나 대기 아님). 60초 넘게 안 오면 그때 첫 온라인 기기를 따른다.
+    private var selectionUnseenSince: Date?
+    /// 저장된 선택이 안 보일 때 기다리는 시간 — 모니터가 기기를 잡는 데는 보통 수 초면 충분하다
+    private static let selectionGrace: TimeInterval = 60
     private let selectedAppleKey = "relay.selectedAppleUdid"
     private var started = false
     private var lastNetPushAt: [String: Date] = [:]
@@ -426,13 +431,22 @@ final class ConsoleStore: ObservableObject {
             selectedSerial = next
             UserDefaults.standard.set(next, forKey: selectedKey)
         }
-        guard snapshot.isOnline else { return }
-
-        // 선택 기기 없으면 첫 온라인 자동 선택
-        if selectedSerial == nil || inventory.device(serial: selectedSerial ?? "") == nil {
-            selectedSerial = snapshot.serial
-            UserDefaults.standard.set(snapshot.serial, forKey: selectedKey)
+        // 저장된 선택은 **곧 올 기기일 수 있다** — 첫 온라인 기기로 덮어쓰지 않는다 (2026-11-05)
+        switch DeviceInventory.selectionStep(
+            selected: selectedSerial,
+            devices: inventory.devices,
+            unseenFor: selectionUnseenSince.map { Date().timeIntervalSince($0) },
+            grace: Self.selectionGrace
+        ) {
+        case .visible:
+            selectionUnseenSince = nil
+        case .wait:
+            if selectionUnseenSince == nil { selectionUnseenSince = Date() }
+        case .adopt(let serial):
+            selectionUnseenSince = nil
+            if serial != selectedSerial { select(serial) }
         }
+        guard snapshot.isOnline else { return }
 
         var m = metricsHistory[snapshot.serial] ?? DroidMetrics()
         let temp = snapshot.deviceTempC ?? snapshot.batteryTempC
@@ -517,6 +531,8 @@ final class ConsoleStore: ObservableObject {
         guard !serial.isEmpty else { return }
         selectedSerial = serial
         UserDefaults.standard.set(serial, forKey: selectedKey)
+        // 사용자가 직접 고른 선택은 "기다리던 중" 이 아니다 — 대기 타이머를 끈다
+        selectionUnseenSince = nil
     }
 
     /// 선택 기기 스냅샷 — nil이면 첫 장치 폴백

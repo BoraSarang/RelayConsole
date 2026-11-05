@@ -294,3 +294,93 @@ struct DeviceSelectionFollowTests {
         #expect(DeviceInventory.followSerial(devices: devices, selected: nil) == nil)
     }
 }
+
+/// 저장된 선택의 유예(grac) 판정 — "아직 안 옴" 과 "없어짐" 을 구분한다.
+/// 2026-11-05 실측: 앱 시작 직후 인벤토리가 비어 있는데 저장값(S7)이 있다는 이유로
+/// 첫 온라인 기기(S22)로 덮어써, 재시작마다 선택이 바뀌었다.
+struct DeviceSelectionGraceTests {
+
+    private func dev(_ serial: String, online: Bool) -> DeviceSnapshot {
+        var d = DeviceSnapshot()
+        d.serial = serial
+        d.isOnline = online
+        return d
+    }
+
+    /// 저장된 선택이 아직 리포트 전 → 기다린다 (덮어쓰지 않음)
+    @Test func waitsForStoredSelection() {
+        let devices = [dev("S22", online: true), dev("A90", online: true)]
+        #expect(DeviceInventory.selectionStep(
+            selected: "192.168.190.216:5555",
+            devices: devices,
+            unseenFor: 3,
+            grace: 60
+        ) == .wait)
+    }
+
+    /// 기다리던 기기가 나타나면 선택 유지
+    @Test func storedSelectionBecomesVisible() {
+        let devices = [dev("S7", online: true), dev("S22", online: true)]
+        #expect(DeviceInventory.selectionStep(
+            selected: "S7", devices: devices, unseenFor: 3, grace: 60
+        ) == .visible)
+    }
+
+    /// 유예 시간을 넘기면 첫 온라인 기기로 전환
+    @Test func adoptsFirstOnlineAfterGrace() {
+        let devices = [dev("A90", online: false), dev("S22", online: true)]
+        #expect(DeviceInventory.selectionStep(
+            selected: "S7", devices: devices, unseenFor: 61, grace: 60
+        ) == .adopt("S22"))
+    }
+
+    /// 경계값(정확히 60초)은 전환 — 유예가 끝난 것으로 본다
+    @Test func adoptsAtGraceBoundary() {
+        let devices = [dev("S22", online: true)]
+        #expect(DeviceInventory.selectionStep(
+            selected: "S7", devices: devices, unseenFor: 60, grace: 60
+        ) == .adopt("S22"))
+    }
+
+    /// 선택이 없으면 즉시 첫 온라인 기기
+    @Test func adoptsWhenNothingSelected() {
+        let devices = [dev("A90", online: false), dev("S22", online: true)]
+        #expect(DeviceInventory.selectionStep(
+            selected: nil, devices: devices, unseenFor: nil, grace: 60
+        ) == .adopt("S22"))
+    }
+
+    /// 빈 문자열은 선택 없음과 동일하게 취급
+    @Test func adoptsWhenSelectionEmpty() {
+        let devices = [dev("S22", online: true)]
+        #expect(DeviceInventory.selectionStep(
+            selected: "", devices: devices, unseenFor: nil, grace: 60
+        ) == .adopt("S22"))
+    }
+
+    /// 기기가 하나도 없으면 전환할 대상이 없다 — 기다린다
+    @Test func waitsWhenNoDevices() {
+        #expect(DeviceInventory.selectionStep(
+            selected: nil, devices: [], unseenFor: nil, grace: 60
+        ) == .wait)
+        #expect(DeviceInventory.selectionStep(
+            selected: "S7", devices: [], unseenFor: 600, grace: 60
+        ) == .wait)
+    }
+
+    /// 전부 오프라인이면 온라인 대신 첫 항목으로 전환 (선택이 사라지지 않게)
+    @Test func adoptsFirstEntryWhenNoneOnline() {
+        let devices = [dev("A90", online: false), dev("S22", online: false)]
+        #expect(DeviceInventory.selectionStep(
+            selected: "S7", devices: devices, unseenFor: 120, grace: 60
+        ) == .adopt("A90"))
+    }
+
+    /// 선택된 serial 이 오프라인으로 인벤토리에 있으면 유지 — "연결 끊김" 을 보여줘야 한다
+    @Test func keepsOfflineButKnownSelection() {
+        let devices = [dev("S7", online: false), dev("S22", online: true)]
+        #expect(DeviceInventory.selectionStep(
+            selected: "S7", devices: devices, unseenFor: 600, grace: 60
+        ) == .visible)
+    }
+}
