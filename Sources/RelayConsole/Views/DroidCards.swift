@@ -378,31 +378,42 @@ enum DroidCards {
             (L10n.string("droid.battery.current"), d?.batteryCurrentMA.map { String(format: "%.2fA", $0 / 1000) } ?? L10n.na),
             (L10n.string("droid.battery.type"), d?.batteryTechnology ?? L10n.na)
         ]
-        return LazyVGrid(columns: [
-            GridItem(.flexible(), spacing: 6),
-            GridItem(.flexible(), spacing: 6),
-            GridItem(.flexible(), spacing: 6)
-        ], spacing: 6) {
-            ForEach(Array(cells.enumerated()), id: \.offset) { _, cell in
-                VStack(spacing: 2) {
-                    Text(cell.0)
-                        .font(OPFont.number(8))
-                        .foregroundStyle(OPColor.inkDim.opacity(0.75))
-                        .lineLimit(1)
-                    Text(cell.1)
-                        .font(OPFont.number(12))
-                        .foregroundStyle(OPColor.ink)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 6)
-                .background(
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(Color.white.opacity(0.03))
-                )
+        // LazyVGrid 는 이 카드(고정 높이 VStack) 안에서 첫 레이아웃 때 높이 0 으로 측정되면
+        // 다시 재지 않아 **셀이 통째로 사라진다**(2026-11-05 실측: 앱 첫 실행 후 배터리 그리드 공백,
+        // 오래 켜 둔 인스턴스에서는 보임). 6칸짜리라 게으를 이유도 없다 — 일반 스택으로 그린다.
+        return VStack(spacing: 6) {
+            HStack(spacing: 6) {
+                cell(cells[0])
+                cell(cells[1])
+                cell(cells[2])
+            }
+            HStack(spacing: 6) {
+                cell(cells[3])
+                cell(cells[4])
+                cell(cells[5])
             }
         }
+    }
+
+    /// 배터리 요약 셀 — 제목(작게) + 값(숫자)
+    private static func cell(_ pair: (String, String)) -> some View {
+        VStack(spacing: 2) {
+            Text(pair.0)
+                .font(OPFont.number(8))
+                .foregroundStyle(OPColor.inkDim.opacity(0.75))
+                .lineLimit(1)
+            Text(pair.1)
+                .font(OPFont.number(12))
+                .foregroundStyle(OPColor.ink)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 6)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color.white.opacity(0.03))
+        )
     }
 
     // MARK: - Network
