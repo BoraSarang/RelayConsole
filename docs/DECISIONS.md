@@ -192,8 +192,12 @@
 
 ## D11 — GPU 사용률은 **kgsl → mali0 폴백** (2026-11-05)
 
-- **결정**: `gpuBusy`·`gpuClk` 폴링을 `cat kgsl… 2>/dev/null || cat mali0… 2>/dev/null` 한 셸로 보낸다.
-  Qualcomm 은 종전 그대로 `kgsl` 이 먼저 읽히고, Exynos 는 `norm_utilization`(0~100)으로 폴백한다.
+- **결정**: GPU 폴링을 한 셸의 폴백 사슬로 보낸다.
+  - 사용률: `kgsl/gpu_busy_percentage` → `mali0/norm_utilization`
+  - 클럭: `kgsl/gpuclk` → `kgsl/clock_mhz` → `mali0/clock`
+  Qualcomm 은 `kgsl` 이 먼저 읽히고, Exynos 는 mali0 으로 폴백한다. adb 호출 수는 늘지 않는다.
+- **추가 실측 (2026-11-05)**: `kgsl/gpuclk` 는 **root 0600** 이라 셸에서 `Permission denied` 다(Android 12 A90 · 16 S22 모두).
+  같은 폴더의 `clock_mhz` 는 0444 이고 이미 MHz(S22 285 · A90 257) → 클럭은 이 경로로 표시된다.
 - **사유**: GPU 카드가 `kgsl` 경로만 읽어 Exynos(Mali-T88x) 기기에서 사용률이 영구 공백이었다.
   sysfs 읽기 한 줄을 `||` 로 이어 붙이므로 **adb 호출 수는 늘지 않는다**(PollBatch 마커 계약 유지).
 - **하지 않는 것**: `mali0/device/clock` 이 **화면 꺼짐 상태에서 0** 을 보고하는 것을 억지로 표시하지 않는다(0 은 값이 아니라 "보고 없음"). 화면이 켜지면 260 MHz 를 정상 보고한다. Adreno/Mali 외(GPU 없음)는 종전처럼 공백으로 둔다.

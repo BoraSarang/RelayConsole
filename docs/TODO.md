@@ -3,6 +3,14 @@
 > **육안 검증 대기는 `docs/MANUAL_VERIFY.md` 한 곳에 모았다** (2026-09-28) —
 > 여러 세션에 흩어져 있어 "남은 게 뭐였지" 를 한 번에 볼 수 없었다.
 
+## 진행 중 (2026-11-05)
+
+- [ ] **T-2026-11-05-3 [P3] Qualcomm GPU 클럭 공백 — `clock_mhz` 폴백** (1.25.0+ · 코드/테스트/빌드 완료 → PR 대기 · bd `RelayConsole-3sr`)
+  - 증상: S22/A90 대시보드 GPU 카드의 **클럭이 비어 있음** (사용률은 정상)
+  - 원인: `kgsl/kgsl-3d0/gpuclk` 가 **root 0600** → 셸에서 `Permission denied`. 수정 전 명령도 동일(회귀 아님). 같은 폴더의 `clock_mhz` 는 0444 이고 이미 MHz
+  - 수정: 폴백 사슬 `kgsl/gpuclk` → `kgsl/clock_mhz` → `mali0/clock` (한 셸 · **adb 호출 수 그대로**)
+  - 검증 [HARD]: `swift test` **869/0** · `./scripts/build-macos.sh debug` 1.25.0 · 실측 S22 **285** · A90 **257** · S7 **260** MHz — `MANUAL_VERIFY` §36 #110/#111 ✅
+
 ## 완료 (2026-11-05)
 
 - [x] **T-2026-11-05-2 [P2] 앱 네트워크 — "보고하지 않음" 과 "아직 없음" 구분** (1.25.0+ · PR #130 머지 `dfb0151` · **`MANUAL_VERIFY` §35 108~109 ✅** · bd `RelayConsole-8u4` closed)

@@ -16,6 +16,9 @@
 - **fix(macos)**: **Exynos(Mali) 기기에서 GPU 사용률이 비어 있던 문제** — GPU 폴링이 Qualcomm `kgsl` 경로만 읽었다. kgsl 이 없으면 `/sys/class/misc/mali0/device/norm_utilization` 으로 폴백한다(같은 셸에서 `||` — adb 호출 수 그대로)
   - 실측 S7(Mali-T88x): idle `0` → 화면 스와이프 중 `17·24·21`. 클럭은 화면이 켜져 있을 때 `260` MHz 로 표시된다(꺼져 있으면 `0` = 보고 없음)
 - **test(macos)**: `ScrcpyMirrorArgsTests` 오디오 고정 · `PollBatchTests` GPU 폴백 · `parseGpuBusyPercent` mali 단일 숫자 픽스처 추가
+- **fix(macos)**: **Qualcomm(Adreno) 기기에서 GPU 클럭이 비어 있던 문제** — `kgsl/kgsl-3d0/gpuclk` 는 root 전용(0600)이라 셸에서 `Permission denied` 다. 같은 폴더의 `clock_mhz`(0444, 이미 MHz)로 폴백한다 (2026-11-05 실측)
+  - 폴백 사슬: `kgsl/gpuclk` → `kgsl/clock_mhz` → `mali0/clock` (모두 한 셸 · adb 호출 수 그대로)
+  - 실측: S22 **285 MHz** · A90 **257 MHz** · S7 **260 MHz**
 - **fix(macos)**: **앱 네트워크 창이 "아직 트래픽 없음" 이라고 거짓말하던 문제** — NETWORK 카드는 실시간 `↑48.1 ↓72.3 KB/s` 를 그리는데(인터페이스 합계), 앱별 창은 비어 있었다 (2026-11-05 S7 실측)
   - 원인은 앱이 아니라 **ROM**: LineageOS 21 `herolte` 의 netd 가 BPF map 을 pin 하지 못해(`map is not pinned` + 덤프 NPE) `dumpsys netstats detail` 에 UID별 바이트가 없다. `/proc/net/xt_qtaguid/stats` 도 0바이트라 대체 경로도 없다
   - 이제 `AdbClient.netStatsUnsupported` 가 덤프 원문으로 **"기기가 보고하지 않음"** 과 **"아직 수집 중"** 을 구분한다. 미지원 기기에서는 0바이트 행을 이력에 넣지 않고, 창은 `이 기기는 앱별 트래픽을 보고하지 않습니다` + `지금 인터페이스 합계 ↑… ↓…` 를 표시한다
