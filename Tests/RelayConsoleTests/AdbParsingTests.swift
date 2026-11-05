@@ -47,9 +47,10 @@ struct AdbParsingTests {
 
     /// 건강 셀 — BSOH·ASOC 순, 하나만 있으면 그것만
     @Test func healthValueShowsBsohThenAsoc() {
-        #expect(DroidCards.healthValue(nil) == L10n.na)
+        // 삼성 확장 필드도 sysfs 대체값도 없으면 "—" 가 아니라 **미지원**이라고 말한다([표시②])
+        #expect(DroidCards.healthValue(nil) == L10n.string("droid.battery.health.unsupported"))
         var d = DeviceSnapshot()
-        #expect(DroidCards.healthValue(d) == L10n.na)
+        #expect(DroidCards.healthValue(d) == L10n.string("droid.battery.health.unsupported"))
         d.batteryHealthPct = 91
         #expect(DroidCards.healthValue(d) == "91%")
         d.batteryAsocPct = 93
@@ -57,6 +58,87 @@ struct AdbParsingTests {
         var e = DeviceSnapshot()
         e.batteryAsocPct = 87
         #expect(DroidCards.healthValue(e) == "87%")
+    }
+
+    /// LineageOS/S7 실측 — `mSavedBatteryBsoh` 가 없어 sysfs `fg_fullcapnom` 으로 대체 표시
+    @Test func healthValueFallsBackToSysfsFullCap() {
+        var d = DeviceSnapshot()
+        d.batteryFullCapNomMAh = 1401
+        d.batteryAsocPct = 94
+        let text = DroidCards.healthValue(d)
+        #expect(text.contains("1401"))
+        #expect(text.contains("94"))
+        #expect(!text.contains(L10n.string("droid.battery.health.unsupported")))
+    }
+
+    /// sysfs 도 없고 커널 health 만 있으면 그 라벨로 판정한다
+    @Test func healthValueFallsBackToKernelHealth() {
+        var d = DeviceSnapshot()
+        d.batteryKernelHealth = "Good"
+        #expect(DroidCards.healthValue(d) == L10n.string("droid.battery.health.state.good"))
+        d.batteryKernelHealth = "Overheat"
+        #expect(DroidCards.healthValue(d) == L10n.string("droid.battery.health.state.problem"))
+    }
+
+    /// 사이클 — 삼성 추정 → sysfs → 미보고(0 은 값이 아니다)
+    @Test func cyclesValueFallsBackToSysfs() {
+        #expect(DroidCards.cyclesValue(nil) == L10n.string("droid.battery.cycles.unsupported"))
+        var d = DeviceSnapshot()
+        d.batterySysCycle = 421
+        #expect(DroidCards.cyclesValue(d) == "421")
+        d.cycleEstimate = 807
+        #expect(DroidCards.cyclesValue(d) == "807")
+        var e = DeviceSnapshot()
+        e.cycleEstimate = nil
+        e.batterySysCycle = nil
+        #expect(DroidCards.cyclesValue(e) == L10n.string("droid.battery.cycles.unsupported"))
+    }
+
+    /// 배터리 폴링에 sysfs 대체 프로브가 포함되는지 — 마커 배치에 그대로 들어가는 단일 문자열
+    @Test func batteryPollIncludesSysfsProbe() {
+        let shell = PollBatch.Cmd.battery.shell
+        #expect(shell.hasPrefix("dumpsys battery"))
+        for name in ["fg_fullcapnom", "fg_asoc", "fg_cycle", "health"] {
+            #expect(shell.contains("rlysysfs_\(name):"))
+            #expect(shell.contains("/sys/class/power_supply/battery/\(name)"))
+        }
+    }
+
+    @Test func parseBatterySysfsFallback() {
+        let sample = """
+        level: 100
+        health: 2
+        rlysysfs_fg_fullcapnom: 1401
+        rlysysfs_fg_asoc: 94
+        rlysysfs_fg_cycle: 0
+        rlysysfs_health: Good
+        """
+        let snap = AdbClient.parseBattery(sample)
+        #expect(snap.batteryFullCapNomMAh == 1401)
+        #expect(snap.batteryAsocPct == 94)
+        #expect(snap.batterySysCycle == nil)          // 0 = 미보고
+        #expect(snap.batteryKernelHealth == "Good")   // sysfs 라벨이 숫자 enum 을 덮는다
+    }
+
+    /// 삼성 프레임워크 필드가 있으면 sysfs 보다 우선한다(S22/A90 회귀 방지)
+    @Test func parseBatterySamsungFieldsWinOverSysfs() {
+        let sample = """
+        mSavedBatteryAsoc: [93]
+        mSavedBatteryUsage: [80739]
+        rlysysfs_fg_asoc: 88
+        rlysysfs_fg_cycle: 421
+        """
+        let snap = AdbClient.parseBattery(sample)
+        #expect(snap.batteryAsocPct == 93)
+        #expect(snap.cycleEstimate == 807)
+        #expect(snap.batterySysCycle == 421)
+    }
+
+    @Test func healthEnumLabels() {
+        #expect(AdbClient.healthEnumLabel(2) == "Good")
+        #expect(AdbClient.healthEnumLabel(4) == "Dead")
+        #expect(AdbClient.healthEnumLabel(1) == nil)
+        #expect(AdbClient.healthEnumLabel(99) == nil)
     }
 
     // MARK: - Display

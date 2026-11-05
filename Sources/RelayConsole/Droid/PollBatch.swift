@@ -61,7 +61,16 @@ enum PollBatch {
         /// - 파이프/리다이렉션은 기기측 `sh`가 처리한다.
         var shell: String {
             switch self {
-            case .battery: return "dumpsys battery"
+            case .battery:
+                // `dumpsys battery`(코어 + 삼성 One UI 확장 필드) 뒤에 **sysfs 대체값**을 붙인다.
+                // LineageOS/AOSP 기기에는 `mSavedBatteryBsoh`/`mSavedBatteryAsoc`/`mSavedBatteryUsage`
+                // 가 없어 건강·사이클 셀이 계속 "—" 로 남았다(2026-11-03 S7 실측).
+                // 삼성 3.18 커널도 이 노드들은 `battery` 디렉터리에 그대로 노출한다.
+                let nodes = ["fg_fullcapnom", "fg_asoc", "fg_cycle", "health"]
+                let fallback = nodes.map { name in
+                    "; echo \"rlysysfs_\(name): $(cat /sys/class/power_supply/battery/\(name) 2>/dev/null)\""
+                }.joined()
+                return "dumpsys battery" + fallback
             case .thermal: return "dumpsys thermalservice"
             case .loadavg: return "cat /proc/loadavg"
             case .procStat: return "cat /proc/stat"
@@ -108,7 +117,11 @@ enum PollBatch {
     static let sixty: [Cmd] = [.activity]
 
     /// 틱 카운터 → 이번 틱 명령. 5초 간격 틱 기준 slow=15초, sixty=60초
-    static func cmds(tickCount: Int) -> [Cmd] {
+    /// - Parameter reduced: 설치·백업처럼 **adb 를 오래 붙잡는 작업** 중에는 true.
+    ///   느린 지표(slow·sixty)를 건너뛰고 fast 만 돈다 — 설치 중 adb 큐 경합을 줄인다.
+    ///   빠진 값은 `DroidMetrics.merge` 가 이전 값을 유지하므로 화면이 0 으로 깜빡이지 않는다.
+    static func cmds(tickCount: Int, reduced: Bool = false) -> [Cmd] {
+        guard !reduced else { return fast }
         var out = tickCount % 3 == 1 ? slow : fast
         if tickCount % 12 == 1 { out += sixty }
         return out

@@ -3,6 +3,38 @@
 > **육안 검증 대기는 `docs/MANUAL_VERIFY.md` 한 곳에 모았다** (2026-09-28) —
 > 여러 세션에 흩어져 있어 "남은 게 뭐였지" 를 한 번에 볼 수 없었다.
 
+## 진행 중 (2026-11-03)
+
+- [ ] **T-2026-11-03-1 [P2] LineageOS 배터리 건강·사이클 대체 표시** (1.25.0 · PR #123 · 코드/테스트/빌드 완료 → **실기기 육안 대기**)
+  - 증상: S7 을 LineageOS 21 로 바꾼 뒤 건강·사이클이 `—`. 원인은 삼성 One UI 전용 `dumpsys` 필드만 읽던 것
+  - 수정: 배터리 폴링에 `rlysysfs_*` 프로브 4종 추가(`fg_fullcapnom`·`fg_asoc`·`fg_cycle`·`health`) → `parseBatteryEx` 파싱 → `DeviceSnapshot` merge → 카드 폴백 표시
+  - 표시 규칙: `—` 금지 · 건강은 **BSOH → 만충 mAh → 커널 health → 미지원**, 사이클은 **추정 → sysfs → 미보고**(0 은 값이 아님)
+  - 검증 [HARD]: `swift test` **866/0**(+8) · `./scripts/build-macos.sh debug` 완료 · 앱 재시작 · L10n **921/921** — 실기기는 `MANUAL_VERIFY` §33
+  - 남은 확인: 방전 실측으로 `fg_fullcapnom` 단위(mAh) 확정 — 1401 은 설계 3000mAh 대비 47% 라 **값 자체가 노후**일 수도 있다
+
+## 진행 중 (2026-10-24)
+
+> `docs/plans/PLAN_app_manage_relayconsole.md` — A/B/C. 사용자 결정: 범위 전부 · 삭제 기본 **완전 삭제** · 번들 전부 · 아이콘 **기본 ON(B 포함)**
+
+- [ ] **T-2026-10-24-1 [A] 단일 APK 설치 + 삭제 의미 교정** (P1 · 1.22.0 · PR #123 · 코드/테스트/빌드 완료 → **실기기 4시나리오 대기**)
+  - 설치: `NSOpenPanel`/드롭 → 확인 시트(파일·크기·SHA-256·기기·옵션) → `adb install -r` → 검증
+  - 교정: `pm uninstall -k` 기본 → **`pm uninstall`(앱+데이터)** 기본, `-k`는 보조 메뉴
+  - 기반: `AppHubController.run`(타임아웃·stderr 없음) → `ProcessRunner` 교체, 취소 훅 추가
+  - 검증 [HARD]: `swift test` **788/0** · `./scripts/build-macos.sh debug` 완료 · 앱 **1.22.0** 재시작 · L10n **863/863** — 실기기는 `MANUAL_VERIFY` §29
+- [ ] **T-2026-10-24-2 [B] 분할·번들·백업 + 아이콘** (P1 · 1.23.0 · PR #123 · 코드/테스트/빌드 완료 → **실기기 확인 대기**)
+  - ZIP 리더(스트리밍·상한 150,000/512MB/8GB·경로순회 거부, `unzip` 호출 없음) · `.apks`/`.apkm` split 선택(ABI·밀도·언어) · `.xapk` OBB
+  - push(원격 `wc -c` 폴링)→`pm install-multiple` 2단계 진행률/취소 · APK 백업(`pm path`+pull+`meta.json`)
+  - 아이콘: AXML+ARSC 직접 파싱 → 512px PNG 캐시(30일·50MB·동시 2), 실패 시 색+이니셜 타일
+  - 검증 [HARD]: `swift test` **826/0**(+38) · `./scripts/build-macos.sh debug` 완료 · 앱 **1.23.0** 재시작 · L10n **886/886** — 실기기는 `MANUAL_VERIFY` §30
+- [ ] **T-2026-10-24-3 [C] 다기기·시스템 앱 + 아이콘·이름 마무리** (P2 · 1.24.0 · PR #123 · 코드/테스트/빌드 완료 → **실기기 확인 대기**)
+  - 설치 확인 시트 온라인 기기 다중 선택(기본 1대) → **기기별 순차 설치** · 기기별 결과표 · 프로필별 번들 1회 추출
+  - 설치·백업 중 폴링 완화(`PollBatch.cmds(reduced:)` — fast 만, 하트비트·배터리·열 유지)
+  - 시스템 앱 `pm uninstall --user 0` + `cmd package install-existing --user 0` 복원 · 2단계 체크박스
+  - 하드 블록(런처·SystemUI·Settings·PackageInstaller·GMS·Play 등 정확+접두사) — UI 잠금 + 컨트롤러 이중 방어
+  - **아이콘·이름 후속 수정 6건** — `versionCode` 접미사 오염 · ZIP 상한 256→**150,000** · ARSC UTF-8 **이중 길이** · 문자열 풀 상한 100,000→**2,000,000**(삼성 230,461) · ARSC **sparse/offset16** 표 · **벡터·적응형 아이콘 렌더**(`AndroidDrawable.swift`)
+  - **앱 이름** — `android:label` → `resources.arsc` 해석 + 참조 체인(F-Droid 2단계). 아이콘과 **같은 APK pull 1회**. 행은 이름 1줄 + 패키지명 2줄, 검색은 이름도 매칭
+  - 검증 [HARD]: `swift test` **859/0**(+33 — `AppSystemTests` 14 · 아이콘/이름 17 · 파서 회귀 2) · `./scripts/build-macos.sh debug` 완료 · 앱 **1.24.0** 재시작 · L10n **916/916** — 실기기는 `MANUAL_VERIFY` §31·§32
+
 ## 완료 (2026-10-19)
 
 - [x] **T-2026-10-19-1 S22 무선 재연결 — mDNS 중복 인스턴스 `" (2)"` · 포트 보존** (P1 · bd `RelayConsole-rym` · PR #121)

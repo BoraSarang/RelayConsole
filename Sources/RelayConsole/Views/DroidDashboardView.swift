@@ -97,7 +97,7 @@ struct DroidDashboardView: View {
         }
         .sheet(isPresented: $showAppHub) {
             if let d = device, !d.serial.isEmpty {
-                AppHubSheet(serial: d.serial)
+                AppHubSheet(serial: d.serial, ident: d.identLabel)
             }
         }
         .sheet(isPresented: $showGallery) {

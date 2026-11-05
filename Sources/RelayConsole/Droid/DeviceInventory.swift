@@ -113,6 +113,13 @@ struct DeviceSnapshot: Sendable, Equatable {
     /// `technology` (예: Li-ion) — 미보고 시 nil
     var batteryTechnology: String?
     var batteryHealthPct: Int?
+    /// AOSP/LineageOS 대체값 — sysfs `fg_fullcapnom`(학습된 만충 용량, mAh).
+    /// 삼성 One UI 의 `mSavedBatteryBsoh` 가 없는 기기에서 건강 셀에 이 값을 보여준다.
+    var batteryFullCapNomMAh: Int?
+    /// sysfs `health` 문자열 (Good/Overheat/Dead/…). 숫자 enum 이 아니라 원문 라벨.
+    var batteryKernelHealth: String?
+    /// sysfs `fg_cycle` — 드라이버가 0/-1 만 보고하면 nil(미보고)로 둔다
+    var batterySysCycle: Int?
     var isProtectionMode: Bool?
     var protectionThresholdPct: Int?
     /// settings global low_power (0/1)
@@ -348,6 +355,9 @@ struct DeviceInventory: Equatable {
                 merged.batteryCurrentMA = merged.batteryCurrentMA ?? prev.batteryCurrentMA
                 merged.batteryTechnology = merged.batteryTechnology ?? prev.batteryTechnology
                 merged.batteryHealthPct = merged.batteryHealthPct ?? prev.batteryHealthPct
+                merged.batteryFullCapNomMAh = merged.batteryFullCapNomMAh ?? prev.batteryFullCapNomMAh
+                merged.batteryKernelHealth = merged.batteryKernelHealth ?? prev.batteryKernelHealth
+                merged.batterySysCycle = merged.batterySysCycle ?? prev.batterySysCycle
                 merged.batteryAsocPct = merged.batteryAsocPct ?? prev.batteryAsocPct
                 merged.isProtectionMode = merged.isProtectionMode ?? prev.isProtectionMode
                 merged.protectionThresholdPct = merged.protectionThresholdPct ?? prev.protectionThresholdPct
