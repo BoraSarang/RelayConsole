@@ -3,6 +3,14 @@
 > **육안 검증 대기는 `docs/MANUAL_VERIFY.md` 한 곳에 모았다** (2026-09-28) —
 > 여러 세션에 흩어져 있어 "남은 게 뭐였지" 를 한 번에 볼 수 없었다.
 
+## 완료 (2026-11-06)
+
+- [x] **T-2026-11-06-1 [P2] APK 설치가 "기기 준비 중…"에 멈춘 것처럼 보임 — 단계 표시·로그** (1.25.0+ · PR #139 머지 `9da9114` · **`MANUAL_VERIFY` §38 114~115 ✅** · bd `RelayConsole-tsg` closed)
+  - 증상: APK 하나 설치가 실기기에서 24초 걸리는데 배너가 `1/1대 기기 준비 중…`에 고정. 설치 구간 로그가 없어 사용자가 23:04·23:05 두 번 취소 (`app.install` `cancelled` 2건 → 23:26 성공)
+  - 원인: 단일 APK 경로(`runSingleInstall`)는 `installPhase`를 바꾸지 않았다(번들만 `install`/`obb` 단계) · `adb install`은 진행률을 주지 않아 `installProgress` 0 고정 · `AppHub` 로그는 완료 후 한 줄뿐 · 아이콘 APK pull(동시 2개)이 같은 ADB 대역폭 사용
+  - 수정: **기기 준비 → 설치 중 → 설치 확인** 단계 전환 · 단계별 로그(파일·바이트·SHA-256·패키지 수·adb exit/timeout·검증 변경 수, ms) · 취소 경과 · 진행률이 없을 때 **불확정 진행 막대**(성공 시 1) · 설치 중 아이콘 pull 일시정지(`AppIconStore.suspend/resume`) · 1대 문구 `기기 준비 중…`
+  - 검증 [HARD]: `swift test` **879/879**(신규 1 — 단계 문구 키) · `./scripts/build-macos.sh debug` 1.25.0 · **사용자 확인(2026-11-06)** 설치 정상 + 로그 창에서 단계 로그 확인 — `MANUAL_VERIFY` §38 114~115
+
 ## 완료 (2026-11-05)
 
 - [x] **T-2026-11-05-5 [P3] 앱 재시작 시 선택한 기기가 다른 기기로 바뀜** (1.25.0+ · PR #136 머지 `aabfb10` · **`MANUAL_VERIFY` §37 112~113 ✅** · bd `RelayConsole-h8k` closed)
