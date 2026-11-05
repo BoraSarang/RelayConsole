@@ -91,11 +91,17 @@ enum ProcessRunner {
     }
 
     /// 결과 전체(종료 코드·stderr) 필요할 때
+    ///
+    /// `onStart` 는 프로세스가 실제로 뜬 직후 1회 호출된다 — 호출측이 핸들을 잡아
+    /// **사용자 취소**(`terminate`)를 걸 수 있게 하기 위한 훅이다. 설치처럼 오래 걸리는
+    /// 명령은 데드라인만으로는 "지금 취소"를 표현할 수 없다.
     static func capture(
         _ path: String,
         _ args: [String],
-        timeout: TimeInterval = pollTimeout
-    ) throws -> Output {        let proc = Process()
+        timeout: TimeInterval = pollTimeout,
+        onStart: ((Process) -> Void)? = nil
+    ) throws -> Output {
+        let proc = Process()
         proc.executableURL = URL(fileURLWithPath: path)
         proc.arguments = args
         let out = Pipe()
@@ -108,6 +114,7 @@ enum ProcessRunner {
             // 실행 자체가 실패 (경로 없음·권한) — stderr는 아직 없다
             return Output(stdout: "", stderr: "", exitCode: -1, timedOut: false)
         }
+        onStart?(proc)
 
         // 두 파이프를 **동시에** 읽는다. 순차로 읽으면 먼저 읽는 쪽이 끝날 때까지
         // 다른 쪽이 채워져 교착할 수 있다.

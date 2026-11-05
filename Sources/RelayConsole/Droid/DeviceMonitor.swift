@@ -166,7 +166,10 @@ actor DeviceMonitor {
         let list = serials
         guard !list.isEmpty else { return }
 
-        let cmds = PollBatch.cmds(tickCount: tickCount)
+        // 설치·백업 중에는 느린 지표를 건너뛴다 — adb 를 오래 붙잡는 작업과 큐에서 경합하지 않게.
+        // `resolveDevices()`(adb devices 하트비트)는 위에서 이미 돌았으므로 연결 감지는 유지된다.
+        let busy = await MainActor.run { AppHubController.shared.installing || AppHubController.shared.backingUp != nil }
+        let cmds = PollBatch.cmds(tickCount: tickCount, reduced: busy)
         var collected: [String: [PollBatch.Cmd: String]] = [:]
         await withTaskGroup(of: (String, [PollBatch.Cmd: String]).self) { group in
             for serial in list {

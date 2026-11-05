@@ -108,7 +108,11 @@ enum PollBatch {
     static let sixty: [Cmd] = [.activity]
 
     /// 틱 카운터 → 이번 틱 명령. 5초 간격 틱 기준 slow=15초, sixty=60초
-    static func cmds(tickCount: Int) -> [Cmd] {
+    /// - Parameter reduced: 설치·백업처럼 **adb 를 오래 붙잡는 작업** 중에는 true.
+    ///   느린 지표(slow·sixty)를 건너뛰고 fast 만 돈다 — 설치 중 adb 큐 경합을 줄인다.
+    ///   빠진 값은 `DroidMetrics.merge` 가 이전 값을 유지하므로 화면이 0 으로 깜빡이지 않는다.
+    static func cmds(tickCount: Int, reduced: Bool = false) -> [Cmd] {
+        guard !reduced else { return fast }
         var out = tickCount % 3 == 1 ? slow : fast
         if tickCount % 12 == 1 { out += sixty }
         return out

@@ -7,6 +7,111 @@
 
 ---
 
+## 1.24.0 — 2026-11-05
+
+### Added
+- **feat(macos)**: **다기기 순차 설치** — 설치 확인 시트에서 온라인 기기를 여러 대 체크하면 위에서부터 차례로 설치 (T-2026-10-24-3 · `PLAN_app_manage_relayconsole` C)
+  - 기본 선택은 **시트를 연 기기 하나** — 실수로 여러 대에 설치하지 않는다. `전체 선택`/`선택 해제` 제공
+  - 진행 배너에 `n/m대` 와 현재 기기 단계(`3/5대 기기 준비 중…`)를 표시. 취소는 다음 기기로 넘어가기 전에 멈춘다
+  - 설치가 끝나면 **기기별 결과표**(성공/실패·버전·실패 사유)를 시트 상단에 남긴다. 사용자가 `결과 지우기` 를 누를 때까지 유지
+  - 번들은 기기 ABI·밀도·언어 프로필마다 **한 번만** 풀고 재사용한다(같은 프로필 기기 2대 = 추출 1회)
+- **feat(macos)**: **시스템 앱 비활성화·복원** — `시스템 앱` 토글 시 `설치됨`/`복원 가능` 탭
+  - 비활성화는 `pm uninstall --user 0 <pkg>` — **시스템 파티션의 APK 는 지우지 않는다**. 2단계 확인(체크박스 2개)을 모두 켜야 실행
+  - 복원은 `cmd package install-existing --user 0 <pkg>` — `복원 가능` 탭에 `pm list packages -u -s` − 현재 설치됨 차집합만 보여준다
+  - **하드 블록**: 런처(제조사 변형 포함)·SystemUI·Settings·PackageInstaller·권한 컨트롤러·Phone/Telecom·GMS/GSF·Play 스토어는 UI 에서 잠금 아이콘으로 표시하고 실행 자체를 막는다. 컨트롤러도 한 번 더 거른다
+  - 복원해도 **앱 데이터는 돌아오지 않는다**는 사실을 확인창·탭 안내에 고정 표시
+- **feat(macos)**: **앱 이름 표시** — 행에 `앱 이름`(1줄) + `패키지명`(2줄)을 함께 보여주고, 검색이 **이름도** 매칭한다
+  - `pm list packages` 에는 라벨이 없다 → `AndroidManifest.xml` 의 `android:label` 을 `resources.arsc` 에서 해석한다
+  - 라벨이 `@string/...` **참조**면 체인을 따라간다(실측 F-Droid: `application@label → @string/app_name → @string/fdroid` 2단계)
+  - 아이콘과 **같은 APK pull 1회**에서 이름도 뽑는다. 아이콘 토글 OFF 면 종전대로 패키지명·색 타일만
+- **feat(macos)**: **아이콘 렌더러** — PNG 만 있던 1.23.0 은 실사용 앱 대부분이 색 타일로 폴백했다(실측 12개 중 7개가 XML-only). 벡터·적응형을 직접 그린다
+  - `<adaptive-icon>` 의 `background`/`foreground` 를 108dp 캔버스 기준 **1.5배 그려 가운데 크롭**(보이는 영역 72dp)
+  - `<vector>` — SVG 경로 전체 명령(M/L/H/V/C/S/Q/T/A/Z · 절대/상대 · 암시 L) · fill/stroke · `group` 변환 · `clip-path` · 그라디언트 근사
+  - `<bitmap>` · `<layer-list>` · `<selector>` · `<color>` · 단색 레이어(`colorValue`) · 확장자 없는 난독화 엔트리(네이버 웨일 `res/4jn` = WebP)
+  - 실패하면 종전과 같이 결정적 색 + 이니셜 타일로 폴백
+
+### Fixed
+- **fix(macos)**: **목록 패키지명에 ` versionCode:N` 접미사가 남던 회귀** — 1.23.0 에서 목록 조회에 `--show-versioncode` 를 추가했지만 파서가 접미사를 자르지 않았다. 화면에 `com.foo versionCode:28` 이 그대로 보였고, `pm path`·아이콘 요청·실행·삭제가 모두 잘못된 이름으로 나가 **아이콘이 전부 색 타일로 폴백**했다. `parsePackages` 가 첫 토큰만 취하도록 수정하고 회귀 테스트 2개를 추가
+- **fix(macos)**: **ZIP 엔트리 상한이 APK 기준이 아니었다** — 1.23.0 의 256 은 번들(수십 개)에는 맞지만 APK(수천~수만 개)는 `limitExceeded` 로 열리지 않았다(F-Droid 1,119개). **150,000** 으로 올리고, 실질 방어선은 중앙 디렉터리 16MB 상한임을 주석으로 고정
+- **fix(macos)**: **ARSC UTF-8 문자열 풀의 이중 길이 누락** — UTF-8 풀은 `문자 수` + `바이트 수` 두 길이를 갖는데 하나만 읽어 모든 문자열이 어긋났다. `parseStringPool` 을 고치고 합성 픽스처도 실제 포맷으로 교정
+- **fix(macos)**: **문자열 풀 상한 100,000** — 삼성 시스템 앱 실측 **230,461개**(삼성 메시지). 풀이 통째로 비어 앱 이름·아이콘이 전부 폴백했다. **2,000,000** 으로 올리고 실제 방어선은 파일 크기 검사임을 명시
+- **fix(macos)**: **희소(sparse) · offset16 오프셋 표 미지원** — 구글 포토·Gboard 가 쓰는 `FLAG_SPARSE`(0x01)/`FLAG_OFFSET16`(0x02) 표를 몰라 아이콘 경로가 비었다. 두 인코딩을 지원하고 `entryOffset` 으로 분리. **sparse 에서 `entryCount` 는 쌍의 개수**라 엔트리 인덱스 상한으로 쓰면 안 된다는 점도 반영(포토 아이콘 인덱스 4·7 > 쌍 2·3)
+- **fix(macos)**: **리소스 값 타입이 문자열·참조뿐이었다** — 벡터의 색·치수·불린을 읽을 수 없었다. `ResourceValue`(text/reference/color/integer/float/dimension)로 확장하고 `TYPE_INT_COLOR_ARGB8/RGB8/ARGB4/RGB4` · `TYPE_FLOAT` · `TYPE_DIMENSION`(`complexToFloat`)을 해석
+
+### Changed
+- **perf(macos)**: 설치·백업 중에는 5초 폴링을 **fast 명령만**으로 줄인다(`PollBatch.cmds(reduced:)`). adb 를 오래 붙잡는 설치와 큐에서 경합하지 않게 하되, `adb devices` 하트비트와 배터리·열·loadavg 는 유지한다. 빠진 slow 값은 병합 로직이 이전 값을 유지하므로 화면이 0 으로 깜빡이지 않는다
+- **chore(macos)**: 감사 로그 종류 추가 — `app.system.disable` · `app.system.restore`
+
+### Verify
+- `swift test` **859/0** (신규 17 — `ResourceValueTests` 2 · `ResourceTableOffsetTests` 3 · `IconCandidateTests` 4 · `SVGPathTests` 6 · `AXMLTreeTests` 2 / 1.24.0 누적 `AppSystemTests` 14 + 패키지 파서 회귀 2) · `./scripts/build-macos.sh debug` 완료 · 앱 **1.24.0** · L10n **916/916 en/ko 1:1**
+- 차단 패키지(정확·접두사·일반·대소문자·빈 값) · `--user 0` 인자 · 복원 차집합 정렬 · reduced 폴링(fast-only·기본값 불변)을 테스트로 고정
+- 아이콘 렌더 실측(수동): F-Droid · YouTube · KakaoTalk · Samsung Messages · Gboard(sparse) · Google Photos(sparse) · Naver Whale(무확장 WebP) · Shizuku(`<bitmap>`) · Samsung Camera · 자사 DroidRelay — 10종 모두 정상 렌더(21~390ms)
+- 실기기 번들·백업·아이콘·이름 확인은 `MANUAL_VERIFY` §30~§32
+
+---
+
+## 1.23.0 — 2026-11-05
+
+### Added
+- **feat(macos)**: **분할·번들 설치** — `.apks` · `.xapk` · `.apkm` 을 앱 허브에서 바로 설치 (T-2026-10-24-2 · `PLAN_app_manage_relayconsole` B)
+  - 번들 안에서 **이 기기에 맞는 APK 만** 고른다: base/master + ABI(`getprop ro.product.cpu.abilist`) + 밀도(`wm density`, 같거나 작은 것 중 최대) + 언어(기기 로케일)
+  - `universal.apk` 가 있으면 그것 하나 · `standalones/` 는 splits 가 있으면 제외 · 모르는 설정 토큰은 **포함**(빠뜨려 설치 실패하는 것보다 낫다) · 아무것도 못 고르면 전체 폴백
+  - `.xapk` 은 `manifest.json` 의 목록·OBB(`expansions[].install_path`)를, `.apkm` 은 `info.json` 목록을 우선하고, 없으면 ZIP 안 APK 를 직접 고른다. 이름 대소문자 차이는 고유 파일명일 때 해석
+  - 설치: 로컬 추출 → `/data/local/tmp/relay-install-<id>/` 로 push → `pm install-multiple` → **성공한 뒤에만** OBB 를 `/sdcard/Android/obb/<pkg>/` 로 복사. 원격 임시 폴더는 성공·실패와 무관하게 삭제
+  - 진행: `전송 중 2/4` 단계 표시 + 원격 파일 크기(`wc -c`) 폴링으로 선형 진행률 · 취소는 push/install 양쪽에서 동작
+  - 실패 구분: 형식 미지원 · APK 없음 · 패키지 정보 없음 · 전송 실패 · OBB 실패를 각각 다른 문구로 알린다(부분 성공을 성공으로 뭉개지 않는다)
+- **feat(macos)**: **APK 백업** — 행 메뉴/컨텍스트 메뉴에서 `~/Downloads/RelayConsole/APKs/<pkg>/<version>/` 로 `pm path` 의 모든 APK(split 포함)를 pull
+  - `meta.json`(패키지·versionName·versionCode·시리얼·파일별 SHA-256·저장 시각) 동봉, **앱 데이터는 포함되지 않는다**는 사실을 파일에도 적는다
+  - 같은 버전 재백업은 덮어쓰지 않고 `-2`, `-3` … · 부분 실패는 `N/M 파일만 백업` · 완료 후 `Finder에서 보기`
+- **feat(macos)**: **앱 아이콘** (기본 ON · 토글로 끔)
+  - `pm path` → base APK 1회 pull → **직접 구현한 AXML/ARSC 파서**로 아이콘 엔트리 추출 → ImageIO 로 512px PNG(256pt@2x) 캐시
+    - `AndroidManifest.xml`(바이너리 XML)에서 패키지·versionName·versionCode·`android:icon`/`roundIcon` 리소스 ID
+    - `resources.arsc` 에서 리소스 ID → 밀도별 파일 경로 후보 → 기기 밀도에 가장 가까운 이미지
+  - 캐시: `~/Library/Application Support/RelayConsole/icons/<pkg>-<versionCode>-512.png` · **30일 · 50MB** 상한(오래된 것부터 삭제) · 동시 2개 · 보이는 행만
+  - 실패·미지원이면 **결정적 색 + 이니셜 타일**로 폴백(빈칸 금지), 사유는 디버그 로그에만
+
+### Changed
+- **chore(macos)**: 설치 버튼·시트 제목을 `APK 설치` → **`설치`/`앱 설치`** 로 — 이제 APK 만 받지 않는다. 파일 선택·드롭도 4종 확장자 허용
+- **chore(macos)**: 앱 목록 조회가 `--show-versioncode` 를 함께 읽어 versionCode 맵을 유지(구형 `pm` 은 플래그 없이 재시도). 아이콘 캐시 키·백업 메타가 이 값을 쓴다
+- **chore(macos)**: 외부 프로세스는 여전히 **adb · scrcpy 뿐** — ZIP 해제·AXML/ARSC 파싱·아이콘 변환을 모두 앱 안에서 처리(`unzip`/`aapt` 호출 없음)
+
+### Fixed
+- **fix(macos)**: **AXML 속성 오프셋** — `attributeStart` 는 `attrExt` 구조 기준(노드 헤더 16바이트 뒤)인데 노드 시작 기준으로 계산해 아이콘 리소스 ID 를 놓치고 있었다. 합성 AXML 테스트가 잡았고, 실제 APK 아이콘 추출의 전제가 된다
+
+### Verify
+- `swift test` **826/0** (신규 `AppBundleTests`·`AndroidResourceTests`·`AndroidBinaryXMLTests` 38) · `./scripts/build-macos.sh debug` 완료 · 앱 **1.23.0** · L10n **886/886 en/ko 1:1**
+- ZIP stored/deflate·경로순회 거부·분할 선택(ABI/밀도/언어/universal/standalones)·XAPK/APKM 추출·OBB 목적지·합성 AXML 파싱을 테스트로 고정
+- 실기기 번들·백업·아이콘 확인은 `MANUAL_VERIFY` §30
+
+---
+
+## 1.22.0 — 2026-11-05
+
+### Added
+- **feat(macos)**: **APK 설치** — 앱 허브에서 파일 선택 또는 드롭 → 확인 시트 → `adb install -r` (T-2026-10-24-1 · `PLAN_app_manage_relayconsole` A)
+  - 확인 시트: 파일명·경로·크기(`AdbClient.formatBytes`)·**SHA-256 앞 12자**(1MB 스트리밍)·대상 기기 라벨 · 옵션 `-r`(기본 ON)·`-g`·`-d`·`-t`(모두 기본 OFF)
+  - 진행: 경과초 타이머 + **취소**(`ProcessRunner.capture` 에 `onStart` 훅 추가 → `terminate()`)
+  - 검증: 설치 전/후 `pm list packages -3 --show-versioncode` diff → 1건이면 `dumpsys package` versionName 표시.
+    동일 버전 재설치처럼 **확인 불가**면 "버전 확인 불가"로 정직하게 표시한다
+  - 실패: `Failure [CODE]` → 코드별 한국어 행동 지침 + 원문 코드 병기(14종 매핑 · 미지 코드는 일반 문구)
+  - 감사: `IssueLog` `app.install` (파일명·SHA-256·serial·결과) · `E-MAC-ADB-0007`
+- **feat(macos)**: **삭제 2옵션 + 의미 교정** — 종전 `pm uninstall -k` 고정은 "삭제"인데 데이터가 남아 저장공간이 회수되지 않았다
+  - 기본: **앱 + 데이터 완전 삭제**(`pm uninstall`) · 보조: **앱만 삭제**(`-k`, 데이터 유지)
+  - 확인창에 "되돌릴 수 없음" 고정 문구, 행 `⋯` 메뉴·확인창 양쪽에서 선택 · `E-MAC-ADB-0008`
+  - `AppHubController` 의 raw `Process`(stderr 폐기·무한 대기)를 `ProcessRunner`(stderr 보존·60초 데드라인)로 교체
+
+### Fixed
+- **fix(macos)**: `AppHubSheet` 새로고침/액션 실패가 **원인 없는 일반 문구**로만 표시되던 문제 — stderr 마지막 줄·실패 코드를 함께 보여준다
+
+### Docs
+- `PLAN_app_manage_relayconsole` (A/B/C) · `DECISIONS` D6(읽기 전용 경계 · 삭제 기본값) · `MANUAL_VERIFY` §29 · `PLAN_app_hub` OUT 갱신
+
+### Verify
+- `swift test` **788/0** (신규 `AppInstallTests` 20) · `./scripts/build-macos.sh debug` 완료 · 앱 **1.22.0** · L10n **863/863 en/ko 1:1**
+- 실기기 4시나리오(정상·재설치·서명 불일치·취소)는 `MANUAL_VERIFY` §29 에서 확인
+
+---
+
 ## 1.21.0 — 2026-10-18
 
 ### Added

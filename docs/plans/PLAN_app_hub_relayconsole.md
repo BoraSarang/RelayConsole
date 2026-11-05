@@ -16,11 +16,12 @@ B 카테고리(툴박스) 일부 흡수 — 전체 파일 탐색기·56종 툴�
 | 목록 | `pm list packages -3` → 패키지 검색·정렬 |
 | 런치 | `monkey -p pkg -c android.intent.category.LAUNCHER 1` |
 | 강제종료 | `am force-stop pkg` |
-| 삭제 | `pm uninstall -k pkg` — 확인 대화상자 필수 |
+| 삭제 | `pm uninstall -k pkg` — 확인 대화상자 필수 (**2026-10-24 교체**: 기본은 `pm uninstall` 완전 삭제 · `-k`는 보조 — `PLAN_app_manage_relayconsole`) |
 | 진입 | 대시보드 헤더 **Apps** 버튼 → 시트 |
 
 ### OUT
-- APK 추출·설치(adb install) · 권한·저장소 정리 상세
+- ~~APK 추출·설치(adb install)~~ → **2026-10-24 범위 변경**: `PLAN_app_manage_relayconsole.md` (A/B/C)로 이관
+- 권한·저장소 정리 상세
 - 시스템 앱 전체 목록 (기본 3rd-party만, 토글로 system 포함 가능)
 - 다중 선택 일괄 처리
 
@@ -31,7 +32,7 @@ B 카테고리(툴박스) 일부 흡수 — 전체 파일 탐색기·56종 툴�
 | IN | OUT |
 |----|-----|
 | `AppHubLogic` 순수 (파싱·검증·검색·정렬) | APK 백업 |
-| `AppHubController` IO (list/launch/stop/uninstall) | 설치(adb install) |
+| `AppHubController` IO (list/launch/stop/uninstall) | 설치(adb install) → **`PLAN_app_manage_relayconsole` A/B/C** |
 | `AppHubSheet` 시트 (검색·행 액션) | 사이드바 전용 탭 |
 | 대시보드 헤더 Apps 버튼 | Apple |
 
