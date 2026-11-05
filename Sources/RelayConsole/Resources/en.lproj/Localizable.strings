@@ -114,6 +114,7 @@
 "apphub.install.opt.test" = "Allow test APK (-t)";
 "apphub.install.options" = "Install options";
 "apphub.install.phase.install" = "Installing…";
+"apphub.install.phase.verify" = "Verifying install…";
 "apphub.install.phase.obb" = "Copying OBB…";
 "apphub.install.phase.preparing" = "Preparing…";
 "apphub.install.phase.push" = "Transferring %d/%d";
@@ -146,6 +147,7 @@
 "apphub.install.many.progress" = "%d/%d";
 "apphub.install.many.result" = "%d of %d installed";
 "apphub.install.many.running" = "%@ — installing on %d devices…";
+"apphub.install.phase.device.one" = "Preparing device…";
 "apphub.install.phase.device" = "Preparing device %d/%d…";
 "apphub.install.results" = "Install results";
 "apphub.install.results.clear" = "Clear results";

@@ -198,6 +198,24 @@ struct AppInstallTests {
         #expect(AppHubLogic.changedPackages(before: before, after: before) == [])
     }
 
+    // MARK: - 설치 단계 문구
+
+    /// 설치 배너가 읽는 단계 키 — 하나라도 빠지면 화면에 `apphub.install.phase.*` 원문이 뜬다.
+    /// (2026-11-05: 단일 APK 가 "기기 준비 중…"에 멈춰 보이던 문제로 단계를 나눴다)
+    @Test func installPhaseKeysResolve() {
+        let keys = [
+            "apphub.install.phase.preparing",
+            "apphub.install.phase.device.one",
+            "apphub.install.phase.install",
+            "apphub.install.phase.verify"
+        ]
+        for key in keys {
+            let text = L10n.string(key)
+            #expect(!text.isEmpty, "단계 문구가 비었다: \(key)")
+            #expect(text != key, "번역 키가 그대로 노출된다: \(key)")
+        }
+    }
+
     // MARK: - 파일 메타데이터
 
     @Test func digestMatchesKnownSha256() throws {

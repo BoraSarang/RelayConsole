@@ -283,6 +283,13 @@ struct AppHubSheet: View {
                         .progressViewStyle(.linear)
                         .controlSize(.small)
                         .frame(maxWidth: 260)
+                } else {
+                    // 단일 APK 는 adb 가 진행률을 주지 않는다 — 숫자 대신 **진행 중** 막대를 보여
+                    // "멈춘 화면"으로 보이지 않게 한다 (2026-11-05)
+                    ProgressView()
+                        .progressViewStyle(.linear)
+                        .controlSize(.small)
+                        .frame(maxWidth: 260)
                 }
             }
             Spacer(minLength: 8)

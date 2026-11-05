@@ -114,6 +114,7 @@
 "apphub.install.opt.test" = "테스트 APK 허용 (-t)";
 "apphub.install.options" = "설치 옵션";
 "apphub.install.phase.install" = "설치 중…";
+"apphub.install.phase.verify" = "설치 확인 중…";
 "apphub.install.phase.obb" = "OBB 복사 중…";
 "apphub.install.phase.preparing" = "준비 중…";
 "apphub.install.phase.push" = "전송 중 %d/%d";
@@ -146,6 +147,7 @@
 "apphub.install.many.progress" = "%d/%d대";
 "apphub.install.many.result" = "%d/%d대 설치 완료";
 "apphub.install.many.running" = "%@ — %d대 설치 중…";
+"apphub.install.phase.device.one" = "기기 준비 중…";
 "apphub.install.phase.device" = "%d/%d대 기기 준비 중…";
 "apphub.install.results" = "설치 결과";
 "apphub.install.results.clear" = "결과 지우기";
