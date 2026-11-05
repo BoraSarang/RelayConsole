@@ -196,6 +196,5 @@
   Qualcomm 은 종전 그대로 `kgsl` 이 먼저 읽히고, Exynos 는 `norm_utilization`(0~100)으로 폴백한다.
 - **사유**: GPU 카드가 `kgsl` 경로만 읽어 Exynos(Mali-T88x) 기기에서 사용률이 영구 공백이었다.
   sysfs 읽기 한 줄을 `||` 로 이어 붙이므로 **adb 호출 수는 늘지 않는다**(PollBatch 마커 계약 유지).
-- **하지 않는 것**: `devfreq`·`mali0/clock` 의 0 값을 억지로 표시하지 않는다(이 커널은 클럭을 0 으로
-  보고한다). Adreno/Mali 외(GPU 없음)는 종전처럼 공백으로 둔다.
+- **하지 않는 것**: `mali0/device/clock` 이 **화면 꺼짐 상태에서 0** 을 보고하는 것을 억지로 표시하지 않는다(0 은 값이 아니라 "보고 없음"). 화면이 켜지면 260 MHz 를 정상 보고한다. Adreno/Mali 외(GPU 없음)는 종전처럼 공백으로 둔다.
 - **다시 보지 않는다**: "GPU 는 Qualcomm 만 지원하면 된다" — 사용자의 관제 대상에 Exynos 기기가 있다.

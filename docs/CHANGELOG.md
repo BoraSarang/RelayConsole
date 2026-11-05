@@ -14,7 +14,7 @@
   - 실행 인자에 `--audio-codec=aac` 를 고정한다 — AAC 는 AOSP 공통 인코더라 어느 기기에서도 열린다. 사용자 `customOpts` 는 뒤에 붙으므로 `--no-audio` 등으로 덮어쓸 수 있다
   - 실측 대조: 기본(opus) 즉시 종료 · `--audio-codec=aac` 8초 유지 · `--no-audio` 12초 유지(720x1280 렌더)
 - **fix(macos)**: **Exynos(Mali) 기기에서 GPU 사용률이 비어 있던 문제** — GPU 폴링이 Qualcomm `kgsl` 경로만 읽었다. kgsl 이 없으면 `/sys/class/misc/mali0/device/norm_utilization` 으로 폴백한다(같은 셸에서 `||` — adb 호출 수 그대로)
-  - 실측 S7(Mali-T88x): idle `0` → 화면 스와이프 중 `6`. 클럭은 이 커널이 `0` 만 보고해 표시하지 않는다(사용률은 정상)
+  - 실측 S7(Mali-T88x): idle `0` → 화면 스와이프 중 `17·24·21`. 클럭은 화면이 켜져 있을 때 `260` MHz 로 표시된다(꺼져 있으면 `0` = 보고 없음)
 - **test(macos)**: `ScrcpyMirrorArgsTests` 오디오 고정 · `PollBatchTests` GPU 폴백 · `parseGpuBusyPercent` mali 단일 숫자 픽스처 추가
 
 ---
