@@ -526,7 +526,7 @@ swift scripts/ax-dump.swift "Relay Console" --click "기본값 복원"       # �
 | 103 | **사이클은 0 이 아니라 미보고로 말한다** | 같은 카드의 `사이클` 셀 확인 | 드라이버가 `fg_cycle=0` 만 보고하면 **`미보고`** 로 표시된다(숫자 `0` 아님). 커널이 실제 사이클을 세는 기기면 그 숫자가 뜬다 | ⬜ |
 | 104 | **삼성 One UI 기기는 회귀 없다** | S22·A90 등 One UI 기기 배터리 카드 | 건강 셀이 종전처럼 **`BSOH · ASOC%`**(예: `91 · 93%`)로 뜨고, 사이클도 `mSavedBatteryUsage` 추정값이 유지된다. sysfs 값이 이를 덮지 않는다 | ⬜ |
 
-## 34. LineageOS scrcpy 오디오 · Exynos GPU 폴백 (T-2026-11-05-1 · 2026-11-05 · 앱 1.25.0+)
+## 34. LineageOS scrcpy 오디오 · Exynos GPU 폴백 (T-2026-11-05-1 · 2026-11-05 · 앱 1.25.0+) — **105~107 통과**
 
 > 배경: scrcpy 5.0.1 은 오디오를 기본 opus 로 전송한다. LineageOS `herolte`(S7) 빌드에는
 > opus 인코더가 없어 `Could not create default audio encoder for opus` → 오디오 demuxer 오류가
