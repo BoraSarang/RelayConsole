@@ -552,3 +552,23 @@ swift scripts/ax-dump.swift "Relay Console" --click "기본값 복원"       # �
 - **107** — `kgsl` 경로 우선 확인(S22 `taro` Android 16 · A90 `msmnile` Android 12):
   - `gpu_busy_percentage` = `0 %` → 설정 앱 스크롤 중 S22 **5%** · A90 **16%** (신규 `||` 폴백이 Qualcomm 값을 가리지 않는다)
   - `gpuclk` 는 `Permission denied`(0600) — **수정 전 명령도 동일하게 빈 값**이었다(회귀 아님). 읽을 수 있는 `clock_mhz`(S22 285 · A90 257)로 대체하는 후속 작업을 bd 에 등록
+
+## 35. 앱 네트워크 — "보고하지 않음" vs "아직 없음" (T-2026-11-05-2 · 2026-11-05 · 앱 1.25.0+)
+
+> 배경: S7(LineageOS 21)에서 다운로드 중인데 NETWORK 카드는 `↑48.1 ↓72.3 KB/s` 그래프가 정상인데
+> '앱 네트워크' 창은 **"아직 트래픽 없음"** 이었다. 원인은 ROM 쪽 — netd 가 BPF map 을 pin 하지 못해
+> `dumpsys netstats detail` 에 UID별 바이트가 없다(`/proc/net/xt_qtaguid/stats` 도 0바이트).
+> 이제 앱은 그 상태를 **"이 기기는 앱별 트래픽을 보고하지 않습니다"** 로 구분해 말한다.
+
+| # | 확인할 것 | 방법 | 기대 결과 | 상태 |
+|---|---|---|---|---|
+| 108 | **S7 은 "미지원" 이라고 말한다** | S7 대시보드 → `앱 네트워크` 창을 연다(다운로드 중이면 더 분명) | `이 기기는 앱별 트래픽을 보고하지 않습니다` + `지금 인터페이스 합계 ↑… ↓…` 가 보인다. **"아직 트래픽 없음" 이 아니다** | ⬜ |
+| 109 | **정상 기기는 앱별 목록이 그대로** | S22/A90 에서 같은 창 확인 | 종전처럼 앱별 업로드/다운로드/합계/누적 행이 나온다. 미지원 문구가 뜨지 않는다 | ⬜ |
+
+### 실측 근거 (2026-11-05)
+
+- S7: `dumpsys netstats detail` → `UID stats:` 에 `uid=10087` 1건, `rb=0 tb=0` 뿐.
+  이어서 `IfaceIndexNameMap: NULL(map is not pinned to /sys/fs/bpf/netd_shared/…)` + `Exception occurred while dumping: NullPointerException`.
+  `ls /sys/fs/bpf/netd_shared` → 없음. `stat /proc/net/xt_qtaguid/stats` → **0 bytes**, 데이터 행 0.
+- S22(같은 명령, 정상): `uid=… set=` **283건**, 실제 바이트 값 포함 → 앱별 목록 정상.
+- 그래서 이 ROM 에서 앱별 수치를 만드는 방법은 **없다**(root/BPF 부재). 숨기지 않고 말하는 것이 정답.

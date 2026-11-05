@@ -1105,6 +1105,38 @@ struct AdbParsingTests {
         #expect(AdbClient.parseUidNetStats("nothing here").isEmpty)
     }
 
+    /// 기기가 UID 통계를 **못 주는** 상태(2026-11-05 LineageOS 21 S7 실측 원문)를 구분한다.
+    /// 이걸 놓치면 다운로드 중인데 "아직 트래픽 없음" 이라고 표시된다(거짓말).
+    @Test func netStatsUnsupportedDetectsUnpinnedBpfDump() {
+        let s7 = """
+        UID stats:
+          Pending bytes: 0
+          History since boot:
+          ident=[{type=1, ratType=COMBINED}] uid=10087 set=DEFAULT tag=0x0
+            NetworkStatsHistory: bucketDuration=7200
+              st=1793714400 rb=0 rp=0 tb=0 tp=0 op=5
+        InterfaceMapUpdater:
+          BPF map status:
+            IfaceIndexNameMap: NULL(map is not pinned to /sys/fs/bpf/netd_shared/map_netd_iface_index_name_map: No such file or directory)
+        Exception occurred while dumping:
+        java.lang.NullPointerException
+        """
+        #expect(AdbClient.netStatsUnsupported(s7))
+
+        // 정상 기기(S22 실측 형식)는 미지원이 아니다
+        let s22 = """
+        UID stats:
+          ident=[{type=1, ratType=COMBINED}] uid=1073 set=DEFAULT tag=0x0
+            NetworkStatsHistory: bucketDuration=7200
+              st=1793534400 rb=306 rp=1 tb=0 tp=0 op=0
+        """
+        #expect(!AdbClient.netStatsUnsupported(s22))
+
+        // 덤프가 비었거나 예외만 있으면 앱별 속도를 만들 수 없다
+        #expect(AdbClient.netStatsUnsupported(""))
+        #expect(AdbClient.netStatsUnsupported("Exception occurred while dumping: java.lang.NullPointerException"))
+    }
+
     @Test func parsePackageUidsMapsFirstUid() {
         let sample = """
         package:com.samsung.android.app  uid:10021

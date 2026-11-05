@@ -220,6 +220,9 @@
 "droid.appnet.hint" = "합계는 인터페이스 실시간(adb 제외) · 앱별 속도는 netstats 60초 평균(adb 제외) · 누적은 부팅 이후 전체량";
 "droid.appnet.title" = "네트워크 사용량 — %@";
 "droid.appnet.titleShort" = "앱 네트워크";
+"droid.appnet.unsupported" = "이 기기는 앱별 트래픽을 보고하지 않습니다";
+"droid.appnet.unsupportedHint" = "인터페이스 합계(그래프)는 정상입니다. 이 ROM 의 netd 가 UID별 통계를 기록하지 않아 앱별 속도를 만들 수 없습니다.";
+"droid.appnet.unsupportedNow" = "지금 인터페이스 합계: %@";
 "droid.battery.current" = "전류";
 "droid.battery.cycles" = "사이클";
 "droid.battery.cycles.unsupported" = "미보고";

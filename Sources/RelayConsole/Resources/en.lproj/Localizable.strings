@@ -220,6 +220,9 @@
 "droid.appnet.hint" = "Totals are live interface rates (excl. adb) · per-app rates are netstats 60-sec avg (excl. adb) · cumulative = since boot.";
 "droid.appnet.title" = "Network usage — %@";
 "droid.appnet.titleShort" = "App network";
+"droid.appnet.unsupported" = "This device does not report per-app traffic";
+"droid.appnet.unsupportedHint" = "Interface totals (the graph) still work. This ROM's netd keeps no per-UID stats, so per-app rates cannot be derived.";
+"droid.appnet.unsupportedNow" = "Live interface total: %@";
 "droid.battery.current" = "Current";
 "droid.battery.cycles" = "Cycles";
 "droid.battery.cycles.unsupported" = "Not reported";
