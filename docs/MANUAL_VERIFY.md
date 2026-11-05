@@ -537,6 +537,18 @@ swift scripts/ax-dump.swift "Relay Console" --click "기본값 복원"       # �
 
 | # | 확인할 것 | 방법 | 기대 결과 | 상태 |
 |---|---|---|---|---|
-| 105 | **S7 미러가 뜨고 소리도 전달된다** | S7 카드 헤더의 미러 토글 | scrcpy 창이 뜨고 화면이 보인다. 오류 팝오버가 없다. 폰에서 재생한 소리가 맥으로 들린다(기기 스피커는 scrcpy 기본 정책대로) | ⬜ |
-| 106 | **S7 GPU 사용률이 표시된다** | S7 대시보드 GPU 카드 확인 → 화면을 위아래로 스와이프 | 사용률이 `0%` 로 굳지 않고 스와이프 중 올라간다(실측 6%). GPU 이름은 `Mali-T88x` 로 유지된다 | ⬜ |
-| 107 | **Qualcomm 기기는 회귀 없다** | S22/A90 GPU 카드 확인 | 종전처럼 Adreno 사용률·클럭이 표시된다(`kgsl` 경로가 우선). GPU 사용률이 사라지지 않는다 | ⬜ |
+| 105 | **S7 미러가 뜨고 소리도 전달된다** | S7 카드 헤더의 미러 토글 | scrcpy 창이 뜨고 화면이 보인다. 오류 팝오버가 없다. 폰에서 재생한 소리가 맥으로 들린다(기기 스피커는 scrcpy 기본 정책대로) | ✅ |
+| 106 | **S7 GPU 사용률이 표시된다** | S7 대시보드 GPU 카드 확인 → 화면을 위아래로 스와이프 | 사용률이 `0%` 로 굳지 않고 스와이프 중 올라간다(실측 17~24%). GPU 이름은 `Mali-T88x`, 클럭은 화면이 켜져 있을 때 `260 MHz` 로 표시된다 | ✅ |
+| 107 | **Qualcomm 기기는 회귀 없다** | S22/A90 GPU 카드 확인 | 종전처럼 Adreno **사용률**이 표시된다(`kgsl` 경로 우선, 실측 S22 0→5% · A90 0→16%). **클럭은 종전과 같이 비어 있다** — `gpuclk` 가 root 전용(0600)이라 이 경로로는 읽히지 않는다(회귀 아님, bd `RelayConsole-3sr` 후속) | ✅ |
+
+### 실측 기록 (2026-11-05 · 앱 인자 그대로 CLI 재현)
+
+- **105** — `scrcpy -s 192.168.190.216:5555 … --audio-codec=aac --verbosity=debug` 12초 유지:
+  - `[server] DEBUG: Using audio encoder: 'OMX.google.aac.encoder'`
+  - `DEBUG: Demuxer 'audio': starting thread` → `DEBUG: Decoder 'audio': aac` → 프레임 수신 후 정상 종료
+  - `INFO: Renderer: metal` · `INFO: Texture (VideoToolbox): 720x1280` · `ERROR` **0건**
+  - 맥 출력 음량 25 · 음소거 아님. (실제 청취는 사용자 확인 몫 — 스트림·디코더 수신까지 확인)
+- **106** — S7 `norm_utilization`: idle `0` → 스와이프 중 **17 · 24 · 21**. `mali0/device/clock` 은 **화면이 켜져 있을 때 260**(꺼져 있으면 0)이라 클럭도 표시된다
+- **107** — `kgsl` 경로 우선 확인(S22 `taro` Android 16 · A90 `msmnile` Android 12):
+  - `gpu_busy_percentage` = `0 %` → 설정 앱 스크롤 중 S22 **5%** · A90 **16%** (신규 `||` 폴백이 Qualcomm 값을 가리지 않는다)
+  - `gpuclk` 는 `Permission denied`(0600) — **수정 전 명령도 동일하게 빈 값**이었다(회귀 아님). 읽을 수 있는 `clock_mhz`(S22 285 · A90 257)로 대체하는 후속 작업을 bd 에 등록

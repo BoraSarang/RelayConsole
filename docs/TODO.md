@@ -10,7 +10,8 @@
   - 원인: scrcpy 5.0.1 기본 오디오 `opus` 인코더가 이 ROM 에 없음 → 오디오 초기화 실패가 **영상 세션까지** 종료. GPU 는 Qualcomm `kgsl` 경로만 폴링
   - 수정: `mirrorArgs` 에 `--audio-codec=aac` 고정(customOpts 로 덮어쓰기 가능) · `PollBatch` GPU busy/clk 를 `kgsl || mali0` 폴백으로(adb 호출 수 동일)
   - 검증 [HARD]: `swift test` **868/0**(+2) · `./scripts/build-macos.sh debug` 완료 · 앱 **1.25.0** 재시작 — 실기기는 `MANUAL_VERIFY` §34
-  - 실측: 기본(opus) 즉시 종료 / `--audio-codec=aac`·`--no-audio` 정상 · S7 GPU util idle `0` → 스와이프 중 `6`
+  - 실측: 기본(opus) 즉시 종료 / `--audio-codec=aac`·`--no-audio` 정상 · S7 GPU util idle `0` → 스와이프 중 `17·24·21`, 클럭 `260`(화면 켜짐)
+  - 육안 검증: `MANUAL_VERIFY` §34 **105~107 ✅**(2026-11-05) — S7 미러 aac 디코딩·720x1280, S22 0→5% · A90 0→16%
 
 ## 진행 중 (2026-11-03)
 
