@@ -47,4 +47,35 @@ final class DeviceOnlineJudgementTests: XCTestCase {
     func testThresholdIsTwo() {
         XCTAssertEqual(DeviceMonitor.offlineAfterFailures, 2)
     }
+
+    // MARK: - 폴링 실패 영속 (2026-11-07)
+
+    /// 첫 실패는 반드시 남긴다 — 재시작 후 "언제부터" 를 알 수 있는 유일한 기록
+    func testFirstPollFailureIsLogged() {
+        XCTAssertTrue(
+            DeviceMonitor.shouldLogPollFailure(streak: 1, lastLogAt: nil, now: Date())
+        )
+    }
+
+    /// 오프라인 전환 시점도 남긴다
+    func testOfflineTransitionIsLogged() {
+        XCTAssertTrue(
+            DeviceMonitor.shouldLogPollFailure(
+                streak: DeviceMonitor.offlineAfterFailures,
+                lastLogAt: Date(),
+                now: Date()
+            )
+        )
+    }
+
+    /// 그 사이 반복 실패는 60초 전이면 쓰지 않는다 — 5초 틱마다 쓰면 하루 수만 줄
+    func testRepeatedFailureIsThrottled() {
+        let now = Date()
+        XCTAssertFalse(
+            DeviceMonitor.shouldLogPollFailure(streak: 3, lastLogAt: now.addingTimeInterval(-30), now: now)
+        )
+        XCTAssertTrue(
+            DeviceMonitor.shouldLogPollFailure(streak: 3, lastLogAt: now.addingTimeInterval(-61), now: now)
+        )
+    }
 }

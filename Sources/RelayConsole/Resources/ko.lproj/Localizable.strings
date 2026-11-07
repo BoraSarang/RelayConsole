@@ -857,6 +857,7 @@
 "wifi.lost.autoOff" = "연결이 끊겼습니다 — 자동 재연결이 꺼져 있습니다";
 "wifi.reconnect.ipNotFound" = "기기 IP 를 찾지 못했습니다 — Wi-Fi 를 확인하세요";
 "wifi.reconnect.notReachable" = "%@ 에 닿지 않습니다 — 같은 Wi-Fi 에 있는지 확인하세요";
+"wifi.reconnect.wrongDevice" = "%@ 은(는) 다른 기기입니다 — 잘못 붙은 연결을 해제했습니다";
 "wifi.reconnect.failed" = "재연결 실패 — %@";
 "wifi.reconnect.nextRetry" = "약 %d분 후 재시도";
 "wifi.reconnect.serverRestart" = "adb 서버가 응답하지 않아 재시작 후 재시도 중…";

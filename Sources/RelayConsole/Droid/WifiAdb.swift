@@ -408,6 +408,26 @@ enum WifiAdbLogic {
         map.first { $0.value == endpoint }?.key
     }
 
+    /// 같은 엔드포인트를 값으로 가진 **다른** 물리 ID — 오매핑이므로 제거 대상 (2026-11-07)
+    ///
+    /// 한 IP:PORT 는 한 기기다. 두 ID 가 같은 값을 가지면 둘 중 하나는 없는 기기의 기억이고,
+    /// 그 기억이 재연결 후보가 되면 **살아 있는 다른 기기**를 그 기기로 채택한다.
+    static func duplicateEndpointOwners(
+        _ map: [String: String],
+        endpoint: String,
+        keep physicalId: String
+    ) -> [String] {
+        map.filter { $0.value == endpoint && $0.key != physicalId }.map(\.key)
+    }
+
+    /// 전역 `adb kill-server` 허용 여부 — **살아 있는 transport 가 하나도 없을 때만** (2026-11-07)
+    ///
+    /// `kill-server` 는 모든 기기(다른 앱의 ADB 세션 포함)를 끊는다. 정상 기기가 하나라도
+    /// 있으면 서버는 살아 있으므로, 실패한 대상만 다시 잇는 것으로 충분하다.
+    static func allowsGlobalServerRestart(healthyTransports: [String]) -> Bool {
+        healthyTransports.isEmpty
+    }
+
     /// 기기별 기억 시드 — 이미 발견된(found)·대기 중(pending)·**사용자가 끊은** 기억은 올리지 않는다 (2026-10-11 · 2026-10-18)
     ///
     /// 종전 `seedLostEndpoint`는 "아무것도 안 보일 때"만 단일 슬롯을 살렸다.
@@ -446,6 +466,9 @@ enum WifiAdbLogic {
     static let connectRetryInterval: TimeInterval = 2
     /// 서버 재시작 뒤 추가 시도 — 재시작 직후 목록 반영이 늦어 1회로 끊으면 조용히 죽는다 (2026-10-10)
     static let postRestartAttempts = 2
+
+    /// 전역 `kill-server` 직전 목록 재확인 대기 — 기동 직후 빈 목록 오판 방지 (2026-11-07)
+    static let serverRestartRecheckDelay: TimeInterval = 1.2
 
     /// adb 오류에서 사람이 읽을 수 있는 원문을 뽑는다 (안쪽에 이미 `cause` 가 있다)
     static func cause(_ error: Error) -> String { (error as? WifiAdbError)?.cause ?? "" }
@@ -1000,8 +1023,10 @@ final class WifiAdbController: ObservableObject {
                 guard WifiAdbLogic.shouldRestartAdbServer(cause: cause(error)) else {
                     throw error
                 }
-                statusMessage = L10n.string("wifi.reconnect.serverRestart")
-                await restartAdbServerOnce(adb: adb, serial: lostSerial)
+                let restarted = await recoverNoRoute(adb: adb, target: endpoint)
+                if restarted {
+                    statusMessage = L10n.string("wifi.reconnect.serverRestart")
+                }
                 if !isMirroring(endpoint) {
                     try? await WifiAdbRunner.run(adb, WifiAdbLogic.disconnectArgs(endpoint: endpoint))
                 }
@@ -1011,8 +1036,28 @@ final class WifiAdbController: ObservableObject {
                 detail = L10n.format("wifi.reconnect.failed", endpoint)
                 return false
             }
+            // 오채택 방지 — 기억해 둔 이 기기의 물리 ID 와 실제 ID 가 다르면 **남의 기기**다.
+            // (오매핑된 후보(.208)를 다른 기기로 채택하면 살아 있는 기기 세션이 뒤섞인다)
+            // ID 조회가 실패한 경우(actualId == nil)는 증명이 없으므로 막지 않는다 — 정상 재연결을
+            // 일시적 getprop 실패로 되돌리면 복구가 영영 안 된다.
+            let actualId = await physicalId(of: endpoint, adb: adb)
+            if let expected = WifiAdbLogic.physicalIdForEndpoint(lostSerial, in: endpointsByDevice),
+               let actualId, actualId != expected {
+                detail = L10n.format("wifi.reconnect.wrongDevice", endpoint)
+                if !isMirroring(endpoint) {
+                    try? await WifiAdbRunner.run(adb, WifiAdbLogic.disconnectArgs(endpoint: endpoint))
+                }
+                // 잘못된 기억은 지운다 — 남기면 쿨다운마다 같은 오채택을 반복한다
+                forgetEndpointMemory(physicalId: expected)
+                lostNetworkEndpoints.remove(lostSerial)
+                DebugLogger.shared.warn(
+                    "WifiAdb",
+                    "[WARN] 재연결 오채택 거부 \(lostSerial) → \(endpoint) (기대 \(expected), 실제 \(actualId))"
+                )
+                return false
+            }
             reconnectFailures = 0
-            rememberEndpoint(endpoint, physicalId: await physicalId(of: endpoint, adb: adb))
+            rememberEndpoint(endpoint, physicalId: actualId)
             // 붙었으니 [끊기] 표식은 의미가 없다 (다시 잃어버리면 정상 경로로 재시도한다)
             userDisconnectedEndpoints.remove(endpoint)
             lostNetworkEndpoints.remove(lostSerial)
@@ -1429,6 +1474,49 @@ final class WifiAdbController: ObservableObject {
         try? await WifiAdbRunner.run(adb, ["start-server"])
     }
 
+    /// `No route to host` 회복 — **서버가 살아 있으면 전역 재시작을 하지 않는다**
+    ///
+    /// `kill-server` 는 모든 transport 를 끊는다. 그래서 죽은 기기 하나를 되살리려다
+    /// 정상 기기(그리고 DroidRelay 같은 다른 앱의 ADB 세션)까지 재연결시켰다
+    /// (2026-11-07 실측: `.216` 재시도마다 S22 전송이 끊겼다).
+    /// `adb devices` 에 `device` 가 하나라도 있으면 **서버는 정상**이므로 대상만 다시 잇는다.
+    ///
+    /// - Returns: `true` 면 서버를 재시작했다. `false` 면 호출부가 대상만 재시도하면 된다.
+    ///   목록 조회조차 실패하면 판단 불가 → 안전하게 재시작한다.
+    private func recoverNoRoute(adb: String, target: String) async -> Bool {
+        var alive = await healthyTransports(adb: adb)
+        // 기동 직후엔 `adb devices` 가 아직 비어 있다 (전송이 로드되는 중).
+        // 이때 곧바로 전역 kill-server 를 하면 **정상 기기 3대가 한꺼번에 끊긴다**
+        // (2026-11-07 11:46 실측). 한 번 더 확인한 뒤에만 결정한다.
+        if alive.isEmpty {
+            try? await Task.sleep(for: .seconds(WifiAdbLogic.serverRestartRecheckDelay))
+            alive = await healthyTransports(adb: adb)
+        }
+        guard WifiAdbLogic.allowsGlobalServerRestart(healthyTransports: alive) else {
+            DebugLogger.shared.warn(
+                "WifiAdb",
+                "[WARN] No route to host — 정상 기기 \(alive.count)대 유지, adb 서버 재시작 생략 (\(target))"
+            )
+            IssueLog.append(
+                IssueLog.Entry(
+                    kind: IssueLog.Kind.wifiServerRestartSkipped,
+                    detail: "다른 기기 세션 보호 — 전역 kill-server 생략 · \(target)만 재연결",
+                    serial: target
+                ),
+                name: "device"
+            )
+            return false
+        }
+        await restartAdbServerOnce(adb: adb, serial: target)
+        return true
+    }
+
+    /// `device` 상태인 전송 목록 — 목록 조회 실패는 "없음"으로 본다 (판단 불가 시 재시작 쪽이 안전)
+    private func healthyTransports(adb: String) async -> [String] {
+        guard let list = try? await WifiAdbRunner.runCapture(adb, ["devices"]) else { return [] }
+        return Self.parseDeviceList(list)
+    }
+
     /// adbd 재시작 직후엔 아직 준비 중일 수 있다 — 고정 대기 대신 **재시도로** 판정한다
     private func connectWithRetry(adb: String, endpoint: String, port: Int) async throws {
         var lastError: Error = WifiAdbError(cause: "")
@@ -1449,9 +1537,10 @@ final class WifiAdbController: ObservableObject {
                 }
             }
         }
-        // 마지막 시도도 "No route to host" 면 adb 서버 재시작 후 1회 (스크립트와 동일)
+        // 마지막 시도도 "No route to host" 면 서버 회복 후 1회 (스크립트와 동일)
         if WifiAdbLogic.shouldRestartAdbServer(cause: WifiAdbLogic.cause(lastError)) {
-            await restartAdbServerOnce(adb: adb, serial: nil)
+            // 다른 기기가 살아 있으면 전역 kill-server 는 그 세션을 끊는다 — 대상만 재시도
+            _ = await recoverNoRoute(adb: adb, target: endpoint)
             // 재시작 직후엔 목록 반영이 늦는다 — device 확인 없이 성공을 말하지 않는다
             // (2026-10-10 실측: 재시작 1회성 connect 뒤 entries에 오르지 않아 조용히 죽었다)
             var connected = false
@@ -1504,7 +1593,7 @@ final class WifiAdbController: ObservableObject {
                     return
                 }
                 statusMessage = L10n.string("wifi.reconnect.serverRestart")
-                await restartAdbServerOnce(adb: adb, serial: clean)
+                _ = await recoverNoRoute(adb: adb, target: clean)
                 do {
                     try await WifiAdbRunner.runConnect(adb, WifiAdbLogic.connectArgs(endpoint: clean))
                 } catch {
@@ -1771,12 +1860,38 @@ final class WifiAdbController: ObservableObject {
         lastEndpoint = endpoint
         UserDefaults.standard.set(endpoint, forKey: WifiAdbLogic.lastEndpointKey)
         if let physicalId, !physicalId.isEmpty {
+            // 한 엔드포인트는 한 물리 기기 — 같은 IP:PORT 를 가진 다른 ID 는 오매핑이다.
+            // 남겨두면 없는 기기의 재연결 후보가 **살아 있는 다른 기기의 IP** 가 되어
+            // 엉뚱한 기기를 그 기기로 채택한다 (2026-11-07 실적: G0012C0594231E2V → .208 동시 존재).
+            let staleIds = WifiAdbLogic.duplicateEndpointOwners(
+                endpointsByDevice, endpoint: endpoint, keep: physicalId
+            )
+            for id in staleIds {
+                endpointsByDevice.removeValue(forKey: id)
+                IssueLog.append(
+                    IssueLog.Entry(
+                        kind: IssueLog.Kind.wifiEndpointRemapped,
+                        detail: "\(id) → \(endpoint) 오매핑 제거 (실제 \(physicalId))",
+                        serial: endpoint
+                    ),
+                    name: "device"
+                )
+            }
             endpointsByDevice[physicalId] = endpoint
             UserDefaults.standard.set(
                 WifiAdbLogic.encodeEndpointsByDevice(endpointsByDevice),
                 forKey: WifiAdbLogic.endpointsByDeviceKey
             )
         }
+    }
+
+    /// 특정 물리 ID 의 기억만 지운다 — **오매핑 정리 전용** (같은 엔드포인트의 정상 기억은 남긴다)
+    private func forgetEndpointMemory(physicalId: String) {
+        guard endpointsByDevice.removeValue(forKey: physicalId) != nil else { return }
+        UserDefaults.standard.set(
+            WifiAdbLogic.encodeEndpointsByDevice(endpointsByDevice),
+            forKey: WifiAdbLogic.endpointsByDeviceKey
+        )
     }
 
     /// 기억에서 이 엔드포인트를 지운다 — [끊기] 는 "다시 잇지 마" 다 (2026-10-18)

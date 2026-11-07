@@ -34,6 +34,8 @@ actor DeviceMonitor {
         var failureStreak: Int = 0
         /// 마지막 실패의 실제 원인 (stderr 등) — 조용한 실패를 막는다
         var lastPollError: String?
+        /// 폴링 실패 JSONL 마지막 기록 시각 — 실패가 길어질 때 60초에 1건만 남긴다 (2026-11-07)
+        var pollLogAt: Date?
         var prevStat = AdbClient.ProcStatSample()
         var prevCoreStat = AdbClient.CoreStatSample()
         var prevNet = AdbClient.NetSample()
@@ -232,6 +234,33 @@ actor DeviceMonitor {
         await logLast("[FAIL] \(NotifyChannel.maskSerial(serial)) \(message)")
     }
 
+    /// 폴링 실패를 **JSONL 에 영속**한다 — 사후에 "언제부터 왜" 를 증명할 유일한 기록
+    ///
+    /// ## 왜 필요한가 (2026-11-07 조사)
+    /// 폴링 실패는 메모리 `DebugLogger`(stderr)로만 남았다. 앱을 재시작하면 그 기록이
+    /// 사라져, "오전에 기기 전체가 사라졌다" 는 **현상만 남고 원인은 사라졌다**.
+    /// 이제 첫 실패 · 오프라인 전환 · 이후 60초에 1건씩 남긴다 (폭주 방지).
+    private func logPollFailureIfNeeded(
+        serial: String,
+        state: inout DeviceState,
+        streak: Int,
+        reason: String
+    ) {
+        let now = Date()
+        guard Self.shouldLogPollFailure(streak: streak, lastLogAt: state.pollLogAt, now: now) else {
+            return
+        }
+        state.pollLogAt = now
+        IssueLog.append(
+            IssueLog.Entry(
+                kind: IssueLog.Kind.adbPollFailed,
+                detail: "연속 \(streak)회 폴링 실패 — \(reason)",
+                serial: serial
+            ),
+            name: "device"
+        )
+    }
+
     // MARK: - 온라인 판정 (2026-09-28 · 결함 A 수정)
 
     /// ★ `isOnline` 판정 — **ADB 가 실제로 응답해야** 온라인이다 (2026-09-28)
@@ -252,6 +281,24 @@ actor DeviceMonitor {
     /// 반대로 한 번이라도 응답이 오면 **즉시** 온라인으로 복귀한다
     /// (복구는 확신이 있어서 오래 기다릴 이점이 없다).
     static let offlineAfterFailures = 2
+
+    /// 폴링 실패 JSONL 기록 간격 — 첫 실패·오프라인 전환은 즉시, 이후 60초에 1건 (2026-11-07)
+    static let pollFailureLogInterval: TimeInterval = 60
+
+    /// 이번 실패를 JSONL 에 남길 시점인가 — **순수 함수** (테스트 고정)
+    ///
+    /// 5초 틱마다 그대로 쓰면 실패가 길어질 때 하루 수만 줄이 된다. 반대로 전혀 안 쓰면
+    /// 앱 재시작 후 "언제부터 왜" 를 알 수 없다 — 그래서 전이 시점 + 주기 기록의 절충.
+    static func shouldLogPollFailure(
+        streak: Int,
+        lastLogAt: Date?,
+        now: Date,
+        threshold: Int = offlineAfterFailures
+    ) -> Bool {
+        if streak == 1 || streak == threshold { return true }
+        guard let lastLogAt else { return true }
+        return now.timeIntervalSince(lastLogAt) >= pollFailureLogInterval
+    }
 
     /// adb 응답 유무와 연속 실패 횟수로 온라인 여부를 정한다 — **순수 함수**
     static func isOnline(
@@ -313,10 +360,22 @@ actor DeviceMonitor {
         // isOnline=true 덕에 lastSampleAt 이 갱신돼 "방금 측정" 으로 위장했고,
         // lastError 도 대부분 기록되지 않았다([표시②] 위반).
         let gotAnyResponse = !batch.isEmpty
+        let previousStreak = state.failureStreak
         if gotAnyResponse {
             state.failureStreak = 0
             state.lastPollError = nil
             snap.measuredAt = .now
+            // 실패 구간의 끝 — 시작만 남고 끝이 없으면 "지금도 죽었나?" 를 알 수 없다
+            if previousStreak > 0 {
+                IssueLog.append(
+                    IssueLog.Entry(
+                        kind: IssueLog.Kind.adbPollRecovered,
+                        detail: "폴링 복구 — 연속 \(previousStreak)회 무응답 후 응답",
+                        serial: serial
+                    ),
+                    name: "device"
+                )
+            }
         } else {
             state.failureStreak += 1
             snap.measuredAt = nil
@@ -324,6 +383,7 @@ actor DeviceMonitor {
             let msg = L10n.format("adb.error.pollFailed", detail)
             snap.lastError = msg
             await logLast(msg)
+            logPollFailureIfNeeded(serial: serial, state: &state, streak: state.failureStreak, reason: detail)
         }
         snap.failureStreak = state.failureStreak
         // ★ 온라인 여부는 **여기서** 정한다 (하드코딩하지 않는다 — 결함 A)

@@ -10,12 +10,18 @@
 ## Unreleased (PR #136·#139 머지 · `9da9114` · 버전 미정)
 
 ### Fixed
+- **fix(macos)**: **죽은 기기 하나 때문에 정상 기기 세션까지 끊기던 문제** — `No route to host` 회복이 무조건 전역 `adb kill-server` 였다. 죽은 `.216` 을 재시도할 때마다 S22 전송이 함께 끊겼고, 다른 앱(DroidRelay)의 ADB 세션도 흔들렸다. 이제 `adb devices` 에 `device` 가 **하나라도** 있으면 서버는 정상으로 보고 **대상만 disconnect/connect** 한다. 전역 재시작은 살아 있는 전송이 0일 때만 하고, 기동 직후 빈 목록은 **1.2초 뒤 재확인**한 다음에만 결정한다(2026-11-07 11:46 실측: 기동 3초 뒤 재시작이 3대를 모두 끊었다). 생략한 결정은 `wifi.server.restartSkipped` 로 남긴다
+
+- **fix(macos)**: **폴링 실패가 디스크에 남지 않던 문제** — 실패 원인은 메모리 `DebugLogger`(stderr) 로만 가서, 앱을 재시작하면 "기기 전체가 사라졌다" 는 현상만 남고 원인이 사라졌다(2026-11-07 오전 조사). 이제 `adb.poll.failed`(첫 실패 · 오프라인 전환 · 이후 60초 1건)와 `adb.poll.recovered` 를 device JSONL 에 남긴다 — 5초 틱마다 쓰지 않도록 전이 시점 + 주기 기록을 순수 함수(`shouldLogPollFailure`)로 고정
+
+- **fix(macos)**: **엔드포인트 기억 오매핑** — 같은 IP:PORT 가 두 물리 ID 에 묶여 있으면(실적 `G0012C0594231E2V → .208` + `RFCM9059YBB → .208`) 재연결이 **남의 기기**를 그 기기로 채택할 수 있었다. 기억 저장 시 중복 소유자 제거(`wifi.endpoint.remapped`) · 재연결 성공 판정에서 물리 ID 를 대조해 불일치면 연결 롤백 + 잘못된 기억 삭제(`wifi.reconnect.wrongDevice`)
+
 - **fix(macos)**: **Wi-Fi ADB 수동 연결·자동 재연결에서 앱 전체가 얼어붙던 문제** — 도달 불가 호스트(`192.168.190.216:5555`)에 `adb connect` 를 걸면 macOS TCP 타임아웃까지 **75초**를 기다리는데, 이 호출이 `@MainActor` 컨트롤러에서 **타임아웃 없는 동기 `Process`** 로 실행돼 그동안 앱이 무응답(무지개 커서)이었다. 15분 자동 재연결도 같은 경로라 주기적으로 재발했다 — 2026-11-07 실측 `time adb connect` **real 75.03s**
   - `WifiAdbRunner` 의 모든 실행을 **`ProcessRunner`(데드라인·stderr 교착 방어) + detached Task** 로 교체. connect 계열 **8초**, 일반 명령 **15초** — 메인 스레드는 어떤 경우에도 잠기지 않는다
   - 데드라인 초과는 일반 실패와 구분해 `wifi.error.timeout`("기기가 %d초 안에 응답하지 않았습니다")으로 표시한다 (`catch` 원인 삭제 금지 유지)
   - 수동 연결은 `adb connect` 전에 **TCP 도달성 선검사**(`nc -z`, detached 2초)를 한다 — 없는 호스트는 8초 시도 전에 "…에 닿지 않습니다"로 즉시 끝난다
-  - 검증: `swift test` **881/881**(신규 2 — runner 데드라인·connect 기한 상한) · `./scripts/build-macos.sh debug` BUILD SUCCEEDED · 앱 1.25.0 재시작 — 육안 확인은 사용자 몫
-  - 같은 뿌리의 후속(별건): 자동 재연결 실패 시 **전역 `adb kill-server`** 가 다른 정상 기기 세션까지 끊는다 · 폴링 실패가 JSONL 에 남지 않는다
+  - 검증: `swift test` **885/885**(신규 4 — runner 데드라인·connect 기한 상한·오매핑 제거·전역 재시작 정책) · XCTest **9/9**(신규 3 — 폴링 기록 시점) · `./scripts/build-macos.sh debug` BUILD SUCCEEDED · 앱 1.25.0 재시작 — 육안 확인은 사용자 몫
+  - 같은 뿌리의 후속 3건(전역 `kill-server` · 폴링 실패 JSONL · 엔드포인트 오매핑)은 **위 항목에서 처리 완료**
 
 - **fix(macos)**: **APK 설치가 "1/1대 기기 준비 중…"에 멈춘 것처럼 보이던 문제** — 실기기 설치가 24초 걸리는 동안 배너 문구가 **설치 전 단계에 고정**돼 있었고, 그 구간 로그가 없어 사용자가 두 번 취소했다(2026-11-05 23:04·23:05 `app.install` `cancelled` 2건 → 23:26 `adb install -r` 24초 성공)
   - `runSingleInstall` 이 `adb install` 직전에 **"설치 중…"** 으로 전환하고, `applyInstallResult` 가 끝나기 전 **"설치 확인 중…"**(패키지 변경·버전 확인)을 표시한다. 종전에는 번들 설치만 `install`/`obb` 단계가 있었다
