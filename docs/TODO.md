@@ -47,6 +47,16 @@
   - 실측: 기본(opus) 즉시 종료 / `--audio-codec=aac`·`--no-audio` 정상 · S7 GPU util idle `0` → 스와이프 중 `17·24·21`, 클럭 `260`(화면 켜짐)
   - 육안 검증: `MANUAL_VERIFY` §34 **105~107 ✅**(2026-11-05) — S7 미러 aac 디코딩·720x1280, S22 0→5% · A90 0→16%
 
+## 진행 중 (2026-11-07)
+
+- [ ] **T-2026-11-07-1 [P1] Wi-Fi ADB 수동 연결·자동 재연결에서 앱 전체가 얼어붙음** (1.25.0+ · 코드/테스트/빌드 완료 → **사용자 육안 확인 대기**)
+  - 증상: S7(`192.168.190.216:5555`, 네트워크에 없음)에 수동 연결을 누르면 팝오버에 "연결 중…" 스피너가 뜬 채 **앱 전체가 무응답**(무지개 커서). 15분 자동 재연결에서도 같은 멈춤이 반복
+  - 원인: `WifiAdbRunner.runCapture` 가 `readDataToEndOfFile()` + `waitUntilExit()` 로 **타임아웃 없이 동기 실행** — 호출부 `WifiAdbController` 가 `@MainActor` 라서 `adb connect` 의 TCP 타임아웃(실측 **75.03초**) 동안 메인 스레드가 잠겼다. `connectAttempts = 3` 이면 최대 3분 45초
+  - 수정: runner 전면 async + `ProcessRunner.captureAsync`(데드라인·stderr 교착 방어) · connect **8초**/일반 **15초** · 초과 시 `wifi.error.timeout` · 수동 연결은 `nc -z`(detached 2초) **도달성 선검사** 후 즉시 실패
+  - 검증 [HARD]: `swift test` **881/881**(신규 2) · `./scripts/build-macos.sh debug` BUILD SUCCEEDED · 앱 **1.25.0** 재시작(PID 87171)
+  - 남은 확인(사용자 몫): S7 를 끄거나 `.216` 이 죽은 상태에서 수동 연결 → **약 2초 만에 "닿지 않습니다"** 로 끝나고 UI 가 계속 반응하는지
+  - 후속(같은 뿌리): 자동 재연결 실패 시 전역 `adb kill-server` 로 다른 기기 세션까지 끊김 · 폴링 실패 JSONL 미기록 · `endpointsByDevice` 오매핑(`G0012C0594231E2V → .208`)
+
 ## 진행 중 (2026-11-03)
 
 - [ ] **T-2026-11-03-1 [P2] LineageOS 배터리 건강·사이클 대체 표시** (1.25.0 · PR #123 머지 · 코드/테스트/빌드 완료 · **S7 화면 육안 완료** · 단위 확인만 사용자 몫)

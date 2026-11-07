@@ -829,6 +829,7 @@
 "wifi.error.endpoint.empty" = "Enter an endpoint";
 "wifi.error.endpoint.format" = "Invalid IP:PORT format";
 "wifi.error.ipNotFound" = "Device IP not found (check Wi-Fi / same network)";
+"wifi.error.timeout" = "Device did not respond within %d seconds (check power, Wi-Fi, wireless debugging)";
 "wifi.field.device" = "USB device";
 "wifi.section.disconnect" = "Disconnect";
 "wifi.section.enable" = "USB → Wi-Fi";
