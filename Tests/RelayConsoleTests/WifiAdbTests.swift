@@ -99,4 +99,42 @@ struct WifiAdbTests {
         #expect(WifiAdbLogic.failText(key: "wifi.error.connectFailed", detail: nil) == L10n.string("wifi.error.connectFailed"))
         #expect(WifiAdbLogic.failText(key: "wifi.error.connectFailed", detail: "") == L10n.string("wifi.error.connectFailed"))
     }
+
+    // MARK: - 엔드포인트 오매핑 정리 (2026-11-07)
+
+    /// 같은 IP:PORT 를 가진 다른 물리 ID 는 제거 대상 — 남기면 살아 있는 기기를 오채택한다
+    @Test func duplicateEndpointOwnersFindsOtherIds() {
+        let map = [
+            "RFCM9059YBB": "192.168.190.208:5555",
+            "G0012C0594231E2V": "192.168.190.208:5555",
+            "R5CT215F4QK": "192.168.190.49:5555"
+        ]
+        let dup = WifiAdbLogic.duplicateEndpointOwners(
+            map, endpoint: "192.168.190.208:5555", keep: "RFCM9059YBB"
+        )
+        #expect(dup == ["G0012C0594231E2V"])
+    }
+
+    /// 정상 맵에서는 아무것도 지우지 않는다
+    @Test func duplicateEndpointOwnersEmptyWhenUnique() {
+        let map = ["RFCM9059YBB": "192.168.190.208:5555"]
+        #expect(
+            WifiAdbLogic.duplicateEndpointOwners(
+                map, endpoint: "192.168.190.208:5555", keep: "RFCM9059YBB"
+            ).isEmpty
+        )
+    }
+
+    // MARK: - 전역 kill-server 정책 (2026-11-07)
+
+    /// 정상 transport 가 하나라도 있으면 전역 재시작 금지 — 다른 기기 세션을 보호한다
+    @Test func globalRestartBlockedWhenAnyTransportAlive() {
+        #expect(!WifiAdbLogic.allowsGlobalServerRestart(healthyTransports: ["192.168.190.49:5555"]))
+        #expect(!WifiAdbLogic.allowsGlobalServerRestart(healthyTransports: ["R5CT215F4QK"]))
+    }
+
+    /// 전부 죽었을 때만 재시작한다
+    @Test func globalRestartAllowedWhenNoneAlive() {
+        #expect(WifiAdbLogic.allowsGlobalServerRestart(healthyTransports: []))
+    }
 }

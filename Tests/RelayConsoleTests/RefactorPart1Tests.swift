@@ -37,6 +37,25 @@ struct RefactorPart1Tests {
         #expect(Date().timeIntervalSince(start) < 10)
     }
 
+    // MARK: - WifiAdbRunner 데드라인 (2026-11-07 — 메인 스레드 75초 정지 재발 방지)
+
+    /// 도달 불가 호스트에 `adb connect` 를 걸면 macOS TCP 타임아웃(실측 75초)까지 매달렸고,
+    /// `@MainActor` 컨트롤러에서 동기 실행이라 **앱 전체가 얼었다**.
+    /// 지금은 runner 가 데드라인을 걸고 detached 로 돌아 메인을 잠그지 않는다.
+    @Test func wifiAdbRunnerTimesOutInsteadOfHanging() async {
+        let start = Date()
+        await #expect(throws: WifiAdbError.self) {
+            _ = try await WifiAdbRunner.runCapture("/bin/sleep", ["30"], timeout: 1)
+        }
+        #expect(Date().timeIntervalSince(start) < 10)
+    }
+
+    /// connect 기한은 UI 가 체감할 수 있는 수준이어야 한다 — 늘리면 "앱이 멈춘다"가 되살아난다
+    @Test func wifiAdbConnectTimeoutStaysShort() {
+        #expect(WifiAdbRunner.connectTimeout <= 10)
+        #expect(WifiAdbRunner.connectTimeout < WifiAdbRunner.commandTimeout)
+    }
+
     /// **교착 회귀**: 자식이 stderr에 64KB를 넘겨도 멈추지 않는다.
     /// 이전 구현은 stderr 파이프를 읽지 않아 이 케이스에서 영구 대기했다.
     @Test func processRunnerDoesNotDeadlockOnLargeStderr() throws {

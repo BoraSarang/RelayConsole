@@ -829,6 +829,7 @@
 "wifi.error.endpoint.empty" = "Enter an endpoint";
 "wifi.error.endpoint.format" = "Invalid IP:PORT format";
 "wifi.error.ipNotFound" = "Device IP not found (check Wi-Fi / same network)";
+"wifi.error.timeout" = "Device did not respond within %d seconds (check power, Wi-Fi, wireless debugging)";
 "wifi.field.device" = "USB device";
 "wifi.section.disconnect" = "Disconnect";
 "wifi.section.enable" = "USB → Wi-Fi";
@@ -856,6 +857,7 @@
 "wifi.lost.autoOff" = "Connection lost — auto-reconnect is off";
 "wifi.reconnect.ipNotFound" = "Could not find the device IP — check Wi-Fi";
 "wifi.reconnect.notReachable" = "%@ is unreachable — check that you are on the same Wi-Fi";
+"wifi.reconnect.wrongDevice" = "%@ is a different device — the wrong connection was rolled back";
 "wifi.reconnect.failed" = "Reconnect failed — %@";
 "wifi.reconnect.nextRetry" = "Retrying in ~%d min";
 "wifi.reconnect.serverRestart" = "adb server is stuck — restarting and retrying…";

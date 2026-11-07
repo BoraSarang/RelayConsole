@@ -43,6 +43,14 @@ enum IssueLog {
         static let androidDisconnected = "device.disconnected"
         static let wifiReconnectFailed = "wifi.reconnect.failed"
         static let wifiServerRestart = "wifi.server.restart"
+        /// 다른 기기가 살아 있어 전역 `kill-server` 를 생략한 결정 (2026-11-07)
+        static let wifiServerRestartSkipped = "wifi.server.restartSkipped"
+        /// 엔드포인트 기억의 오매핑 정리 (같은 IP:PORT 를 다른 물리 ID 가 갖고 있던 경우)
+        static let wifiEndpointRemapped = "wifi.endpoint.remapped"
+        /// 폴링 연속 실패 — 앱 재시작 후에도 "언제부터 왜" 를 남긴다 (2026-11-07)
+        static let adbPollFailed = "adb.poll.failed"
+        /// 폴링 복구 — 실패 구간의 끝
+        static let adbPollRecovered = "adb.poll.recovered"
     }
 
     private static let dirName = "logs"
