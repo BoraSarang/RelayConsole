@@ -7,7 +7,7 @@
 
 ---
 
-## Unreleased (PR #136·#139 머지 · `9da9114` · 버전 미정)
+## Unreleased (PR #136·#139·#141 머지 · `9eb5cc9` · 버전 미정)
 
 ### Fixed
 - **fix(macos)**: **죽은 기기 하나 때문에 정상 기기 세션까지 끊기던 문제** — `No route to host` 회복이 무조건 전역 `adb kill-server` 였다. 죽은 `.216` 을 재시도할 때마다 S22 전송이 함께 끊겼고, 다른 앱(DroidRelay)의 ADB 세션도 흔들렸다. 이제 `adb devices` 에 `device` 가 **하나라도** 있으면 서버는 정상으로 보고 **대상만 disconnect/connect** 한다. 전역 재시작은 살아 있는 전송이 0일 때만 하고, 기동 직후 빈 목록은 **1.2초 뒤 재확인**한 다음에만 결정한다(2026-11-07 11:46 실측: 기동 3초 뒤 재시작이 3대를 모두 끊었다). 생략한 결정은 `wifi.server.restartSkipped` 로 남긴다
@@ -22,6 +22,7 @@
   - 수동 연결은 `adb connect` 전에 **TCP 도달성 선검사**(`nc -z`, detached 2초)를 한다 — 없는 호스트는 8초 시도 전에 "…에 닿지 않습니다"로 즉시 끝난다
   - 검증: `swift test` **885/885**(신규 4 — runner 데드라인·connect 기한 상한·오매핑 제거·전역 재시작 정책) · XCTest **9/9**(신규 3 — 폴링 기록 시점) · `./scripts/build-macos.sh debug` BUILD SUCCEEDED · 앱 1.25.0 재시작 — 육안 확인은 사용자 몫
   - 같은 뿌리의 후속 3건(전역 `kill-server` · 폴링 실패 JSONL · 엔드포인트 오매핑)은 **위 항목에서 처리 완료**
+  - **PR #141 → squash merge `9eb5cc9`** · 육안 확인은 `MANUAL_VERIFY` §39 117~120
 
 - **fix(macos)**: **APK 설치가 "1/1대 기기 준비 중…"에 멈춘 것처럼 보이던 문제** — 실기기 설치가 24초 걸리는 동안 배너 문구가 **설치 전 단계에 고정**돼 있었고, 그 구간 로그가 없어 사용자가 두 번 취소했다(2026-11-05 23:04·23:05 `app.install` `cancelled` 2건 → 23:26 `adb install -r` 24초 성공)
   - `runSingleInstall` 이 `adb install` 직전에 **"설치 중…"** 으로 전환하고, `applyInstallResult` 가 끝나기 전 **"설치 확인 중…"**(패키지 변경·버전 확인)을 표시한다. 종전에는 번들 설치만 `install`/`obb` 단계가 있었다
