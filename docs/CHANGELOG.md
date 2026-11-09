@@ -10,6 +10,8 @@
 ## Unreleased (PR #136·#139·#141 머지 · `9eb5cc9` · 버전 미정)
 
 ### Fixed
+- **fix(macos)**: **Applications 격자·Dock 아이콘이 재빌드 후에도 회색 기본 아이콘으로 남던 문제** — 번들은 매번 `rm -rf` 로 재생성되는데 `CFBundleVersion` 이 `1` 고정이라 LaunchServices·iconservices·Dock 썸네일 캐시가 **같은 앱**으로 보고 갱신된 `AppIcon.icns` 를 계속 무시했다(2026-11-09 실측: Finder 목록은 정상, Applications 격자만 회색 — 번들 icns 는 16~1024px 전부 유효). 이제 빌드마다 `CFBundleVersion` 을 `YYYYMMDD.HHMMSS` 로 발급하고, 서명 검증 후 `lsregister -f` + 사용자 `com.apple.dock.iconcache` 삭제·Dock 재시작으로 캐시를 무효화한다
+
 - **fix(macos)**: **죽은 기기 하나 때문에 정상 기기 세션까지 끊기던 문제** — `No route to host` 회복이 무조건 전역 `adb kill-server` 였다. 죽은 `.216` 을 재시도할 때마다 S22 전송이 함께 끊겼고, 다른 앱(DroidRelay)의 ADB 세션도 흔들렸다. 이제 `adb devices` 에 `device` 가 **하나라도** 있으면 서버는 정상으로 보고 **대상만 disconnect/connect** 한다. 전역 재시작은 살아 있는 전송이 0일 때만 하고, 기동 직후 빈 목록은 **1.2초 뒤 재확인**한 다음에만 결정한다(2026-11-07 11:46 실측: 기동 3초 뒤 재시작이 3대를 모두 끊었다). 생략한 결정은 `wifi.server.restartSkipped` 로 남긴다
 
 - **fix(macos)**: **폴링 실패가 디스크에 남지 않던 문제** — 실패 원인은 메모리 `DebugLogger`(stderr) 로만 가서, 앱을 재시작하면 "기기 전체가 사라졌다" 는 현상만 남고 원인이 사라졌다(2026-11-07 오전 조사). 이제 `adb.poll.failed`(첫 실패 · 오프라인 전환 · 이후 60초 1건)와 `adb.poll.recovered` 를 device JSONL 에 남긴다 — 5초 틱마다 쓰지 않도록 전이 시점 + 주기 기록을 순수 함수(`shouldLogPollFailure`)로 고정
