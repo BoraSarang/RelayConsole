@@ -12,6 +12,12 @@ BUILD_DIR="./.build"
 VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" Resources/Info.plist)
 [ -n "$VERSION" ] || { echo "Info.plist 버전 읽기 실패"; exit 1; }
 
+# 빌드 번호는 빌드마다 새로 발급한다.
+# 왜: 번들을 매번 rm -rf 로 재생성하는데 CFBundleVersion 이 고정이면
+#     LaunchServices·iconservices/Dock 아이콘 캐시가 "같은 앱"으로 보고
+#     갱신된 AppIcon.icns 를 계속 무시한다 (2026-11-09 Applications 격자 회색 아이콘 사례).
+BUILD_NUMBER=$(date +%Y%m%d.%H%M%S)
+
 # 서명 — Apple Development (비샌드박스 앱 · DECISIONS D2 로 위젯 appex 제거)
 CODE_SIGN_IDENTITY="76811B50FF3F9015B9E287FC6829806E1D42B9DB" # Apple Development: leeborasarang@gmail.com (HLQNBZHQQN) · TEAM 6GPJQ7BQC9
 DEVELOPMENT_TEAM="6GPJQ7BQC9"
@@ -61,6 +67,9 @@ mkdir -p "$APP_BUNDLE/Contents/Resources"
 
 cp "$BINARY" "$APP_BUNDLE/Contents/MacOS/"
 cp "Resources/Info.plist" "$APP_BUNDLE/Contents/"
+# 빌드 번호 주입 — 서명 전에 넣어야 번들 해시·아이콘 캐시 키가 함께 갱신된다
+/usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD_NUMBER" "$APP_BUNDLE/Contents/Info.plist"
+log "빌드 번호: $BUILD_NUMBER"
 # ★ Resources/Localizable.xcstrings 는 2026-09-28 에 삭제했다 (왜: TODO 참조).
 #   앱은 Sources/RelayConsole/Resources/{en,ko}.lproj/Localizable.strings 만 읽고,
 #   이 파일은 612키로 낙오해 있어 **"여기서 고쳐도 아무 일도 안 일어나는" 함정**이 된다.
@@ -125,5 +134,19 @@ if ! codesign --verify --deep --strict "$APP_BUNDLE" 2>&1; then
 fi
 log "서명 검증 통과 (팀 $DEVELOPMENT_TEAM)"
 
-log "완료: $APP_BUNDLE ($BUNDLE_ID, $VERSION)"
+# ── 아이콘·LaunchServices 캐시 무효화 ───────────────────────────────────────
+# Applications 격자(Apps.app)·Finder 가 재빌드된 번들의 새 아이콘을 즉시 읽도록.
+# CFBundleVersion 이 매 빌드 바뀌므로 캐시 키도 함께 갱신된다.
+LSREGISTER="/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
+if [ -x "$LSREGISTER" ]; then
+  "$LSREGISTER" -f "$APP_BUNDLE" >/dev/null 2>&1 || warn "lsregister 재등록 실패 (계속)"
+fi
+ICON_CACHE_DIR=$(getconf DARWIN_USER_CACHE_DIR 2>/dev/null || true)
+if [ -n "$ICON_CACHE_DIR" ] && [ -f "${ICON_CACHE_DIR%/}/com.apple.dock.iconcache" ]; then
+  rm -f "${ICON_CACHE_DIR%/}/com.apple.dock.iconcache" 2>/dev/null || true
+  killall Dock 2>/dev/null || true
+  log "아이콘 캐시 무효화 (Dock 재시작)"
+fi
+
+log "완료: $APP_BUNDLE ($BUNDLE_ID, $VERSION, build $BUILD_NUMBER)"
 open "$APP_BUNDLE" 2>/dev/null || true
