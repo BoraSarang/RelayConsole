@@ -9,6 +9,17 @@
 
 ## Unreleased (PR #136·#139·#141 머지 · `9eb5cc9` · 버전 미정)
 
+### Added
+- **feat(macos)**: **부팅 후 첫 연결 훅 — `adb root` + 웨이크락 + `persist.adb.tcp.port=5555` + 부팅 직후 90초 화면 유지** — S7(`herolte` · LineageOS 21 · `userdebug`)을 재부팅하면 `:5555`가 root adbd가 아닌 상태로 올라오고, 화면이 꺼지면 Wi-Fi/ADB가 끊겨 매번 USB·수동 `adb root`가 필요했다. `adb root`는 **5555를 열지 않는다** — adbd를 root로 재시작할 뿐이고 전송이 한 번 끊긴다. 5555 재부팅 유지는 폰의 `persist.adb.tcp.port=5555`가 담당하므로, 앱이 ① 부팅당 1회 root 승격 ② 끊긴 전송 재연결 ③ persist 보장 ④ 웨이크락 ⑤ Wi-Fi 재연결 창을 자동화한다
+  - 설정 토글 `relay.postBootHook`(기본 OFF) · `/proc/sys/kernel/random/boot_id`(폴백 `btime`)로 **부팅당 1회** · 물리 ID별 처리 토큰을 UserDefaults 에 영속해 **앱 재시작에도 반복하지 않는다**. 연결이 끊기면 토큰 캐시를 지워 다음 부팅을 다시 읽는다(60초 TTL)
+  - 순서는 **root → persist → wake lock** 고정: userdebug 기본 adbd(shell)는 `persist.*`를 쓸 수 없어 `adb root` 뒤에만 `setprop persist.adb.tcp.port 5555`가 성공한다(2026-11-12 S7 실측 `Failed to set property`). `ro.debuggable=1`/`id -u=0` 선검사로 `user` 빌드(S22/A90)는 호출 없이 건너뛴다
+  - `adb root`는 exit 0으로도 실패하므로 stdout/stderr 문구로 판정하고, `restarting adbd as root`면 disconnect/connect + `id -u` 폴링(20초)으로 재연결한다. 실패는 부팅당 3회·10분 쿨다운
+  - **부팅 직후 90초 화면 유지**: Android `WifiCountryCode`가 부팅 때 `Disconnect wifi to force update`를 1회 수행하는데 화면이 꺼져 있으면 자동 재연결이 지연됐다(2026-11-12 19:17 S7 이탈의 원인 — 웨이크락 실패 아님). `screen_off_timeout`을 `max(원래, 120000)`ms로 올리고 `input keyevent 224`로 깨운 뒤 90초 후 원래 값으로 복구한다(`-1` 유지). 앱이 중단되면 UserDefaults 예약으로 다음 실행에서 10분 이내 복구
+  - 미러링(`scrcpy`) 중에는 `adb root`가 세션을 끊으므로 보류하고 다음 틱에 재시도. mDNS 전용 전송은 건너뛴다
+  - 결과는 `DebugLogger` · `IssueLog postboot.hook`(`root=… · persist=… · wake=… · settle=…`) · 설정 상태 줄에 남긴다. 신규 에러 코드 `E-MAC-ADB-0009`(root 재연결) · `E-MAC-ADB-0010`(persist) · `E-MAC-PERM-0001`(웨이크락)
+  - 검증: `swift test` **909/909** · `./scripts/build-macos.sh debug` 완료(build `20261112.200829`) · S7 2차 재부팅(20:00:58) end-to-end `root=restarted · persist=유지 · wake=held · settle=90초`, `screen_off_timeout` 30000→120000→30000 복구, 정착 후에도 `:5555` 응답 · S22/A90 `건너뜀 — root 불가` · 같은 부팅에서 앱 재시작 시 재실행 없음 — 육안 확인은 `MANUAL_VERIFY` §40 121~125 ✅
+  - 성능: 상시 폴링 경로는 설정(UserDefaults) 조회 + 60초 캐시된 `boot_id` 확인뿐. 같은 부팅에서도 60초마다 `boot_id` 1회를 다시 읽어(잠든 사이 재부팅 감지) 토큰만 비교하고, 훅 본체는 부팅당 최초 1회(~10회 adb 호출)만 실행한다
+
 ### Fixed
 - **fix(macos)**: **Applications 격자·Dock 아이콘이 재빌드 후에도 회색 기본 아이콘으로 남던 문제** — 번들은 매번 `rm -rf` 로 재생성되는데 `CFBundleVersion` 이 `1` 고정이라 LaunchServices·iconservices·Dock 썸네일 캐시가 **같은 앱**으로 보고 갱신된 `AppIcon.icns` 를 계속 무시했다(2026-11-09 실측: Finder 목록은 정상, Applications 격자만 회색 — 번들 icns 는 16~1024px 전부 유효). 이제 빌드마다 `CFBundleVersion` 을 `YYYYMMDD.HHMMSS` 로 발급하고, 서명 검증 후 `lsregister -f` + 사용자 `com.apple.dock.iconcache` 삭제·Dock 재시작으로 캐시를 무효화한다
 

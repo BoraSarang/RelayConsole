@@ -1395,10 +1395,20 @@ actor DeviceMonitor {
             }
         }
 
+        // 부팅 후 첫 연결 훅 — 새 연결뿐 아니라 연결 중인 모든 기기를 매 틱 넘긴다.
+        // (미러링 보류·앱 재시작 후 첫 틱을 모두 커버한다. 설정 OFF면 컨트롤러가 즉시 반환)
+        await MainActor.run {
+            PostBootHookController.shared.consider(serials: found)
+        }
+
         // 끊김 — 활성 gate synthetic clear (후속조치 영구잔류 방지)
         for s in knownSerials where !foundSet.contains(s) {
             knownSerials.remove(s)
             states.removeValue(forKey: s)
+            // 재부팅 뒤 새 boot_id를 다시 읽을 수 있게 부팅 토큰 캐시를 지운다
+            await MainActor.run {
+                PostBootHookController.shared.forget(serial: s)
+            }
             // TCP 엔드포인트 유실 → 자동 재연결 (2026-09-27 · PLAN_wifi_reconnect)
             //
             // "USB 를 뽑아도 IP 로 계속" 의 목표는 **IP 가 바뀌어도** 성립해야 한다.
