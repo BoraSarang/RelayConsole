@@ -3,6 +3,14 @@
 > **육안 검증 대기는 `docs/MANUAL_VERIFY.md` 한 곳에 모았다** (2026-09-28) —
 > 여러 세션에 흩어져 있어 "남은 게 뭐였지" 를 한 번에 볼 수 없었다.
 
+## 완료 (2026-11-12)
+
+- [x] **T-2026-11-12-1 [P1] 부팅 후 첫 연결 훅 — adb root + 웨이크락 + 5555 영속** (1.25.0+ · `docs/plans/PLAN_postboot_hook_relayconsole.md` · **`MANUAL_VERIFY` §40 121~125 ✅ · 126 ⬜ 코드 경로**)
+  - 증상: S7(LineageOS 21 `herolte`)을 재부팅하면 `:5555`가 adbd root가 아닌 상태로 올라오고, 잠들면 Wi-Fi/ADB가 끊긴다. 매번 USB/수동 `adb root`가 필요하다.
+  - 원인: `adb root`는 **5555를 열지 않는다** — adbd를 root로 재시작할 뿐이고 전송이 한 번 끊긴다. 5555 재부팅 유지는 폰의 `persist.adb.tcp.port=5555`가 담당한다(S7은 이미 설정됨). S22/A90은 `user` 빌드라 `adb root` 불가. 부팅 시 Android `WifiCountryCode`가 Wi-Fi를 1회 끊는데, 화면이 꺼져 있으면 자동 재연결이 지연된다(19:17 이탈의 원인 — 웨이크락 실패 아님).
+  - 수정: 설정 토글 `relay.postBootHook`(기본 OFF) · 부팅 ID로 부팅당 1회 · `adb root` 출력 판정 · 재연결(disconnect/connect, 20초) · `/sys/power/wake_lock`에 `relayconsole` · root 가능 기기는 `persist.adb.tcp.port=5555` 보장 · 미러링 중 보류 · 3회/10분 재시도 · **부팅 직후 90초 화면 유지**(`screen_off_timeout` 임시 상향→복구) · `IssueLog postboot.hook`. **순서는 root → persist → wakelock → settle** (shell은 persist 설정 불가 — 2026-11-12 S7 실측).
+  - 검증 [HARD]: `swift test` **909/909** · `./scripts/build-macos.sh debug` 완료(1.25.0, build `20261112.200829`) · **S7 2차 재부팅 end-to-end 성공**(`root=restarted · persist=유지 · wake=held · settle=90초`, `screen_off_timeout` 30000→120000→30000 복구, 정착 후 `:5555` 유지) · S22/A90 `건너뜀 — root 불가` · 같은 부팅에서 앱 재시작 시 재실행 없음 · 미러링 보류는 코드 경로만 확인.
+
 ## 완료 (2026-11-07)
 
 - [x] **T-2026-11-07-1 [P1] Wi-Fi ADB 수동 연결·자동 재연결에서 앱 전체가 얼어붙음** (1.25.0+ · PR #141 머지 `9eb5cc9` · **육안 확인은 `MANUAL_VERIFY` §39 117**)

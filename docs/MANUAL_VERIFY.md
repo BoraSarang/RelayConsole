@@ -690,3 +690,30 @@ t=75s … t=105s → 192.168.190.49:38671   (첫 온라인 S22 로 전환)
 
 - **코드/테스트** — `swift test` 885/885 · XCTest 9/9 · `./scripts/build-macos.sh debug` BUILD SUCCEEDED · PR #141 squash merge `9eb5cc9`.
 - **117~120** — 사용자 육안 확인 대기. `.216` 이 연결된 상태에서는 117 을 재현할 수 없다.
+
+## 40. 부팅 후 첫 연결 훅 — adb root + 웨이크락 + 5555 영속 (T-2026-11-12-1 · 2026-11-12 · 앱 1.25.0+)
+
+> 배경: S7(`herolte` · LineageOS 21 · `userdebug`)은 재부팅 뒤 `:5555`가 root adbd로 올라오지 않고,
+> 화면이 꺼지면 Wi-Fi가 잠들어 ADB가 끊긴다. 앱이 부팅당 1회 `adb root` → 재연결 →
+> `persist.adb.tcp.port=5555` 보장 → `/sys/power/wake_lock` 기록 → **90초 화면 유지**를 자동 수행한다.
+> 설정 토글 `relay.postBootHook`(기본 OFF)을 켠 상태에서 확인한다.
+
+| # | 확인할 것 | 방법 | 기대 결과 | 상태 |
+|---|---|---|---|---|
+| 121 | **S7을 재부팅만 해도 USB 없이 `:5555`가 열린다** | S7 재부팅(USB 뺀 상태) → 2~3분 대기 → Mac에서 `nc -vz 192.168.190.216 5555` | `succeeded!` — USB 연결 없이 포트가 열린다 | ✅ |
+| 122 | **앱이 부팅 후 첫 연결에서 훅을 1회 실행한다** | 연결 직후 `logs/device-*.jsonl`에서 `postboot.hook` 확인 | `root=restarted · persist=유지 · wake=held · settle=90초`, `ok:true` 1건. 같은 부팅에서 재실행 없음 | ✅ |
+| 123 | **웨이크락이 걸려 화면이 꺼져도 유지된다** | `adb -s 192.168.190.216:5555 shell cat /sys/power/wake_lock` → 화면 끄고 60초 이상 ping | `relayconsole` · ping 100% 응답(실측 45/45) | ✅ |
+| 124 | **`persist.adb.tcp.port`가 디스크에 남는다** | `adb -s 192.168.190.216:5555 shell cat /data/property/persist.adb.tcp.port` | `5555` (재부팅 뒤에도 유지) | ✅ |
+| 125 | **S22/A90은 조용히 건너뛴다** | 두 기기 연결 후 `logs/device-*.jsonl`의 `postboot.hook` | `건너뜀 — root 불가 (debuggable=0 uid=2000)`, `ok:true`. 앱이 멈추거나 재시도 폭주하지 않는다 | ✅ |
+| 126 | **미러링 중에는 보류한다** | S7 미러링 시작 → 재부팅 없이 토글 ON 상태로 연결 | `postboot.status`가 보류로 남고, 미러링 종료 후 다음 틱에 실행된다 | ⬜ |
+
+### 실측 기록 (§40 · 2026-11-12)
+
+- **코드/테스트** — `swift test` **909/909**(신규 24 — 판정·토큰·재시도·화면 유지/복구) · `./scripts/build-macos.sh debug` 완료(1.25.0, build `20261112.200829`).
+- **1차 재부팅(19:17)** — 훅 실행 직후 S7이 네트워크에서 이탈(ping 100% loss · ARP incomplete). 원인은 웨이크락 실패가 아니라 **Android `WifiCountryCode`가 부팅 때 `Disconnect wifi to force update`를 1회 수행**하고, 화면이 꺼진 상태에서 자동 재연결이 지연된 것이었다. 부팅당 국가 코드 갱신은 1회(`DISCONNECT_WIFI_COUNT_MAX = 1`)다.
+- **보완** — 부팅 직후 **90초 화면 유지**를 추가했다. `settings get system screen_off_timeout` → `max(원래, 120000)`ms → `input keyevent 224` → 90초 → 원래 값 복구. 앱이 중간에 죽으면 UserDefaults 예약으로 다음 실행에서 10분 이내 복구한다.
+- **2차 재부팅(20:00:58)** — `root=restarted · persist=유지 · wake=held · settle=90초`, `screen_off_timeout` **30000 → 120000 → 30000** 복구 확인. 정착 후에도 `:5555`가 응답했고, 20:01:47 화면 깨움 뒤 20:01:57 잠금화면 정책으로 다시 꺼졌지만 Wi-Fi는 재연결된 상태를 유지했다.
+- **앱 재시작** — 같은 부팅에서 앱을 다시 띄워도 `postboot.hook` 추가 실행이 없다.
+- **S22/A90** — `건너뜀 — root 불가 (debuggable=0 uid=2000)` 1건씩, `ok:true`. 연결은 흔들리지 않았다.
+- **126** — 미러링 보류는 코드 경로(`ScrcpyController.isRunning` 가드)만 확인했다. 실제 미러링 중 재현은 남음.
+- **주의** — 웨이크락은 root adbd에서만 성공한다. 90초 창이 끝난 뒤 잠금화면 정책으로 화면이 다시 꺼질 수 있으나, 이 창의 목적은 국가 코드 갱신 뒤 Wi-Fi 재연결을 확보하는 것이다.
