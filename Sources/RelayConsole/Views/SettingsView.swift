@@ -42,6 +42,9 @@ struct SettingsView: View {
     @AppStorage(LoginItemLogic.consoleAtLaunchKey) private var consoleAtLaunch = false
     /// USB 연결 시 자동 Wi-Fi ADB — 기본 ON (사용자 확정)
     @AppStorage(WifiAdbLogic.autoModeKey) private var wifiAuto = true
+    /// 부팅 후 첫 연결 훅 — 기본 OFF (root 동작이므로 사용자가 켠다)
+    @AppStorage(PostBootHookLogic.enabledKey) private var postBootHook = false
+    @ObservedObject private var postBoot = PostBootHookController.shared
     @ObservedObject private var login = LoginItemController.shared
     @State private var selection: SettingsTab? = .general
 
@@ -136,6 +139,17 @@ struct SettingsView: View {
                 .font(OPFont.body(10))
                 .foregroundStyle(OPColor.inkDim)
                 .fixedSize(horizontal: false, vertical: true)
+            Toggle(L10n.string("wifi.setting.postboot"), isOn: $postBootHook)
+            Text(L10n.string("wifi.setting.postboot.help"))
+                .font(OPFont.body(10))
+                .foregroundStyle(OPColor.inkDim)
+                .fixedSize(horizontal: false, vertical: true)
+            if let message = postBoot.lastMessage {
+                Text(message)
+                    .font(OPFont.body(10))
+                    .foregroundStyle(postBoot.lastMessageIsError ? OPColor.bad : OPColor.inkDim)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 

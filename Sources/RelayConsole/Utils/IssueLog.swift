@@ -51,6 +51,8 @@ enum IssueLog {
         static let adbPollFailed = "adb.poll.failed"
         /// 폴링 복구 — 실패 구간의 끝
         static let adbPollRecovered = "adb.poll.recovered"
+        /// 부팅 후 첫 연결 훅 — adb root · 5555 영속 · 웨이크락 (2026-11-12)
+        static let postBootHook = "postboot.hook"
     }
 
     private static let dirName = "logs"
