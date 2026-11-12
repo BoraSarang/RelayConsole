@@ -1,6 +1,6 @@
 # PLAN_postboot_hook_relayconsole — 부팅 후 첫 연결 훅 (adb root + 웨이크락 + 5555 영속)
 
-> 착수: 2026-11-12 · 규모 M · 상태: **구현·실기기 검증 완료 (2026-11-12) · PR 진행**
+> 착수: 2026-11-12 · 규모 M · 상태: **구현·실기기 검증 완료 (2026-11-12) · PR #144**
 > 선행: `PLAN_wifi_auto_tcpip_relayconsole`(USB→tcpip) · `PLAN_wifi_reconnect_relayconsole`(TCP 유실 재연결) · `PLAN_wifi_pairing_relayconsole`(mDNS 재부팅 내구성)
 > TODO: `T-2026-11-12-1`
 
