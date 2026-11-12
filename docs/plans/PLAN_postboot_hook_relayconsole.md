@@ -65,6 +65,7 @@
 
 ### 3.2 부팅 1회 판정
 1. `boot_id`를 읽어 `bootToken`으로 쓴다. 비어 있으면 `/proc/stat`의 `btime`을 쓴다.
+   캐시는 60초 — Mac이 잠든 사이 폰이 재부팅한 경우에도 새 토큰을 다시 읽는다.
 2. `ro.boot.serialno`(물리 ID)를 읽는다. 실패하면 serial로 폴백.
 3. UserDefaults `relay.postBoot.boot.<physicalId>`와 비교한다.
    - 같으면 이미 처리한 부팅 → 즉시 반환.
