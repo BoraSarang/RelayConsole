@@ -709,7 +709,7 @@ t=75s … t=105s → 192.168.190.49:38671   (첫 온라인 S22 로 전환)
 
 ### 실측 기록 (§40 · 2026-11-12)
 
-- **코드/테스트** — `swift test` **909/909**(신규 24 — 판정·토큰·재시도·화면 유지/복구) · `./scripts/build-macos.sh debug` 완료(1.25.0, build `20261112.200829`).
+- **코드/테스트** — `swift test` **909/909**(신규 24 — 판정·토큰·재시도·화면 유지/복구) · `./scripts/build-macos.sh debug` 완료(1.25.0, build `20261112.200829`) · PR #144 squash merge `c50f4ef`.
 - **1차 재부팅(19:17)** — 훅 실행 직후 S7이 네트워크에서 이탈(ping 100% loss · ARP incomplete). 원인은 웨이크락 실패가 아니라 **Android `WifiCountryCode`가 부팅 때 `Disconnect wifi to force update`를 1회 수행**하고, 화면이 꺼진 상태에서 자동 재연결이 지연된 것이었다. 부팅당 국가 코드 갱신은 1회(`DISCONNECT_WIFI_COUNT_MAX = 1`)다.
 - **보완** — 부팅 직후 **90초 화면 유지**를 추가했다. `settings get system screen_off_timeout` → `max(원래, 120000)`ms → `input keyevent 224` → 90초 → 원래 값 복구. 앱이 중간에 죽으면 UserDefaults 예약으로 다음 실행에서 10분 이내 복구한다.
 - **2차 재부팅(20:00:58)** — `root=restarted · persist=유지 · wake=held · settle=90초`, `screen_off_timeout` **30000 → 120000 → 30000** 복구 확인. 정착 후에도 `:5555`가 응답했고, 20:01:47 화면 깨움 뒤 20:01:57 잠금화면 정책으로 다시 꺼졌지만 Wi-Fi는 재연결된 상태를 유지했다.
