@@ -7,7 +7,7 @@
 
 ---
 
-## Unreleased (PR #136·#139·#141 머지 · `9eb5cc9` · 버전 미정)
+## Unreleased (PR #136·#139·#141·#144 머지 · `c50f4ef` · 버전 미정)
 
 ### Added
 - **feat(macos)**: **부팅 후 첫 연결 훅 — `adb root` + 웨이크락 + `persist.adb.tcp.port=5555` + 부팅 직후 90초 화면 유지** — S7(`herolte` · LineageOS 21 · `userdebug`)을 재부팅하면 `:5555`가 root adbd가 아닌 상태로 올라오고, 화면이 꺼지면 Wi-Fi/ADB가 끊겨 매번 USB·수동 `adb root`가 필요했다. `adb root`는 **5555를 열지 않는다** — adbd를 root로 재시작할 뿐이고 전송이 한 번 끊긴다. 5555 재부팅 유지는 폰의 `persist.adb.tcp.port=5555`가 담당하므로, 앱이 ① 부팅당 1회 root 승격 ② 끊긴 전송 재연결 ③ persist 보장 ④ 웨이크락 ⑤ Wi-Fi 재연결 창을 자동화한다
