@@ -13,3 +13,6 @@ env
 .agent/
 *.log
 RelayConsole_src_clean.zip
+
+# agent scratch — 커밋 금지 (_workspace/)
+_workspace/
