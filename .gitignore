@@ -16,3 +16,9 @@ RelayConsole_src_clean.zip
 
 # agent scratch — 커밋 금지 (_workspace/)
 _workspace/
+
+# mockup previews — HTML이 정본, PNG는 로컬 미리보기
+docs/mockups/**/screens/
+docs/mockups/**/shots/
+docs/mockups/**/preview/
+docs/mockups/*.png
