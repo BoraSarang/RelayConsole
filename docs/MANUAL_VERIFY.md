@@ -801,3 +801,19 @@ t=75s … t=105s → 192.168.190.49:38671   (첫 온라인 S22 로 전환)
 
 - **코드/테스트** — `defaultLegacyPaste = false` (기존 사용자 설정값은 유지) · `swift test` **926/926**(기본 인자에 `--legacy-paste` 없음·명시 시에만 추가) · `./scripts/build-macos.sh debug` BUILD SUCCEEDED.
 - **근거** — `scrcpy --help`(5.0.1): `--legacy-paste` = "Inject computer clipboard text as a sequence of key events… It can break non-ASCII content". 기본 경로는 클립보드를 기기에 프로그램으로 설정한다.
+
+---
+
+## 46. 상위 폴더로 이동 — 드롭 대상 확장 (T-2026-11-15-5 · 2026-11-15 · 앱 1.25.0+)
+
+| # | 확인할 것 | 방법 | 기대 결과 | 상태 |
+|---|---|---|---|---|
+| 148 | **브레드크럼으로 올린다** | `/sdcard/Download` 에서 파일을 경로 바의 `sdcard` 에 올린다 | 그 파일이 `/sdcard` 로 이동하고 목록에서 사라진다 | ⬜ |
+| 149 | **사이드바 폴더로 옮긴다** | 파일을 사이드바 `DCIM` 위에 올린다 | 그 폴더로 이동한다 | ⬜ |
+| 150 | **목록 빈 곳에 놓으면 현재 폴더로 간다** | 같은 폴더 안의 파일을 목록 빈 곳(행 밖)에 올린다 | 위치 변화 없음 + `이미 그 폴더 안에 있습니다` 표시 | ⬜ |
+| 151 | **드롭 대상이 보인다** | 위 세 곳 각각에 드래그를 대기시킨다 | 대상이 cta 테두리(브레드크럼·목록) 또는 cta 배경(사이드바)으로 표시된다 | ⬜ |
+
+### 실측 기록 (§46 · 2026-11-15)
+
+- **코드/테스트** — `swift test` **927/927**(신규 1 — `sameDirectory`) · `./scripts/build-macos.sh debug` BUILD SUCCEEDED(1.25.0, build `20261115.045026`) · L10n `files.move.sameDir` en·ko 동시 추가(키 969=969).
+- **규칙** — 이동 제약은 그대로다: **같은 저장 영역만**(`/sdcard` ↔ `/data/local/tmp` 교차 이동 거부) · 폴더를 자기 자신·하위로 옮기는 것 거부 · **덮어쓰지 않음**(같은 이름은 알림).

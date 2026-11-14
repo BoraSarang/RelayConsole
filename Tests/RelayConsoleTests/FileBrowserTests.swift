@@ -323,7 +323,8 @@ struct FileBrowserTests {
     @Test func moveAllowedWithinSameRoot() {
         #expect(FileBrowserLogic.canMove(path: "/sdcard/Download/a.txt", to: "/sdcard/DCIM"))
         #expect(FileBrowserLogic.canMove(path: "/sdcard/Download/a.txt", to: "/sdcard"))
-        #expect(FileBrowserLogic.canMove(path: "/data/local/tmp/x.log", to: "/data/local/tmp"))
+        // 같은 저장 영역 안의 다른 폴더로는 이동 가능
+        #expect(FileBrowserLogic.canMove(path: "/data/local/tmp/x.log", to: "/data/local/tmp/sub"))
         // trailing slash 를 붙여도 같은 경로로 본다
         #expect(FileBrowserLogic.canMove(path: "/sdcard/Download/a.txt", to: "/sdcard/DCIM/"))
     }
@@ -343,6 +344,18 @@ struct FileBrowserTests {
     @Test func moveBlockedIntoSelfOrDescendant() {
         #expect(FileBrowserLogic.moveBlockReason(path: "/sdcard/A", to: "/sdcard/A") == .intoSelf)
         #expect(FileBrowserLogic.moveBlockReason(path: "/sdcard/A", to: "/sdcard/A/B") == .intoSelf)
+    }
+
+    @Test func moveBlockedWhenAlreadyInThatDirectory() {
+        // 브레드크럼(현재 폴더)이나 목록에 떼면 변화가 없다 — 사유를 알려준다
+        #expect(
+            FileBrowserLogic.moveBlockReason(path: "/sdcard/Download/a.txt", to: "/sdcard/Download")
+                == .sameDirectory
+        )
+        #expect(FileBrowserLogic.moveBlockReason(path: "/sdcard/a.txt", to: "/sdcard") == .sameDirectory)
+        #expect(!FileBrowserLogic.canMove(path: "/sdcard/Download/a.txt", to: "/sdcard/Download"))
+        // 형제 폴더는 정상 이동
+        #expect(FileBrowserLogic.canMove(path: "/sdcard/Download/a.txt", to: "/sdcard/DCIM"))
     }
 
     @Test func moveTargetKeepsNameAndQuotesSpaces() {

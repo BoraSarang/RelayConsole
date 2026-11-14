@@ -256,6 +256,8 @@ enum FileBrowserLogic {
         case sourceNotAllowed
         case differentRoot
         case intoSelf
+        /// 이미 그 폴더 안에 있음 — 이동해도 변화가 없다(브레드크럼·현재 폴더에 놓기)
+        case sameDirectory
     }
 
     private static func trimmedPath(_ path: String) -> String {
@@ -281,6 +283,8 @@ enum FileBrowserLogic {
         guard srcRoot == dstRoot else { return .differentRoot }
         // 폴더를 자기 자신·자기 하위 폴더로 옮기면 트리가 사라진다
         guard dst != src, !dst.hasPrefix(src + "/") else { return .intoSelf }
+        // 이미 그 폴더 안에 있으면 이동해도 변화가 없다 (브레드크럼·현재 폴더에 놓기)
+        if parentPath(src) == dst { return .sameDirectory }
         return nil
     }
 
@@ -1010,6 +1014,8 @@ final class FileBrowserController: ObservableObject {
             return L10n.format("files.move.crossRoot", path)
         case .intoSelf:
             return L10n.format("files.move.intoSelf", path)
+        case .sameDirectory:
+            return L10n.format("files.move.sameDir", path)
         case .sourceNotAllowed, .none:
             return L10n.format("files.move.forbidden", path)
         }

@@ -30,6 +30,10 @@ struct FileBrowserContent: View {
     @State private var selectionAnchor: String?
     /// 드롭 대상이 된 폴더 행 — 놓을 수 있을 때 테두리로 표시
     @State private var dropTargetID: String?
+    /// 드롭 대상이 된 **경로**(브레드크럼 · 사이드바 · 현재 폴더)
+    @State private var dropPathTarget: String?
+    /// 목록 영역이 드롭 대상이 된 상태 — 여긴 현재 폴더로 이동
+    @State private var dropListTarget = false
     /// 새 폴더 만들기 — 입력창에 쓰는 이름
     @State private var newFolderName: String = ""
     @State private var showNewFolderDialog = false
@@ -319,22 +323,32 @@ struct FileBrowserContent: View {
                                 .font(.system(size: 8, weight: .bold))
                                 .foregroundStyle(OPColor.inkDim.opacity(0.6))
                         }
-                        Button {
-                            ctl.navigate(to: crumb.path)
-                        } label: {
-                            Text(crumb.label)
-                                .font(OPFont.number(11))
-                                .foregroundStyle(idx == crumbs.count - 1 ? OPColor.cta : OPColor.ink)
-                                .lineLimit(1)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 5)
-                                .background(
-                                    idx == crumbs.count - 1
-                                        ? OPColor.cta.opacity(0.14) : Color.clear,
-                                    in: RoundedRectangle(cornerRadius: 6)
-                                )
+                        // 상위 폴더로 이동 — 브레드크럼에 떼면 그 경로로 옮겨 간다
+                        droppableFolder(crumb.path) {
+                            Button {
+                                ctl.navigate(to: crumb.path)
+                            } label: {
+                                Text(crumb.label)
+                                    .font(OPFont.number(11))
+                                    .foregroundStyle(idx == crumbs.count - 1 ? OPColor.cta : OPColor.ink)
+                                    .lineLimit(1)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 5)
+                                    .background(
+                                        idx == crumbs.count - 1
+                                            ? OPColor.cta.opacity(0.14) : Color.clear,
+                                        in: RoundedRectangle(cornerRadius: 6)
+                                    )
+                            }
+                            .buttonStyle(.plain)
                         }
-                        .buttonStyle(.plain)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 6)
+                                .stroke(
+                                    dropPathTarget == crumb.path ? OPColor.cta : Color.clear,
+                                    lineWidth: 1
+                                )
+                        )
                     }
                 }
             }
@@ -392,27 +406,30 @@ struct FileBrowserContent: View {
                     .padding(.horizontal, 10)
                     .padding(.top, 4)
                 ForEach(Array(FileBrowserLogic.favorites.enumerated()), id: \.offset) { _, fav in
-                    Button {
-                        ctl.navigate(to: fav.path)
-                    } label: {
-                        HStack(spacing: 6) {
-                            Image(systemName: iconFor(fav.label))
-                                .font(.system(size: 11))
-                                .frame(width: 14)
-                            Text(fav.label)
-                                .font(OPFont.body(11))
-                                .lineLimit(1)
-                            Spacer()
+                    droppableFolder(fav.path) {
+                        Button {
+                            ctl.navigate(to: fav.path)
+                        } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: iconFor(fav.label))
+                                    .font(.system(size: 11))
+                                    .frame(width: 14)
+                                Text(fav.label)
+                                    .font(OPFont.body(11))
+                                    .lineLimit(1)
+                                Spacer()
+                            }
+                            .foregroundStyle(ctl.path.hasPrefix(fav.path) ? OPColor.cta : OPColor.inkDim)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .contentShape(Rectangle())
                         }
-                        .foregroundStyle(ctl.path.hasPrefix(fav.path) ? OPColor.cta : OPColor.inkDim)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 5)
-                        .contentShape(Rectangle())
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
                     .background(
-                        ctl.path.hasPrefix(fav.path)
-                            ? OPColor.cta.opacity(0.14) : Color.clear,
+                        dropPathTarget == fav.path
+                            ? OPColor.cta.opacity(0.22)
+                            : (ctl.path.hasPrefix(fav.path) ? OPColor.cta.opacity(0.14) : Color.clear),
                         in: RoundedRectangle(cornerRadius: 6)
                     )
                 }
@@ -447,28 +464,33 @@ struct FileBrowserContent: View {
                         .frame(width: 14, height: 18)
                 }
                 .buttonStyle(.plain)
-                Button {
-                    ctl.navigate(to: dir)
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "folder")
-                            .font(.system(size: 11))
-                            .frame(width: 14)
-                        Text(label)
-                            .font(OPFont.body(11))
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                        Spacer()
+                // 트리 폴더로 이동 — 거기에 떼면 그 경로로 옮겨 간다
+                droppableFolder(dir) {
+                    Button {
+                        ctl.navigate(to: dir)
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "folder")
+                                .font(.system(size: 11))
+                                .frame(width: 14)
+                            Text(label)
+                                .font(OPFont.body(11))
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                            Spacer()
+                        }
+                        .foregroundStyle(isCurrent ? OPColor.cta : OPColor.inkDim)
+                        .padding(.vertical, 4)
+                        .contentShape(Rectangle())
                     }
-                    .foregroundStyle(isCurrent ? OPColor.cta : OPColor.inkDim)
-                    .padding(.vertical, 4)
-                    .contentShape(Rectangle())
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
             }
             .padding(.leading, CGFloat(depth) * 12)
             .background(
-                isCurrent ? OPColor.cta.opacity(0.14) : Color.clear,
+                dropPathTarget == dir
+                    ? OPColor.cta.opacity(0.22)
+                    : (isCurrent ? OPColor.cta.opacity(0.14) : Color.clear),
                 in: RoundedRectangle(cornerRadius: 6)
             )
             if expanded {
@@ -527,6 +549,20 @@ struct FileBrowserContent: View {
             ctl.push(urls: urls)
             return true
         }
+        // 목록 빈 곳(행이 아닌 곳)에 떼면 **현재 폴더**로 옮긴다
+        .dropDestination(for: FileBrowserDragPayload.self) { payloads, _ in
+            let paths = payloads.flatMap(\.paths)
+            guard !paths.isEmpty else { return false }
+            dropListTarget = false
+            ctl.move(paths: paths, to: ctl.path)
+            return true
+        } isTargeted: { targeted in
+            dropListTarget = targeted
+        }
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(dropListTarget ? OPColor.cta : Color.clear, lineWidth: 1)
+        )
     }
 
     private var columnHeader: some View {
@@ -696,6 +732,41 @@ struct FileBrowserContent: View {
             dropTargetID = item.id
         } else if dropTargetID == item.id {
             dropTargetID = nil
+        }
+    }
+
+    // MARK: 폴더 경로 드롭 대상 (브레드크럼 · 사이드바 · 현재 폴더)
+
+    /// 경로(폴더)를 드롭 대상으로 만든다 — 기기 내 이동 + Finder 전송
+    private func droppableFolder<Content: View>(
+        _ path: String,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        content()
+            .dropDestination(for: FileBrowserDragPayload.self) { payloads, _ in
+                let paths = payloads.flatMap(\.paths)
+                guard !paths.isEmpty else { return false }
+                dropPathTarget = nil
+                ctl.move(paths: paths, to: path)
+                return true
+            } isTargeted: { targeted in
+                setDropPath(path, targeted)
+            }
+            .dropDestination(for: URL.self) { urls, _ in
+                guard !urls.isEmpty else { return false }
+                dropPathTarget = nil
+                ctl.push(urls: urls, to: path)
+                return true
+            } isTargeted: { targeted in
+                setDropPath(path, targeted)
+            }
+    }
+
+    private func setDropPath(_ path: String, _ targeted: Bool) {
+        if targeted {
+            dropPathTarget = path
+        } else if dropPathTarget == path {
+            dropPathTarget = nil
         }
     }
 

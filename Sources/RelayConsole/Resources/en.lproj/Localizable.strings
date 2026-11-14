@@ -398,6 +398,7 @@
 "files.move.intoSelf" = "Cannot move a folder into itself: %@";
 "files.move.moving" = "Moving %d item(s)…";
 "files.move.partial" = "Moved %d, failed %d — %@";
+"files.move.sameDir" = "Already in that folder — nothing moved: %@";
 "files.mkdir.button" = "New Folder";
 "files.mkdir.done" = "Created folder: %@";
 "files.mkdir.hint" = "Creates in: %@";
