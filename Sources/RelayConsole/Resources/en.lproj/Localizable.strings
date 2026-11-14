@@ -708,6 +708,7 @@
 "settings.scrcpy.hwdec.note" = "Auto falls back to software on failure. Choosing VideoToolbox explicitly exits on failure instead of falling back.";
 "settings.scrcpy.hwdec.videotoolbox" = "VideoToolbox (advanced)";
 "settings.scrcpy.legacyPaste" = "Legacy paste mode";
+"settings.scrcpy.legacyPaste.note" = "OFF (recommended): the clipboard is handed to the device as-is, so Korean and other Unicode text paste correctly. ON: sends the text as key events — Korean breaks, and it is only needed for devices that misbehave when their clipboard is set programmatically.";
 "settings.scrcpy.maxFps" = "Max frame rate (fps)";
 "settings.scrcpy.maxSize" = "Max resolution (px)";
 "settings.scrcpy.noControl" = "Read-only mirror (no input)";

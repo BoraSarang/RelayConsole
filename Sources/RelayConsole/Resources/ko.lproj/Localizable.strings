@@ -708,6 +708,7 @@
 "settings.scrcpy.hwdec.note" = "자동은 실패 시 소프트웨어로 되돌립니다. VideoToolbox를 직접 고르면 실패 시 폴백 없이 종료됩니다.";
 "settings.scrcpy.hwdec.videotoolbox" = "VideoToolbox (고급)";
 "settings.scrcpy.legacyPaste" = "구형 붙여넣기 방식";
+"settings.scrcpy.legacyPaste.note" = "OFF(권장): 클립보드를 기기로 그대로 넘겨 한글 등 유니코드가 붙습니다. ON: 텍스트를 키 이벤트 순서로 보내서 한글은 깨지고, 일부 기기가 클립보드 설정을 오처리할 때만 씁니다.";
 "settings.scrcpy.maxFps" = "최대 프레임 (fps)";
 "settings.scrcpy.maxSize" = "최대 해상도 (px)";
 "settings.scrcpy.noControl" = "읽기 전용 미러 (입력 없음)";

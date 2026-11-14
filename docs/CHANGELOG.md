@@ -9,6 +9,11 @@
 
 ## Unreleased (PR #136·#139·#141·#144 머지 · `c50f4ef` · 버전 미정)
 
+### Changed
+- **chore(macos)**: **scrcpy "구형 붙여넣기 방식" 기본값을 OFF 로 변경** — ON(`--legacy-paste`)은 클립보드 텍스트를 **키 이벤트 시퀀스**로 주입한다. scrcpy 문서도 "it can break non-ASCII content" 라고 명시하며, 실제로 한글 등 조합(IME)된 유니코드는 깨진다. 기본 경로는 클립보드를 기기에 프로그램으로 설정하므로 유니코드가 그대로 전달된다. 기존 사용자 설정값은 그대로 두고 **새 기본값만 OFF** 로 바꿨다. 설정 토글 아래에 한 줄 설명을 넣었다
+  - 참고: scrcpy 는 키 이벤트만 기기로 보내므로 **맥 IME 로 친 한글은 그대로 전달되지 않는다**. 기기 입력창에 한글로 넣으려면 맥에서 복사 후 미러링 창에서 `Ctrl+v`(macOS 기본 MOD 기준 `Cmd+v`·`Alt+v`도 동일)
+  - L10n `settings.scrcpy.legacyPaste.note` (en·ko 동시) · 검증: `swift test` **926/926**
+
 ### Added
 - **feat(macos)**: **파일 탐색기 폴더 생성(mkdir)** — 툴바 `새 폴더` 버튼으로 현재 폴더에 새 폴더를 만든다. 이름 입력창에서 경로 구분자(`/`)·`.`/`..`·빈 값은 막고, 공백이 있는 이름은 따옴표로 인용한다(`mkdir '/sdcard/New Folder'`). **같은 이름이 있으면 덮어쓰지 않고 실패 사유를 그대로 보여준다**. 생성 후 목록·사이드바 트리를 갱신한다
   - 검증: `swift test` **922/922**(신규 2 — 이름 검증·인용) · 육안 확인은 `MANUAL_VERIFY` §43 139~141
@@ -33,6 +38,10 @@
   - 성능: 상시 폴링 경로는 설정(UserDefaults) 조회 + 60초 캐시된 `boot_id` 확인뿐. 같은 부팅에서도 60초마다 `boot_id` 1회를 다시 읽어(잠든 사이 재부팅 감지) 토큰만 비교하고, 훅 본체는 부팅당 최초 1회(~10회 adb 호출)만 실행한다
 
 ### Fixed
+- **fix(macos)**: **드래그 고스트가 커서에서 크게 떨어져 보이던 문제** — SwiftUI 는 드래그 프리뷰를 **소스 뷰(행 전체)의 중앙**에 건다. 행 폭이 ~630pt 인데 이름 텍스트를 잡아 끄면 고스트가 **커서 +250pt** 어긋나 "잡은 파일"이 어디 있는지 헷갈렸다(2026-11-15 실측: 커서 1172→고스트 왼쪽 1314 / 커서 1513→고스트 왼쪽 1726). 이제 행의 커서 위치와 행 크기를 기록해 프리뷰를 `grab - rowSize/2` 만큼 반대로 밀어 **커서 아래에 붙는다**. 탭·더블클릭·컨텍스트 메뉴와 충돌하지 않게 호버로 위치를 잡는다
+  - 순수 로직: `FileBrowserLogic.dragAnchorOffset` — `FileBrowserTests` 3건
+  - 검증: `swift test` **926/926** · 육안 확인은 `MANUAL_VERIFY` §44 142~144
+
 - **fix(macos)**: **Applications 격자·Dock 아이콘이 재빌드 후에도 회색 기본 아이콘으로 남던 문제** — 번들은 매번 `rm -rf` 로 재생성되는데 `CFBundleVersion` 이 `1` 고정이라 LaunchServices·iconservices·Dock 썸네일 캐시가 **같은 앱**으로 보고 갱신된 `AppIcon.icns` 를 계속 무시했다(2026-11-09 실측: Finder 목록은 정상, Applications 격자만 회색 — 번들 icns 는 16~1024px 전부 유효). 이제 빌드마다 `CFBundleVersion` 을 `YYYYMMDD.HHMMSS` 로 발급하고, 서명 검증 후 `lsregister -f` + 사용자 `com.apple.dock.iconcache` 삭제·Dock 재시작으로 캐시를 무효화한다
 
 - **fix(macos)**: **죽은 기기 하나 때문에 정상 기기 세션까지 끊기던 문제** — `No route to host` 회복이 무조건 전역 `adb kill-server` 였다. 죽은 `.216` 을 재시도할 때마다 S22 전송이 함께 끊겼고, 다른 앱(DroidRelay)의 ADB 세션도 흔들렸다. 이제 `adb devices` 에 `device` 가 **하나라도** 있으면 서버는 정상으로 보고 **대상만 disconnect/connect** 한다. 전역 재시작은 살아 있는 전송이 0일 때만 하고, 기동 직후 빈 목록은 **1.2초 뒤 재확인**한 다음에만 결정한다(2026-11-07 11:46 실측: 기동 3초 뒤 재시작이 3대를 모두 끊었다). 생략한 결정은 `wifi.server.restartSkipped` 로 남긴다

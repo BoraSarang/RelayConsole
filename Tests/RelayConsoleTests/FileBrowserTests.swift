@@ -394,6 +394,32 @@ struct FileBrowserTests {
         ])
     }
 
+    // MARK: 드래그 프리뷰 앵커 보정
+
+    @Test func dragAnchorOffsetCancelsSwiftUICentering() {
+        // SwiftUI 는 프리뷰를 행(폭 630) 중앙에 건다.
+        // 행 왼쪽(x=64)을 잡으면 고스트가 커서 +251pt 로 밀린다 → 그만큼 반대로 민다.
+        let row = CGSize(width: 630, height: 30)
+        let offset = FileBrowserLogic.dragAnchorOffset(grab: CGPoint(x: 64, y: 15), rowSize: row)
+        #expect(offset.width == -251)
+        #expect(offset.height == 0)
+    }
+
+    @Test func dragAnchorOffsetIsZeroWhenGrabbedAtCenter() {
+        let row = CGSize(width: 630, height: 30)
+        let offset = FileBrowserLogic.dragAnchorOffset(grab: CGPoint(x: 315, y: 15), rowSize: row)
+        #expect(offset.width == 0)
+        #expect(offset.height == 0)
+    }
+
+    @Test func dragAnchorOffsetIgnoresUnknownRowSize() {
+        let offset = FileBrowserLogic.dragAnchorOffset(
+            grab: CGPoint(x: 40, y: 10),
+            rowSize: .zero
+        )
+        #expect(offset == .zero)
+    }
+
     // MARK: 헬퍼
 
     private func mk(_ name: String, dir: Bool, size: Int64 = 0) -> FileBrowserLogic.Item {

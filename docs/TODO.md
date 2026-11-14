@@ -5,6 +5,19 @@
 
 ## 완료 (2026-11-15)
 
+- [ ] **T-2026-11-15-3 [P2] 드래그 고스트가 커서에서 떨어져 보이던 문제** (1.25.0+ · PR #146 · **육안 대기 `MANUAL_VERIFY` §44**)
+  - 요청: "파일 선택해서 드래그 하려니까 마우스 포인터 위치랑.. 드래그 되는 파일 위치가 애매하게 동떨어져 있다"
+  - 원인(측정): SwiftUI 는 드래그 프리뷰를 **소스 뷰(행 전체)의 중앙**에 건다. 행 폭이 ~630pt 인데 이름 텍스트(행 왼쪽)를 잡으면 고스트가 **커서 +248~251pt** 로 밀려난다(자홍 마커 + 픽셀 경계 상자 실측: 커서 1172→고스트 왼쪽 1314, 커서 1513→고스트 왼쪽 1726).
+  - 수정: 행의 커서 위치(`onContinuousHover`)와 행 크기(`onGeometryChange`)를 기록하고, 프리뷰를 `grab - rowSize/2` 만큼 반대로 민다(`FileBrowserLogic.dragAnchorOffset`). 탭·더블클릭·컨텍스트 메뉴와 충돌하지 않도록 **호버**를 쓴다(드래그 제스처를 쓰면 탭이 씹힌다).
+  - 순수 로직: `dragAnchorOffset` — `FileBrowserTests` 3건.
+  - 검증 [HARD]: `swift test` **926/926**(+4) · `swift test --filter FileBrowserTests` **41/41** · `./scripts/build-macos.sh debug` BUILD SUCCEEDED(1.25.0, build `20261115.034723`).
+
+- [ ] **T-2026-11-15-4 [P2] scrcpy 구형 붙여넣기 기본값 OFF + 설명 추가** (1.25.0+ · PR #146 · **육안 대기 `MANUAL_VERIFY` §45**)
+  - 요청: "구형 붙여넣기 방식을 Off 로 하니까 한글 복사 잘 되는데… 맥에서 한글 쳤을때 기기에 적용 못하는게 맞지?"
+  - 사실(scrcpy 5.0.1 `scrcpy --help`·공식 문서): 기본 경로는 클립보드를 **기기에 프로그램으로 설정** → 유니코드 유지. `--legacy-paste` 는 텍스트를 **키 이벤트 시퀀스**로 주입 → "it can break non-ASCII content" 라 한글은 깨진다. scrcpy 는 키 이벤트만 전달하므로 **맥 IME 로 조합한 한글은 그대로 못 보낸다**(복사 후 `Ctrl+v` 붙여넣기가 정답).
+  - 수정: `defaultLegacyPaste` 을 **false** 로 변경(기존 사용자 설정값은 유지) + 설정 토글 아래 설명 한 줄 추가. L10n `settings.scrcpy.legacyPaste.note` (en·ko 동시).
+  - 검증 [HARD]: `swift test` **926/926**(+2 — 기본 인자에서 `--legacy-paste` 제외·명시 시에만 추가) · `./scripts/build-macos.sh debug` BUILD SUCCEEDED.
+
 - [ ] **T-2026-11-15-2 [P2] 파일 탐색기 폴더 생성(mkdir)** (1.25.0+ · PR #146 · **실기기 육안 대기 `MANUAL_VERIFY` §43**)
   - 요청: "폴더 생성 기능이 없더라"
   - 수정: 툴바에 `새 폴더` 버튼 → 이름 입력 다이얼로그 → 현재 폴더에 `mkdir`(같은 이름이 있으면 실패를 그대로 알림). 이름 검증(빈 값·`.`/`..`·`/` 포함·255바이트 초과 거부)· 경로·공백 따옴표 인용(`mkdir '/sdcard/New Folder'`). 성공 시 목록·트리 갱신.

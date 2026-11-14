@@ -169,3 +169,41 @@ swift test
 | L10n | `files.mkdir.button|title|placeholder|hint|done|invalid` · `files.error.mkdir` · `files.action.create` |
 
 검증: `swift test` **922/922** · `./scripts/build-macos.sh debug` 1.25.0 · 육안 `MANUAL_VERIFY` §43 139~141.
+
+---
+
+## 12. 후속 — 드래그 고스트 앵커 보정 + scrcpy 붙여넣기 기본값 (2026-11-15)
+
+> T-2026-11-15-3(드래그 앵커) · T-2026-11-15-4(scrcpy 기본값) · 브랜치 `feat/macos-file-multi-select` (PR #146).
+
+### 12.1 드래그 고스트가 커서에서 떨어져 보이던 문제
+
+사용자 보고: *"파일 선택해서 드래그 하려니까 마우스 포인터 위치랑 드래그 되는 파일 위치가 애매하게 동떨어져 있다"*.
+
+**원인** — SwiftUI 는 드래그 프리뷰를 **소스 뷰(행 전체)의 중앙**에 건다.
+행 폭이 ~630pt 인데 사용자가 이름 텍스트(행 왼쪽)를 잡으면 고스트가 **커서 +250pt** 로 밀려난다.
+
+| 실측 | 커서 | 고스트 왼쪽 | 차이 |
+|---|---|---|---|
+| `relay-drag-src.txt` 잡음 | 1172 | 1314.5 | +142.5 (프리뷰 폭 143) |
+| `1.txt` 잡음 | 1164 | 1373.3 | +209.3 (프리뷰 폭 71) |
+| `1.txt` 잡고 오른쪽으로 길게 | 1513 | 1726 | +213 (프리뷰 폭 71) |
+
+→ 고스트 **오른쪽 끝**이 항상 커서 +280 내외로 고정 = 행 중앙 기준 앵커임을 확인.
+
+**수정** — 행의 커서 위치와 행 크기를 기록해 프리뷰를 `grab - rowSize/2` 만큼 반대로 민다.
+
+| 항목 | 내용 |
+|------|------|
+| 위치 확보 | `onContinuousHover`(행 로컬 좌표) — 탭·더블클릭·컨텍스트 메뉴와 충돌하지 않음 |
+| 크기 확보 | `onGeometryChange(for: CGSize.self)` — 행 뷰 크기 |
+| 보정식 | `FileBrowserLogic.dragAnchorOffset(grab:rowSize:)` = `grab - rowSize/2` (순수 함수 · 테스트 3건) |
+| 효과 | 고스트 중심이 커서 위치에 일치(행 어디를 잡아도 동일) |
+
+### 12.2 scrcpy "구형 붙여넣기 방식" 기본값 OFF
+
+- `scrcpy --help`(5.0.1) 근거: `--legacy-paste` 는 "Inject computer clipboard text as a sequence of key events" → "It can break non-ASCII content". 기본 경로는 클립보드를 기기에 **프로그램으로 설정** → 유니코드 유지.
+- 따라서 `defaultLegacyPaste` 을 **false** 로 변경(기존 사용자 설정값은 유지). 설정 토글 아래 설명 1줄 추가(`settings.scrcpy.legacyPaste.note`).
+- 참고: scrcpy 는 **키 이벤트만** 전달 → 맥 IME 로 조합한 한글은 그대로 못 보낸다. 기기 입력창에 한글로 넣으려면 맥에서 복사 후 미러링 창에서 `Ctrl+v`.
+
+검증: `swift test` **926/926** · `./scripts/build-macos.sh debug` 1.25.0(build `20261115.034723`) · 육안 `MANUAL_VERIFY` §44 142~144 · §45 145~147.

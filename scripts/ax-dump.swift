@@ -145,6 +145,25 @@ if mode == "--rows" {
     exit(0)
 }
 
+// ★ `--frames` — 이름 있는 요소의 **화면 위치·크기**를 잰다 (읽기 전용)
+//   드래그 고스트가 커서에서 얼마나 떨어지는지 볼 때, 행의 실제 좌표가 필요하다.
+if mode == "--frames" {
+    func frameOf(_ el: AXUIElement) -> (CGPoint, CGSize)? {
+        guard let pv = attr(el, kAXPositionAttribute), let sv = attr(el, kAXSizeAttribute) else { return nil }
+        var p = CGPoint.zero, s = CGSize.zero
+        guard AXValueGetValue(pv as! AXValue, .cgPoint, &p),
+              AXValueGetValue(sv as! AXValue, .cgSize, &s) else { return nil }
+        return (p, s)
+    }
+    for n in nodes where !n.name.isEmpty && (needle.isEmpty || n.name.contains(needle)) {
+        let f = frameOf(n.el)
+        let xy = f.map { "(\(Int($0.0.x)),\(Int($0.0.y)))" } ?? "?"
+        let wh = f.map { "\(Int($0.1.width))x\(Int($0.1.height))" } ?? "?"
+        print("\(n.role) — \(n.name)  @\(xy) \(wh)")
+    }
+    exit(0)
+}
+
 // ★ `--values` / `--count` — **텍스트 내용**을 읽는다 (2026-09-28 추가)
 //   왜 필요했나: 로그 행처럼 SwiftUI 가 AX **이름이 아니라 값**으로 내는 요소가 있다.
 //   이름만 보면 "요소 237개 · 이름 없음" 에서 끝나고, **무엇이 화면에 있는지 알 수 없다.**

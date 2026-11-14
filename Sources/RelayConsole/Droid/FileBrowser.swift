@@ -231,6 +231,22 @@ enum FileBrowserLogic {
         return ordered.isEmpty ? [itemID] : ordered
     }
 
+    // MARK: - 드래그 프리뷰 앵커 보정
+
+    /// SwiftUI 는 드래그 프리뷰를 **소스 뷰(행 전체)의 중앙**에 건다.
+    /// 그래서 행 왼쪽을 잡으면 고스트가 커서 오른쪽으로 크게 밀려난다
+    /// (2026-11-15 실측: 커서 +248~251pt).
+    ///
+    /// → 잡은 지점이 행 중앙에서 얼마나 떨어져 있는지만큼 프리뷰를 반대로 민다.
+    ///   grab 은 **행 로컬 좌표**(왼쪽 위 기준), rowSize 는 행의 크기.
+    static func dragAnchorOffset(grab: CGPoint, rowSize: CGSize) -> CGSize {
+        guard rowSize.width > 0, rowSize.height > 0 else { return .zero }
+        return CGSize(
+            width: grab.x - rowSize.width / 2,
+            height: grab.y - rowSize.height / 2
+        )
+    }
+
     // MARK: - 이동 (드래그 → 폴더)
 
     /// 이동을 허용하는 저장 영역 — 서로 다른 마운트는 rename이 아니라 복사+삭제가 된다

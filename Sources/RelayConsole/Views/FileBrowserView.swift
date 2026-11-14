@@ -36,6 +36,11 @@ struct FileBrowserContent: View {
     @State private var query: String = ""
     @State private var sortKey: FileBrowserLogic.SortKey = .name
     @State private var sortAscending = true
+    /// 드래그 프리뷰 앵커 보정용 — SwiftUI는 프리뷰를 **소스 뷰 중앙**에 맞춘다.
+    /// 행(폭 ~630pt) 전체가 소스라서 행 왼쪽을 잡으면 고스트가 오른쪽으로 밀려난다.
+    /// → 누른 지점(행 로컬 좌표)과 행 크기를 재서 프리뷰를 그만큼 반대로 민다.
+    @State private var dragGrab: CGPoint = .zero
+    @State private var dragRowSize: CGSize = .zero
 
     private static let dateFmt: DateFormatter = {
         let f = DateFormatter()
@@ -622,6 +627,16 @@ struct FileBrowserContent: View {
                 .stroke(dropTargetID == item.id ? OPColor.cta : Color.clear, lineWidth: 1)
         )
         // 행을 끌어 폴더에 놓으면 이동(같은 저장 영역만) — 선택이 있으면 선택 전체를 옮긴다
+        // 앵커 보정: 커서가 행 어디를 누르고 있는지 기록해 두고 dragPreview 에서 상쇄한다.
+        // (호버 위치 사용 — 탭·드래그 제스처와 충돌하지 않는다)
+        .onGeometryChange(for: CGSize.self) { $0.size } action: { size in
+            if dragRowSize != size { dragRowSize = size }
+        }
+        .onContinuousHover { phase in
+            if case .active(let point) = phase, dragGrab != point {
+                dragGrab = point
+            }
+        }
         .draggable(FileBrowserDragPayload(paths: dragPaths(for: item))) {
             dragPreview(for: item)
         }
@@ -670,6 +685,9 @@ struct FileBrowserContent: View {
         .padding(.horizontal, 6)
         .padding(.vertical, 3)
         .background(OPColor.card.opacity(0.85), in: RoundedRectangle(cornerRadius: 5))
+        // SwiftUI 는 프리뷰를 **소스 뷰(행) 중앙**에 건다 → 누른 지점만큼 반대로 민다.
+        // (2026-11-15 실측: 행 왼쪽을 잡으면 고스트가 커서 +250pt 에 떠 있었다)
+        .offset(FileBrowserLogic.dragAnchorOffset(grab: dragGrab, rowSize: dragRowSize))
     }
 
     private func setDropTarget(_ item: FileBrowserLogic.Item, _ targeted: Bool) {

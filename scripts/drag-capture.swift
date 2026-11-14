@@ -26,6 +26,8 @@ var doDrop = true
 var keepHeld = false
 var moveTo: CGPoint?
 var cropSize: CGFloat = 900
+var grabOffset = CGPoint.zero
+var explicitEnd: CGPoint?
 
 for arg in CommandLine.arguments.dropFirst() {
     func value(_ key: String) -> String? {
@@ -36,6 +38,14 @@ for arg in CommandLine.arguments.dropFirst() {
     else if let v = value("--target=") { targetNeedle = v }
     else if let v = value("--out=") { outPath = v }
     else if let v = value("--crop=") { cropSize = Double(v) ?? 900 }
+    else if let v = value("--to=") {
+        let parts = v.split(separator: ",").compactMap { Double($0) }
+        if parts.count >= 2 { explicitEnd = CGPoint(x: parts[0], y: parts[1]) }
+    }
+    else if let v = value("--grab=") {
+        let parts = v.split(separator: ",").compactMap { Double($0) }
+        if parts.count >= 2 { grabOffset = CGPoint(x: parts[0], y: parts[1]) }
+    }
     else if let v = value("--move=") {
         let parts = v.split(separator: ",").compactMap { Double($0) }
         if parts.count >= 2 { moveTo = CGPoint(x: parts[0], y: parts[1]) }
@@ -44,8 +54,8 @@ for arg in CommandLine.arguments.dropFirst() {
     else if arg == "--keep" { keepHeld = true }
 }
 
-guard !sourceNeedle.isEmpty, !targetNeedle.isEmpty else {
-    FileHandle.standardError.write(Data("사용: --source=이름 --target=이름 [--out=경로] [--cancel] [--keep]\n".utf8))
+guard !sourceNeedle.isEmpty, !targetNeedle.isEmpty || explicitEnd != nil else {
+    FileHandle.standardError.write(Data("사용: --source=이름 --target=이름 [--out=경로] [--cancel] [--keep] [--to=x,y] [--grab=dx,dy]\n".utf8))
     exit(2)
 }
 
@@ -146,21 +156,32 @@ guard let srcEl = findVisible(sourceNeedle) else {
     FileHandle.standardError.write(Data("원본 요소를 찾지 못했습니다: \(sourceNeedle)\n".utf8))
     exit(3)
 }
-guard let dstEl = findVisible(targetNeedle) else {
+let dstEl = targetNeedle.isEmpty ? nil : findVisible(targetNeedle)
+if explicitEnd == nil, dstEl == nil {
     FileHandle.standardError.write(Data("대상 요소를 찾지 못했습니다: \(targetNeedle)\n".utf8))
     exit(3)
 }
 
-guard let srcTop = point(srcEl), let dstTop = point(dstEl) else {
+guard let srcTop = point(srcEl) else {
     FileHandle.standardError.write(Data("좌표를 얻지 못했습니다\n".utf8))
     exit(3)
 }
 
 let srcSize = size(srcEl)
-let dstSize = size(dstEl)
 // 시작점은 이름 텍스트 중앙(파일 아이콘 쪽), 도착점은 대상 텍스트 중앙
-let start = CGPoint(x: srcTop.x + min(srcSize.width / 2, 40), y: srcTop.y + srcSize.height / 2)
-let end = CGPoint(x: dstTop.x + min(dstSize.width / 2, 40), y: dstTop.y + dstSize.height / 2)
+let start = CGPoint(
+    x: srcTop.x + min(srcSize.width / 2, 40) + grabOffset.x,
+    y: srcTop.y + srcSize.height / 2 + grabOffset.y
+)
+let end: CGPoint
+if let explicitEnd {
+    end = explicitEnd
+} else if let dstEl, let dstTop = point(dstEl) {
+    let dstSize = size(dstEl)
+    end = CGPoint(x: dstTop.x + min(dstSize.width / 2, 40), y: dstTop.y + dstSize.height / 2)
+} else {
+    end = start
+}
 
 print("원본 \(sourceNeedle) → \(start)")
 print("대상 \(targetNeedle) → \(end)")
@@ -189,6 +210,7 @@ func capture(_ path: String, around cursor: CGPoint, size: CGFloat = 900) -> Boo
     let p = Process()
     p.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
     p.arguments = ["-x", "-R", "\(Int(rect.minX)),\(Int(rect.minY)),\(Int(rect.width)),\(Int(rect.height))", path]
+    print("캡처 영역 \(Int(rect.minX)),\(Int(rect.minY)),\(Int(rect.width)),\(Int(rect.height))")
     do {
         try p.run()
         p.waitUntilExit()
