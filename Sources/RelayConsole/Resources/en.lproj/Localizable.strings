@@ -366,6 +366,7 @@
 "float.card.summary" = "Summary";
 "files.action.open" = "Open";
 "files.action.cancel" = "Cancel";
+"files.action.create" = "Create";
 "files.action.delete" = "Delete";
 "files.action.deleteCount" = "Delete %d Item(s)";
 "files.action.pullCount" = "Pull %d Item(s)";
@@ -385,6 +386,7 @@
 "files.empty" = "This folder is empty";
 "files.error.delete" = "Delete failed";
 "files.error.list" = "Cannot read this folder";
+"files.error.mkdir" = "Could not create the folder";
 "files.error.move" = "Move failed";
 "files.error.pull" = "Pull failed";
 "files.error.push" = "Transfer failed";
@@ -396,6 +398,12 @@
 "files.move.intoSelf" = "Cannot move a folder into itself: %@";
 "files.move.moving" = "Moving %d item(s)…";
 "files.move.partial" = "Moved %d, failed %d — %@";
+"files.mkdir.button" = "New Folder";
+"files.mkdir.done" = "Created folder: %@";
+"files.mkdir.hint" = "Creates in: %@";
+"files.mkdir.invalid" = "Check the folder name";
+"files.mkdir.placeholder" = "Folder name";
+"files.mkdir.title" = "New Folder";
 "files.nav.back" = "Back";
 "files.nav.forward" = "Forward";
 "files.nav.refresh" = "Refresh";

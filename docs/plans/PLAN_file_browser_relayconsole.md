@@ -152,3 +152,20 @@ swift test
 
 검증: `swift test` **920/920** · `./scripts/build-macos.sh debug` 1.25.0(build `20261115.003826`) ·
 실기기 확인(`mv -n` 충돌 시 덮어쓰지 않음·exit 0 / `test -e` 0·1) · 육안 `MANUAL_VERIFY` §42 133~138.
+
+---
+
+## 11. 후속 — 폴더 생성 (2026-11-15)
+
+> T-2026-11-15-2 · 브랜치 `feat/macos-file-multi-select` (PR #146).
+> 원래 §1 OUT 에 있던 `mkdir` 을 사용자 요청으로 되살린다. 삭제·이동과 같은 축의 파일 조작이라 함께 둔다.
+
+| 항목 | 변경 |
+|------|------|
+| 진입 | 툴바 `새 폴더` 아이콘 → 이름 입력 다이얼로그(현재 폴더 경로 표시) |
+| 실행 | `mkdir '<경로>'` — `-p` 를 **붙이지 않는다**(같은 이름이면 실패를 그대로 보여줘야 함) |
+| 이름 검증 | 빈 값·`.`/`..`·`/` 포함·255바이트 초과 거부(`isValidFolderName`) · 공백 포함 이름은 따옴표 인용 |
+| 결과 | 성공 → `폴더를 만들었습니다: 이름` + 목록/트리 갱신 · 실패 → 외부 명령 stderr 를 그대로 노출([표시②]) |
+| L10n | `files.mkdir.button|title|placeholder|hint|done|invalid` · `files.error.mkdir` · `files.action.create` |
+
+검증: `swift test` **922/922** · `./scripts/build-macos.sh debug` 1.25.0 · 육안 `MANUAL_VERIFY` §43 139~141.

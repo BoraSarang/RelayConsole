@@ -366,6 +366,7 @@
 "float.card.summary" = "요약";
 "files.action.open" = "열기";
 "files.action.cancel" = "취소";
+"files.action.create" = "만들기";
 "files.action.delete" = "삭제";
 "files.action.deleteCount" = "%d개 삭제";
 "files.action.pullCount" = "%d개 가져오기";
@@ -385,6 +386,7 @@
 "files.empty" = "이 폴더는 비어 있습니다";
 "files.error.delete" = "삭제에 실패했습니다";
 "files.error.list" = "폴더를 읽을 수 없습니다";
+"files.error.mkdir" = "폴더를 만들지 못했습니다";
 "files.error.move" = "이동에 실패했습니다";
 "files.error.pull" = "가져오기에 실패했습니다";
 "files.error.push" = "전송에 실패했습니다";
@@ -396,6 +398,12 @@
 "files.move.intoSelf" = "폴더를 자기 안으로 옮길 수 없습니다: %@";
 "files.move.moving" = "%d개 이동 중…";
 "files.move.partial" = "%d개 이동, %d개 실패 — %@";
+"files.mkdir.button" = "새 폴더";
+"files.mkdir.done" = "폴더를 만들었습니다: %@";
+"files.mkdir.hint" = "만들 위치: %@";
+"files.mkdir.invalid" = "폴더 이름을 확인하세요";
+"files.mkdir.placeholder" = "폴더 이름";
+"files.mkdir.title" = "새 폴더";
 "files.nav.back" = "뒤로";
 "files.nav.forward" = "앞으로";
 "files.nav.refresh" = "새로고침";

@@ -281,6 +281,22 @@ enum FileBrowserLogic {
         ["shell", "mv -n " + shellQuote(path) + " " + shellQuote(moveTarget(path: path, to: dir))]
     }
 
+    // MARK: - 폴더 생성 (mkdir)
+
+    /// 폴더 이름 검증 — 빈 값·`.`/`..`·경로 구분자(`/`)·255바이트 초과는 거부
+    static func isValidFolderName(_ name: String) -> Bool {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, trimmed != ".", trimmed != ".." else { return false }
+        guard !trimmed.contains("/") else { return false }
+        guard trimmed.utf8.count <= 255 else { return false }
+        return true
+    }
+
+    /// `mkdir` 는 -p 없이 — 같은 이름이 있으면 실패를 그대로 보여준다
+    static func mkdirArgs(dir: String, name: String) -> [String] {
+        ["shell", "mkdir " + shellQuote(join(dir: dir, name: name))]
+    }
+
     // MARK: - 경로
 
     /// "/sdcard/Download" → "/sdcard" · "/" → nil
@@ -993,6 +1009,55 @@ final class FileBrowserController: ObservableObject {
         case 0: return true
         case 1: return false
         default: return nil
+        }
+    }
+
+    // MARK: 폴더 생성 (mkdir)
+
+    /// 현재 폴더에 새 폴더를 만든다 — 같은 이름이 있으면 실패 사유를 그대로 보여준다
+    func createFolder(name: String) {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !busy, !loading, !serial.isEmpty else { return }
+        guard FileBrowserLogic.isValidFolderName(trimmed) else {
+            statusMessage = L10n.string("files.mkdir.invalid")
+            return
+        }
+        busy = true
+        statusMessage = nil
+        let adb = DeviceMonitor.adbPathNow()
+        let serial = self.serial
+        let dir = path
+        Task.detached(priority: .utility) {
+            var errorText: String?
+            if let adb {
+                let res = Self.runCapture(
+                    adb: adb,
+                    args: ["-s", serial] + FileBrowserLogic.mkdirArgs(dir: dir, name: trimmed)
+                )
+                if res.code != 0 {
+                    errorText = Self.firstLine(res.err.isEmpty ? res.out : res.err)
+                    await DebugLogger.shared.error(
+                        "FileBrowser",
+                        "[ERROR] E-MAC-ADB-0012 폴더 생성 실패 code=\(res.code) "
+                            + FileBrowserLogic.join(dir: dir, name: trimmed) + " \(errorText ?? "")"
+                    )
+                }
+            } else {
+                errorText = ErrorCode.adbBinaryMissing.koMessage
+                await DebugLogger.shared.error("FileBrowser", "[ERROR] E-MAC-ADB-0012 adb 바이너리 없음")
+            }
+            await MainActor.run {
+                self.busy = false
+                if let errorText, !errorText.isEmpty {
+                    self.statusMessage = errorText
+                } else if errorText != nil {
+                    self.statusMessage = L10n.string("files.error.mkdir")
+                } else {
+                    self.statusMessage = L10n.format("files.mkdir.done", trimmed)
+                    self.invalidateTree()
+                    self.reloadQuietly(adb: adb, serial: serial, dir: dir)
+                }
+            }
         }
     }
 

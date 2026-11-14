@@ -371,6 +371,29 @@ struct FileBrowserTests {
         ) == ["/sdcard/a", "/sdcard/c"])
     }
 
+    // MARK: 폴더 생성 (mkdir)
+
+    @Test func folderNameValidationRejectsBadNames() {
+        #expect(FileBrowserLogic.isValidFolderName("New Folder"))
+        #expect(FileBrowserLogic.isValidFolderName("사진 2026"))
+        #expect(FileBrowserLogic.isValidFolderName(" a "))     // 앞뒤 공백은 정리해서 사용
+        #expect(!FileBrowserLogic.isValidFolderName(""))
+        #expect(!FileBrowserLogic.isValidFolderName("   "))
+        #expect(!FileBrowserLogic.isValidFolderName("."))
+        #expect(!FileBrowserLogic.isValidFolderName(".."))
+        #expect(!FileBrowserLogic.isValidFolderName("a/b"))    // 경로 구분자 금지
+        #expect(!FileBrowserLogic.isValidFolderName(String(repeating: "가", count: 100)))
+    }
+
+    @Test func mkdirArgsQuotesSpacesAndUnicode() {
+        #expect(FileBrowserLogic.mkdirArgs(dir: "/sdcard", name: "New Folder") == [
+            "shell", "mkdir '/sdcard/New Folder'"
+        ])
+        #expect(FileBrowserLogic.mkdirArgs(dir: "/sdcard/Download/", name: "사진") == [
+            "shell", "mkdir '/sdcard/Download/사진'"
+        ])
+    }
+
     // MARK: 헬퍼
 
     private func mk(_ name: String, dir: Bool, size: Int64 = 0) -> FileBrowserLogic.Item {

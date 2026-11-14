@@ -30,6 +30,9 @@ struct FileBrowserContent: View {
     @State private var selectionAnchor: String?
     /// 드롭 대상이 된 폴더 행 — 놓을 수 있을 때 테두리로 표시
     @State private var dropTargetID: String?
+    /// 새 폴더 만들기 — 입력창에 쓰는 이름
+    @State private var newFolderName: String = ""
+    @State private var showNewFolderDialog = false
     @State private var query: String = ""
     @State private var sortKey: FileBrowserLogic.SortKey = .name
     @State private var sortAscending = true
@@ -114,6 +117,23 @@ struct FileBrowserContent: View {
                 Text(L10n.format("files.delete.message", deletePreview(targets)))
             }
         }
+        .alert(L10n.string("files.mkdir.title"), isPresented: $showNewFolderDialog) {
+            TextField(L10n.string("files.mkdir.placeholder"), text: $newFolderName)
+            Button(L10n.string("files.action.create")) {
+                ctl.createFolder(name: newFolderName)
+                newFolderName = ""
+            }
+            .disabled(
+                !FileBrowserLogic.isValidFolderName(
+                    newFolderName.trimmingCharacters(in: .whitespacesAndNewlines)
+                )
+            )
+            Button(L10n.string("files.action.cancel"), role: .cancel) {
+                newFolderName = ""
+            }
+        } message: {
+            Text(L10n.format("files.mkdir.hint", ctl.path))
+        }
     }
 
     private var devices: [DeviceSnapshot] { store.inventory.devices }
@@ -183,6 +203,21 @@ struct FileBrowserContent: View {
             }
             .buttonStyle(.plain)
             .help(L10n.format("files.dest.title", ctl.destDir))
+            Button {
+                newFolderName = ""
+                showNewFolderDialog = true
+            } label: {
+                Image(systemName: "folder.badge.plus")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(OPColor.inkDim)
+                    .frame(width: 26, height: 26)
+                    .background(OPColor.card, in: RoundedRectangle(cornerRadius: 13))
+                    .overlay(RoundedRectangle(cornerRadius: 13).stroke(OPColor.border, lineWidth: 1))
+            }
+            .buttonStyle(.plain)
+            .help(L10n.string("files.mkdir.button"))
+            .accessibilityLabel(L10n.string("files.mkdir.button"))
+            .disabled(ctl.busy || ctl.loading)
             Button(L10n.string("files.pull.button")) {
                 ctl.pull(selection: selection)
             }
@@ -620,22 +655,21 @@ struct FileBrowserContent: View {
         )
     }
 
-    /// 드래그 미리보기 — 여러 개면 개수만 보여준다
+    /// 드래그 고스트 — 아이콘+이름 반투명 복사. "들고 있는 물건"처럼 보이게 한다
     private func dragPreview(for item: FileBrowserLogic.Item) -> some View {
         let paths = dragPaths(for: item)
-        return HStack(spacing: 6) {
+        return HStack(spacing: 5) {
             Image(systemName: item.isDir ? "folder.fill" : fileIcon(item))
-                .font(.system(size: 12))
+                .font(.system(size: 11))
                 .foregroundStyle(item.isDir ? OPColor.cta : OPColor.inkDim)
             Text(paths.count > 1 ? L10n.format("files.drag.multiple", paths.count) : item.name)
                 .font(OPFont.number(11))
                 .foregroundStyle(OPColor.ink)
                 .lineLimit(1)
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 5)
-        .background(OPColor.card, in: RoundedRectangle(cornerRadius: 6))
-        .overlay(RoundedRectangle(cornerRadius: 6).stroke(OPColor.border, lineWidth: 1))
+        .padding(.horizontal, 6)
+        .padding(.vertical, 3)
+        .background(OPColor.card.opacity(0.85), in: RoundedRectangle(cornerRadius: 5))
     }
 
     private func setDropTarget(_ item: FileBrowserLogic.Item, _ targeted: Bool) {

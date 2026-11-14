@@ -5,6 +5,13 @@
 
 ## 완료 (2026-11-15)
 
+- [ ] **T-2026-11-15-2 [P2] 파일 탐색기 폴더 생성(mkdir)** (1.25.0+ · PR #146 · **실기기 육안 대기 `MANUAL_VERIFY` §43**)
+  - 요청: "폴더 생성 기능이 없더라"
+  - 수정: 툴바에 `새 폴더` 버튼 → 이름 입력 다이얼로그 → 현재 폴더에 `mkdir`(같은 이름이 있으면 실패를 그대로 알림). 이름 검증(빈 값·`.`/`..`·`/` 포함·255바이트 초과 거부)· 경로·공백 따옴표 인용(`mkdir '/sdcard/New Folder'`). 성공 시 목록·트리 갱신.
+  - L10n: `files.mkdir.button|title|placeholder|hint|done|invalid` · `files.error.mkdir` · `files.action.create` (en·ko 동시). 신규 에러코드 `E-MAC-ADB-0012`.
+  - 순수 로직: `isValidFolderName` · `mkdirArgs` — `FileBrowserTests` 2건.
+  - 검증 [HARD]: `swift test` **922/922**(+2) · `swift test --filter FileBrowserTests` **38/38** · `./scripts/build-macos.sh debug` BUILD SUCCEEDED.
+
 - [ ] **T-2026-11-15-1 [P2] 파일 탐색기 드래그 이동 — 행 → 폴더(mv) + Finder → 폴더 전송** (1.25.0+ · PR #146 · **실기기 육안 대기 `MANUAL_VERIFY` §42**)
   - 요청: "파일 드래그 해서 폴더로 옮기는건 어려울라나?"
   - 결정(사용자): ① 기기 내부 이동 + Finder→폴더 전송 ② 이름 충돌 시 **이동하지 않고 알림** ③ **같은 저장 영역만** 허용.
