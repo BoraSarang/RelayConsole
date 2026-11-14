@@ -318,6 +318,59 @@ struct FileBrowserTests {
         ) == ["a", "c"])
     }
 
+    // MARK: 이동 (드래그 → 폴더)
+
+    @Test func moveAllowedWithinSameRoot() {
+        #expect(FileBrowserLogic.canMove(path: "/sdcard/Download/a.txt", to: "/sdcard/DCIM"))
+        #expect(FileBrowserLogic.canMove(path: "/sdcard/Download/a.txt", to: "/sdcard"))
+        #expect(FileBrowserLogic.canMove(path: "/data/local/tmp/x.log", to: "/data/local/tmp"))
+        // trailing slash 를 붙여도 같은 경로로 본다
+        #expect(FileBrowserLogic.canMove(path: "/sdcard/Download/a.txt", to: "/sdcard/DCIM/"))
+    }
+
+    @Test func moveBlockedAcrossStorageRoots() {
+        #expect(FileBrowserLogic.moveBlockReason(path: "/sdcard/a.txt", to: "/data/local/tmp") == .differentRoot)
+        #expect(!FileBrowserLogic.canMove(path: "/data/local/tmp/x.log", to: "/sdcard"))
+    }
+
+    @Test func moveBlockedForRootItselfAndOutsidePaths() {
+        #expect(FileBrowserLogic.moveBlockReason(path: "/sdcard", to: "/sdcard/DCIM") == .sourceNotAllowed)
+        #expect(FileBrowserLogic.moveBlockReason(path: "/system/build.prop", to: "/sdcard") == .sourceNotAllowed)
+        #expect(FileBrowserLogic.moveBlockReason(path: "/sdcardFake/x", to: "/sdcard") == .sourceNotAllowed)
+        #expect(FileBrowserLogic.moveBlockReason(path: "", to: "/sdcard") == .sourceNotAllowed)
+    }
+
+    @Test func moveBlockedIntoSelfOrDescendant() {
+        #expect(FileBrowserLogic.moveBlockReason(path: "/sdcard/A", to: "/sdcard/A") == .intoSelf)
+        #expect(FileBrowserLogic.moveBlockReason(path: "/sdcard/A", to: "/sdcard/A/B") == .intoSelf)
+    }
+
+    @Test func moveTargetKeepsNameAndQuotesSpaces() {
+        #expect(
+            FileBrowserLogic.moveTarget(path: "/sdcard/Download/a.txt", to: "/sdcard/DCIM")
+                == "/sdcard/DCIM/a.txt"
+        )
+        #expect(FileBrowserLogic.moveArgs(path: "/sdcard/My File.jpg", to: "/sdcard/DCIM") == [
+            "shell", "mv -n '/sdcard/My File.jpg' '/sdcard/DCIM/My File.jpg'"
+        ])
+    }
+
+    @Test func dragPathsFollowsSelectionAndListOrder() {
+        let ids = ["/sdcard/a", "/sdcard/b", "/sdcard/c"]
+        // 선택된 행을 끌면 선택 전체
+        #expect(FileBrowserLogic.dragPaths(
+            itemID: "/sdcard/b", selection: ["/sdcard/a", "/sdcard/b"], orderedIDs: ids
+        ) == ["/sdcard/a", "/sdcard/b"])
+        // 선택에 없는 행을 끌면 그 행만
+        #expect(FileBrowserLogic.dragPaths(
+            itemID: "/sdcard/c", selection: ["/sdcard/a"], orderedIDs: ids
+        ) == ["/sdcard/c"])
+        // 목록 순서를 유지
+        #expect(FileBrowserLogic.dragPaths(
+            itemID: "/sdcard/a", selection: ["/sdcard/c", "/sdcard/a"], orderedIDs: ids
+        ) == ["/sdcard/a", "/sdcard/c"])
+    }
+
     // MARK: 헬퍼
 
     private func mk(_ name: String, dir: Bool, size: Int64 = 0) -> FileBrowserLogic.Item {

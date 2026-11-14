@@ -1,5 +1,23 @@
 import SwiftUI
 import AppKit
+import CoreTransferable
+import UniformTypeIdentifiers
+
+// MARK: - 드래그 페이로드
+
+extension UTType {
+    /// 앱 내부 드래그 전용 — Finder 파일 드롭(public.file-url)과 구분한다
+    static let relayConsoleFilePaths = UTType(exportedAs: "com.borasarang.relayconsole.filepaths")
+}
+
+/// 행을 끌어 옮길 때 실어 가는 경로 목록 — 기기 내 경로만 담는다
+struct FileBrowserDragPayload: Codable, Sendable, Transferable {
+    let paths: [String]
+
+    static var transferRepresentation: some TransferRepresentation {
+        CodableRepresentation(contentType: .relayConsoleFilePaths)
+    }
+}
 
 /// ADB 파일 탐색기 콘텐츠 — 사이드바 즐겨찾기 · 컬럼 목록 · 드래그 전송
 /// UI 형식: `RESEARCH_adb_file_browser` §7 (운영체제 탐색기 컬럼형)
@@ -10,6 +28,8 @@ struct FileBrowserContent: View {
     @State private var selection: Set<String> = []
     /// Shift 범위 선택의 기준점 — 마지막으로 체크·클릭한 항목
     @State private var selectionAnchor: String?
+    /// 드롭 대상이 된 폴더 행 — 놓을 수 있을 때 테두리로 표시
+    @State private var dropTargetID: String?
     @State private var query: String = ""
     @State private var sortKey: FileBrowserLogic.SortKey = .name
     @State private var sortAscending = true
@@ -562,6 +582,69 @@ struct FileBrowserContent: View {
             isSelected ? OPColor.cta.opacity(0.18)
                 : (idx % 2 == 1 ? OPColor.card.opacity(0.35) : Color.clear)
         )
+        .overlay(
+            RoundedRectangle(cornerRadius: 6)
+                .stroke(dropTargetID == item.id ? OPColor.cta : Color.clear, lineWidth: 1)
+        )
+        // 행을 끌어 폴더에 놓으면 이동(같은 저장 영역만) — 선택이 있으면 선택 전체를 옮긴다
+        .draggable(FileBrowserDragPayload(paths: dragPaths(for: item))) {
+            dragPreview(for: item)
+        }
+        .dropDestination(for: FileBrowserDragPayload.self) { payloads, _ in
+            guard item.isDir else { return false }
+            let paths = payloads.flatMap(\.paths)
+            guard !paths.isEmpty else { return false }
+            dropTargetID = nil
+            ctl.move(paths: paths, to: item.path)
+            return true
+        } isTargeted: { targeted in
+            setDropTarget(item, targeted)
+        }
+        // Finder 파일을 폴더 행에 놓으면 그 폴더로 전송 (기존: 창 어디든 현재 폴더로)
+        .dropDestination(for: URL.self) { urls, _ in
+            guard item.isDir, !urls.isEmpty else { return false }
+            dropTargetID = nil
+            ctl.push(urls: urls, to: item.path)
+            return true
+        } isTargeted: { targeted in
+            setDropTarget(item, targeted)
+        }
+    }
+
+    /// 드래그할 경로 — 선택된 행이면 선택 전체, 아니면 그 행만
+    private func dragPaths(for item: FileBrowserLogic.Item) -> [String] {
+        FileBrowserLogic.dragPaths(
+            itemID: item.id,
+            selection: selection,
+            orderedIDs: visible.map(\.id)
+        )
+    }
+
+    /// 드래그 미리보기 — 여러 개면 개수만 보여준다
+    private func dragPreview(for item: FileBrowserLogic.Item) -> some View {
+        let paths = dragPaths(for: item)
+        return HStack(spacing: 6) {
+            Image(systemName: item.isDir ? "folder.fill" : fileIcon(item))
+                .font(.system(size: 12))
+                .foregroundStyle(item.isDir ? OPColor.cta : OPColor.inkDim)
+            Text(paths.count > 1 ? L10n.format("files.drag.multiple", paths.count) : item.name)
+                .font(OPFont.number(11))
+                .foregroundStyle(OPColor.ink)
+                .lineLimit(1)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+        .background(OPColor.card, in: RoundedRectangle(cornerRadius: 6))
+        .overlay(RoundedRectangle(cornerRadius: 6).stroke(OPColor.border, lineWidth: 1))
+    }
+
+    private func setDropTarget(_ item: FileBrowserLogic.Item, _ targeted: Bool) {
+        guard item.isDir else { return }
+        if targeted {
+            dropTargetID = item.id
+        } else if dropTargetID == item.id {
+            dropTargetID = nil
+        }
     }
 
     /// 행 클릭 — 일반=단일, ⌘=토글, Shift=기준점부터 범위, ⌘+Shift=범위 추가

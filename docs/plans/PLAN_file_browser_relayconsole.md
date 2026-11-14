@@ -132,3 +132,23 @@ swift test
 | L10n | `files.select.all|row` · `files.selection.clear|count` · `files.action.deleteCount|pullCount` · `files.delete.partial|partialCount` |
 
 검증: `swift test` **914/914** · `./scripts/build-macos.sh debug` 1.25.0(build `20261114.235045`) · 육안 `MANUAL_VERIFY` §41 127~132.
+
+---
+
+## 10. 후속 — 드래그 이동 (2026-11-15)
+
+> T-2026-11-15-1 · 브랜치 `feat/macos-file-drag-move` (PR #146 위 스택).
+> 사용자 결정: ① 기기 내부 이동 + Finder→폴더 전송 ② 충돌 시 **이동하지 않고 알림** ③ **같은 저장 영역만** 허용.
+
+| 항목 | 변경 |
+|------|------|
+| 드래그 소스 | 행 전체(체크박스 포함) · `FileBrowserDragPayload`(커스텀 UTI `com.borasarang.relayconsole.filepaths`)에 **기기 내 경로만** 담음 |
+| 드롭 대상 | **폴더 행만** — 대상 테두리 하이라이트(`isTargeted`) · 내부 경로 = 이동, Finder URL = 그 폴더로 push |
+| 다중 이동 | 선택된 행을 끌면 `dragPaths` 가 목록 순서대로 **선택 전체**를 실어 감 |
+| 덮어쓰기 금지 | `test -e` 사전 확인 → 있으면 건너뛰고 `files.move.exists` 표시. `mv -n` 은 race 용 안전장치(충돌 시에도 exit 0) |
+| 이동 제한 | 같은 저장 영역만(`moveRoots`) · 자기 자신/하위 폴더 금지 · 사유별 문구(`crossRoot`/`intoSelf`/`forbidden`) |
+| 부분 실패 | `N개 이동, M개 실패 — 첫 원인` · 성공분만 목록/트리 갱신 |
+| L10n | `files.move.*` 7 · `files.drag.multiple` · `files.error.move` · `files.push.doneTo` |
+
+검증: `swift test` **920/920** · `./scripts/build-macos.sh debug` 1.25.0(build `20261115.003826`) ·
+실기기 확인(`mv -n` 충돌 시 덮어쓰지 않음·exit 0 / `test -e` 0·1) · 육안 `MANUAL_VERIFY` §42 133~138.
