@@ -178,6 +178,109 @@ enum FileBrowserLogic {
         return items.filter { $0.name.lowercased().contains(q) }
     }
 
+    // MARK: - 선택 (체크박스 · 범위)
+
+    /// 헤더 체크박스 3상태 — 현재 목록(필터·정렬 후) 기준
+    enum SelectAllState: Equatable {
+        case none, partial, all
+    }
+
+    static func selectAllState(_ visible: [Item], selection: Set<String>) -> SelectAllState {
+        guard !visible.isEmpty else { return .none }
+        let selected = visible.reduce(into: 0) { count, item in
+            if selection.contains(item.id) { count += 1 }
+        }
+        if selected == 0 { return .none }
+        return selected == visible.count ? .all : .partial
+    }
+
+    /// 체크박스 1개 토글 — 다른 선택은 유지
+    static func toggling(_ selection: Set<String>, id: String) -> Set<String> {
+        var next = selection
+        if next.contains(id) {
+            next.remove(id)
+        } else {
+            next.insert(id)
+        }
+        return next
+    }
+
+    /// Shift 범위 선택 — 기준점이 목록에 없으면 해당 항목만.
+    /// additive(⌘+Shift)면 기존 선택을 유지한 채 범위를 더한다.
+    static func rangeSelection(
+        ids: [String],
+        anchor: String?,
+        to id: String,
+        additive: Bool,
+        current: Set<String>
+    ) -> Set<String> {
+        guard let anchor,
+              let a = ids.firstIndex(of: anchor),
+              let b = ids.firstIndex(of: id) else {
+            return additive ? current.union([id]) : [id]
+        }
+        let slice = a <= b ? ids[a...b] : ids[b...a]
+        return additive ? current.union(slice) : Set(slice)
+    }
+
+    /// 드래그할 경로 — 선택된 행을 끌면 선택 전체, 아니면 그 행만.
+    /// 목록 순서를 유지해 이동 결과·메시지가 화면 순서와 같게 한다.
+    static func dragPaths(itemID: String, selection: Set<String>, orderedIDs: [String]) -> [String] {
+        let chosen = selection.contains(itemID) ? selection : [itemID]
+        let ordered = orderedIDs.filter { chosen.contains($0) }
+        return ordered.isEmpty ? [itemID] : ordered
+    }
+
+    // MARK: - 이동 (드래그 → 폴더)
+
+    /// 이동을 허용하는 저장 영역 — 서로 다른 마운트는 rename이 아니라 복사+삭제가 된다
+    static let moveRoots = ["/sdcard", "/data/local/tmp"]
+
+    enum MoveBlockReason: Equatable {
+        case sourceNotAllowed
+        case differentRoot
+        case intoSelf
+    }
+
+    private static func trimmedPath(_ path: String) -> String {
+        var p = path
+        while p.count > 1, p.hasSuffix("/") { p.removeLast() }
+        return p
+    }
+
+    static func moveRoot(of path: String) -> String? {
+        let p = trimmedPath(path)
+        return moveRoots.first { p == $0 || p.hasPrefix($0 + "/") }
+    }
+
+    /// 이동 금지 사유 — nil이면 허용. **같은 저장 영역 안에서만** 허용한다.
+    static func moveBlockReason(path: String, to dir: String) -> MoveBlockReason? {
+        let src = trimmedPath(path)
+        let dst = trimmedPath(dir)
+        guard !src.isEmpty, !dst.isEmpty,
+              let srcRoot = moveRoot(of: src), src != srcRoot else {
+            return .sourceNotAllowed
+        }
+        guard let dstRoot = moveRoot(of: dst) else { return .sourceNotAllowed }
+        guard srcRoot == dstRoot else { return .differentRoot }
+        // 폴더를 자기 자신·자기 하위 폴더로 옮기면 트리가 사라진다
+        guard dst != src, !dst.hasPrefix(src + "/") else { return .intoSelf }
+        return nil
+    }
+
+    static func canMove(path: String, to dir: String) -> Bool {
+        moveBlockReason(path: path, to: dir) == nil
+    }
+
+    /// 이동 대상 경로 — 같은 이름은 컨트롤러가 사전 확인해 덮어쓰지 않는다
+    static func moveTarget(path: String, to dir: String) -> String {
+        join(dir: dir, name: (path as NSString).lastPathComponent)
+    }
+
+    static func moveArgs(path: String, to dir: String) -> [String] {
+        ["shell", "mv -n " + shellQuote(path) + " " + shellQuote(moveTarget(path: path, to: dir))]
+    }
+
     // MARK: - 경로
 
     /// "/sdcard/Download" → "/sdcard" · "/" → nil
@@ -672,8 +775,14 @@ final class FileBrowserController: ObservableObject {
 
     // MARK: 전송 (push → 기기)
 
+    /// 현재 폴더로 전송 — Finder 드롭 기본 경로
     func push(urls: [URL]) {
-        guard !busy, !loading, !serial.isEmpty, !urls.isEmpty else { return }
+        push(urls: urls, to: path)
+    }
+
+    /// `dir` 로 전송 — 현재 폴더 또는 Finder 파일을 놓은 폴더 행
+    func push(urls: [URL], to dir: String) {
+        guard !busy, !loading, !serial.isEmpty, !urls.isEmpty, !dir.isEmpty else { return }
         let targets = urls.filter { FileManager.default.fileExists(atPath: $0.path) }
         guard !targets.isEmpty else { return }
         busy = true
@@ -682,7 +791,7 @@ final class FileBrowserController: ObservableObject {
         currentProc = nil
         let adb = DeviceMonitor.adbPathNow()
         let serial = self.serial
-        let dir = path
+        let isCurrentDir = dir == path
         let (token, poller) = startProgressPoller()
         Task.detached(priority: .utility) {
             var okCount = 0
@@ -752,11 +861,138 @@ final class FileBrowserController: ObservableObject {
                 } else if errorText != nil {
                     self.statusMessage = L10n.string("files.error.push")
                 } else {
-                    self.statusMessage = L10n.format("files.push.done", "\(okCount)")
+                    self.statusMessage = isCurrentDir
+                        ? L10n.format("files.push.done", "\(okCount)")
+                        : L10n.format("files.push.doneTo", "\(okCount)", dir)
                     self.invalidateTree()
                     self.reloadQuietly(adb: adb, serial: serial, dir: dir)
                 }
             }
+        }
+    }
+
+    // MARK: 이동 (드래그 → 폴더, 같은 저장 영역만)
+
+    func move(paths: [String], to dir: String) {
+        guard !busy, !loading, !serial.isEmpty, !paths.isEmpty, !dir.isEmpty else { return }
+        let unique = Array(Set(paths)).sorted()
+        let valid = unique.filter { FileBrowserLogic.canMove(path: $0, to: dir) }
+        guard !valid.isEmpty else {
+            let first = unique.first ?? ""
+            statusMessage = Self.moveBlockMessage(
+                FileBrowserLogic.moveBlockReason(path: first, to: dir), path: first
+            )
+            return
+        }
+        busy = true
+        statusMessage = L10n.format("files.move.moving", valid.count)
+        let adb = DeviceMonitor.adbPathNow()
+        let serial = self.serial
+        let current = path
+        Task.detached(priority: .utility) {
+            var okCount = 0
+            var failCount = unique.count - valid.count
+            var firstError: String?
+            // 허용되지 않은 항목이 섞여 있으면 첫 사유를 남긴다
+            if let bad = unique.first(where: { !valid.contains($0) }) {
+                firstError = Self.moveBlockMessage(
+                    FileBrowserLogic.moveBlockReason(path: bad, to: dir), path: bad
+                )
+            }
+            if let adb {
+                for src in valid {
+                    let target = FileBrowserLogic.moveTarget(path: src, to: dir)
+                    let exists = Self.remoteExists(adb: adb, serial: serial, path: target)
+                    if exists == nil {
+                        failCount += 1
+                        if firstError == nil { firstError = L10n.string("files.error.move") }
+                        await DebugLogger.shared.error(
+                            "FileBrowser",
+                            "[ERROR] E-MAC-ADB-0011 대상 확인 실패 \(target)"
+                        )
+                        continue
+                    }
+                    if exists == true {
+                        // 덮어쓰지 않는다 — 같은 이름은 사용자가 직접 정리하게 남긴다
+                        failCount += 1
+                        if firstError == nil {
+                            firstError = L10n.format(
+                                "files.move.exists", (src as NSString).lastPathComponent
+                            )
+                        }
+                        continue
+                    }
+                    let res = Self.runCapture(
+                        adb: adb,
+                        args: ["-s", serial] + FileBrowserLogic.moveArgs(path: src, to: dir)
+                    )
+                    if res.code == 0 {
+                        okCount += 1
+                    } else {
+                        failCount += 1
+                        let line = Self.firstLine(res.err.isEmpty ? res.out : res.err)
+                        if firstError == nil {
+                            firstError = line.isEmpty ? L10n.string("files.error.move") : line
+                        }
+                        await DebugLogger.shared.error(
+                            "FileBrowser",
+                            "[ERROR] E-MAC-ADB-0011 이동 실패 code=\(res.code) \(src) → \(target) \(line)"
+                        )
+                    }
+                }
+            } else {
+                failCount = unique.count
+                firstError = ErrorCode.adbBinaryMissing.koMessage
+                await DebugLogger.shared.error("FileBrowser", "[ERROR] E-MAC-ADB-0011 adb 바이너리 없음")
+            }
+            await MainActor.run {
+                self.busy = false
+                if failCount > 0 {
+                    let reason = (firstError?.isEmpty == false) ? firstError : nil
+                    if okCount > 0 {
+                        self.statusMessage = L10n.format(
+                            "files.move.partial", okCount, failCount,
+                            reason ?? L10n.string("files.error.move")
+                        )
+                    } else {
+                        self.statusMessage = reason ?? L10n.string("files.error.move")
+                    }
+                } else {
+                    self.statusMessage = L10n.format("files.move.done", okCount)
+                }
+                if okCount > 0 {
+                    self.invalidateTree()
+                    self.reloadQuietly(adb: adb, serial: serial, dir: current)
+                }
+            }
+        }
+    }
+
+    /// 이동 금지 사유 → 사용자 문구. nil이면 허용(호출 전에 canMove 로 걸러진다)
+    nonisolated static func moveBlockMessage(
+        _ reason: FileBrowserLogic.MoveBlockReason?,
+        path: String
+    ) -> String {
+        switch reason {
+        case .differentRoot:
+            return L10n.format("files.move.crossRoot", path)
+        case .intoSelf:
+            return L10n.format("files.move.intoSelf", path)
+        case .sourceNotAllowed, .none:
+            return L10n.format("files.move.forbidden", path)
+        }
+    }
+
+    /// 원격 경로 존재 여부 — 0=있음, 1=없음, 그 외=nil(확인 실패)
+    nonisolated static func remoteExists(adb: String, serial: String, path: String) -> Bool? {
+        let res = runCapture(
+            adb: adb,
+            args: ["-s", serial, "shell", "test -e " + FileBrowserLogic.shellQuote(path)]
+        )
+        switch res.code {
+        case 0: return true
+        case 1: return false
+        default: return nil
         }
     }
 
@@ -894,8 +1130,11 @@ final class FileBrowserController: ObservableObject {
         let dir = path
         Task.detached(priority: .utility) {
             var okCount = 0
-            var errorText: String?
+            var failCount = 0
+            var firstError: String?
             if let adb {
+                // 한 항목이 실패해도 나머지는 계속 지운다 — 일괄 삭제에서 중간 중단은
+                // "무엇이 남았는지" 알 수 없게 만든다. 실패는 개수+첫 원인으로 표시.
                 for item in targets {
                     let res = Self.runCapture(
                         adb: adb,
@@ -904,26 +1143,35 @@ final class FileBrowserController: ObservableObject {
                     if res.code == 0 {
                         okCount += 1
                     } else {
-                        errorText = Self.firstLine(res.err.isEmpty ? res.out : res.err)
+                        failCount += 1
+                        let line = Self.firstLine(res.err.isEmpty ? res.out : res.err)
+                        if firstError == nil { firstError = line }
                         await DebugLogger.shared.error(
                             "FileBrowser",
-                            "[ERROR] E-MAC-ADB-0007 삭제 실패 code=\(res.code) \(item.path) \(errorText ?? "")"
+                            "[ERROR] E-MAC-ADB-0007 삭제 실패 code=\(res.code) \(item.path) \(line)"
                         )
-                        break
                     }
                 }
             } else {
-                errorText = ErrorCode.adbBinaryMissing.koMessage
+                failCount = targets.count
+                firstError = ErrorCode.adbBinaryMissing.koMessage
                 await DebugLogger.shared.error("FileBrowser", "[ERROR] E-MAC-ADB-0007 adb 바이너리 없음")
             }
             await MainActor.run {
                 self.busy = false
-                if let errorText, !errorText.isEmpty {
-                    self.statusMessage = errorText
-                } else if errorText != nil {
-                    self.statusMessage = L10n.string("files.error.delete")
+                if failCount > 0 {
+                    let reason = (firstError?.isEmpty == false) ? firstError : nil
+                    if okCount > 0 {
+                        self.statusMessage = reason.map {
+                            L10n.format("files.delete.partial", okCount, failCount, $0)
+                        } ?? L10n.format("files.delete.partialCount", okCount, failCount)
+                    } else {
+                        self.statusMessage = reason ?? L10n.string("files.error.delete")
+                    }
                 } else {
                     self.statusMessage = L10n.format("files.delete.done", okCount)
+                }
+                if okCount > 0 {
                     self.invalidateTree()
                     self.reloadQuietly(adb: adb, serial: serial, dir: dir)
                 }

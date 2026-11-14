@@ -3,6 +3,29 @@
 > **육안 검증 대기는 `docs/MANUAL_VERIFY.md` 한 곳에 모았다** (2026-09-28) —
 > 여러 세션에 흩어져 있어 "남은 게 뭐였지" 를 한 번에 볼 수 없었다.
 
+## 완료 (2026-11-15)
+
+- [ ] **T-2026-11-15-1 [P2] 파일 탐색기 드래그 이동 — 행 → 폴더(mv) + Finder → 폴더 전송** (1.25.0+ · PR #146 · **실기기 육안 대기 `MANUAL_VERIFY` §42**)
+  - 요청: "파일 드래그 해서 폴더로 옮기는건 어려울라나?"
+  - 결정(사용자): ① 기기 내부 이동 + Finder→폴더 전송 ② 이름 충돌 시 **이동하지 않고 알림** ③ **같은 저장 영역만** 허용.
+  - 수정: 행을 드래그 소스로, 폴더 행을 드롭 대상으로 — `FileBrowserDragPayload`(커스텀 UTI `com.borasarang.relayconsole.filepaths`, Info.plist `UTExportedTypeDeclarations`)에 **기기 내 경로만** 싣는다. 선택된 행을 끌면 **선택 전체**를 옮긴다(목록 순서 유지). 이동은 `mv -n` + `test -e` 사전 확인으로 **덮어쓰지 않는다**(충돌 시 이름 알림). `/sdcard` ↔ `/data/local/tmp` 교차 이동·자기 자신/하위 폴더 이동은 **사유를 붙여 거부**. Finder 파일을 폴더 행에 놓으면 그 폴더로 push(`files.push.doneTo`). 부분 실패는 `N개 이동, M개 실패 — 첫 사유`.
+  - 실측(실기기 S22 `192.168.126.213:5555`): `test -e` 종료코드 **0=있음 / 1=없음** 확인 · `mv -n` 는 **충돌 시 덮어쓰지 않고 exit 0**(→ 사전 확인 필수 확인) · 파일·폴더 이동 성공 · 테스트 폴더 정리 완료.
+  - 순수 로직: `moveRoots` · `moveRoot(of:)` · `moveBlockReason` · `canMove` · `moveTarget` · `moveArgs` · `dragPaths` — `FileBrowserTests` 6건.
+  - L10n: `files.move.*` 7키 · `files.drag.multiple` · `files.error.move` · `files.push.doneTo` (en·ko 동시). 신규 에러코드 `E-MAC-ADB-0011`.
+  - 검증 [HARD]: `swift test` **920/920**(+6) · `swift test --filter FileBrowserTests` **36/36** · `./scripts/build-macos.sh debug` BUILD SUCCEEDED(1.25.0, build `20261115.003826`) · UTI 선언이 번들에 반영됨 확인.
+  - 육안: `MANUAL_VERIFY` §42 133~138 — 행→폴더 이동 · 다중 이동 · 충돌 알림 · 교차 영역 거부 · Finder→폴더 전송.
+
+## 완료 (2026-11-14)
+
+- [ ] **T-2026-11-14-1 [P2] 파일 탐색기 다중 선택·일괄 삭제 — 체크박스·전체 선택** (1.25.0+ · 브랜치 `feat/macos-file-multi-select` · **실기기 육안 대기 `MANUAL_VERIFY` §41**)
+  - 요청: "여러 파일 한꺼번에 선택해서 삭제 안 되나? 체크박스를 추가 하던지"
+  - 현황: `confirmDelete`·`pull` 은 이미 `Set<String>` 다중 선택을 지원했지만, 선택 방법이 **⌘-클릭뿐**이라 발견성이 낮았다. 전체 선택·선택 개수 표시도 없었다.
+  - 수정: 행 체크박스(15px) · 헤더 **3상태 전체 선택**(없음/일부/전체) · **Shift 범위 선택**(위/아래, ⌘+Shift 추가) · ⌘ 토글 유지 · 툴바 `N개 선택`+해제 칩 · 우클릭 메뉴를 **선택 전체**에 적용(다중이면 `N개 삭제`/`N개 가져오기`) · 검색·새로고침으로 사라진 항목은 선택에서 제거(숨은 파일 삭제 방지) · 일괄 삭제는 항목별 실패에도 계속 진행하고 `N개 삭제, M개 실패 — 첫 원인` 표시.
+  - 순수 로직: `FileBrowserLogic.SelectAllState` · `selectAllState` · `toggling` · `rangeSelection` — `FileBrowserTests` 5건.
+  - L10n: `files.select.all|row` · `files.selection.clear|count` · `files.action.deleteCount|pullCount` · `files.delete.partial|partialCount` (en·ko 동시).
+  - 검증 [HARD]: `swift test` **914/914**(+5) · `swift test --filter FileBrowserTests` **30/30** · `./scripts/build-macos.sh debug` BUILD SUCCEEDED(1.25.0, build `20261114.235045`) · 앱 재시작(PID 21566).
+  - 육안: `MANUAL_VERIFY` §41 127~132 — 다중 선택 → 삭제 확인 → 일괄 삭제.
+
 ## 완료 (2026-11-12)
 
 - [x] **T-2026-11-12-1 [P1] 부팅 후 첫 연결 훅 — adb root + 웨이크락 + 5555 영속** (1.25.0+ · PR #144 머지 `c50f4ef` · `docs/plans/PLAN_postboot_hook_relayconsole.md` · **`MANUAL_VERIFY` §40 121~125 ✅ · 126 ⬜ 코드 경로**)

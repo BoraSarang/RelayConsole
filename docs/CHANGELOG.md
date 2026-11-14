@@ -10,6 +10,15 @@
 ## Unreleased (PR #136·#139·#141·#144 머지 · `c50f4ef` · 버전 미정)
 
 ### Added
+- **feat(macos)**: **파일 탐색기 드래그 이동 — 행을 폴더로 끌어 옮기기(mv) + Finder 파일을 폴더 행으로 전송** — 파일 탐색기에서 행을 끌어 폴더 행에 놓으면 기기 안에서 **이동**한다. 선택된 상태로 끌면 **선택 전체**가 함께 이동한다. Finder에서 끌어온 파일을 폴더 행에 놓으면 **그 폴더로 전송**된다(기존엔 창 어디든 현재 폴더로 전송)
+  - **덮어쓰지 않는다** — 이동 전에 `test -e`로 대상 존재를 확인하고 `mv -n`으로 옮긴다. 같은 이름이 있으면 건너뛰고 상태줄에 어떤 이름이 충돌했는지 표시한다(Android `mv -n` 는 충돌 시에도 exit 0이라 사전 확인이 필수)
+  - **같은 저장 영역만** 허용한다 — `/sdcard` ↔ `/data/local/tmp` 는 파일시스템이 달라 복사+삭제(진행률 없음)로 동작하므로 거부하고 사유를 알린다. 폴더를 자기 자신·하위 폴더로 옮기는 것도 거부한다
+  - 부분 실패는 `N개 이동, M개 실패 — 첫 원인` 으로 표시한다. 신규 에러코드 `E-MAC-ADB-0011` · L10n 10키(en·ko)
+  - 검증: `swift test` **920/920**(신규 6 — 저장 영역·자기 하위·충돌·드래그 경로) · `./scripts/build-macos.sh debug` BUILD SUCCEEDED(1.25.0, build `20261115.003826`) · 실기기 `mv -n`/`test -e` 동작 확인 · 육안 확인은 `MANUAL_VERIFY` §42 133~138
+
+- **feat(macos)**: **파일 탐색기 다중 선택·일괄 삭제 — 체크박스 열** — 기존에는 ⌘-클릭으로만 여러 항목을 선택할 수 있어(툴바 삭제 자체는 다중 지원) 발견성이 낮았다. 각 행에 체크박스, 헤더에 **3상태 전체 선택**(없음/일부/전체), **Shift 범위 선택**(⌘+Shift 추가), 선택 개수+해제 칩을 추가했다. 선택된 행을 우클릭하면 메뉴가 선택 전체(`N개 삭제`·`N개 가져오기`)에 적용된다. **검색·새로고침으로 사라진 항목은 선택에서 제거**해 보이지 않는 파일이 삭제되는 경로를 막았고, 일괄 삭제는 한 항목이 실패해도 나머지를 계속 진행한 뒤 `N개 삭제, M개 실패 — 첫 원인`으로 표시한다
+  - 검증: `swift test` **914/914**(신규 5 — 3상태·토글·범위) · `swift test --filter FileBrowserTests` 30/30 · `./scripts/build-macos.sh debug` BUILD SUCCEEDED(1.25.0, build `20261114.235045`) · 육안 확인은 `MANUAL_VERIFY` §41 127~132
+
 - **feat(macos)**: **부팅 후 첫 연결 훅 — `adb root` + 웨이크락 + `persist.adb.tcp.port=5555` + 부팅 직후 90초 화면 유지** — S7(`herolte` · LineageOS 21 · `userdebug`)을 재부팅하면 `:5555`가 root adbd가 아닌 상태로 올라오고, 화면이 꺼지면 Wi-Fi/ADB가 끊겨 매번 USB·수동 `adb root`가 필요했다. `adb root`는 **5555를 열지 않는다** — adbd를 root로 재시작할 뿐이고 전송이 한 번 끊긴다. 5555 재부팅 유지는 폰의 `persist.adb.tcp.port=5555`가 담당하므로, 앱이 ① 부팅당 1회 root 승격 ② 끊긴 전송 재연결 ③ persist 보장 ④ 웨이크락 ⑤ Wi-Fi 재연결 창을 자동화한다
   - 설정 토글 `relay.postBootHook`(기본 OFF) · `/proc/sys/kernel/random/boot_id`(폴백 `btime`)로 **부팅당 1회** · 물리 ID별 처리 토큰을 UserDefaults 에 영속해 **앱 재시작에도 반복하지 않는다**. 연결이 끊기면 토큰 캐시를 지워 다음 부팅을 다시 읽는다(60초 TTL)
   - 순서는 **root → persist → wake lock** 고정: userdebug 기본 adbd(shell)는 `persist.*`를 쓸 수 없어 `adb root` 뒤에만 `setprop persist.adb.tcp.port 5555`가 성공한다(2026-11-12 S7 실측 `Failed to set property`). `ro.debuggable=1`/`id -u=0` 선검사로 `user` 빌드(S22/A90)는 호출 없이 건너뛴다
