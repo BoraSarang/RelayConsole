@@ -21,7 +21,8 @@ import Foundation
 let rawArgs = Array(CommandLine.arguments.dropFirst())
 let windowNeedle = rawArgs.first(where: { $0.hasPrefix("--window=") })?
     .replacingOccurrences(of: "--window=", with: "")
-let args = rawArgs.filter { !$0.hasPrefix("--window=") }
+let skipActivate = rawArgs.contains("--no-activate")
+let args = rawArgs.filter { !$0.hasPrefix("--window=") && $0 != "--no-activate" }
 let procName = args.first ?? "RelayConsole"
 let mode = args.count > 1 ? args[1] : "--buttons"
 let needle = args.count > 2 ? args[2] : ""
@@ -59,7 +60,9 @@ guard let pid = pidOf(procName) else {
 }
 // ★ 앱을 **앞에 올려야** 트리가 완성된다 — 앞이 아니면 푸터·창 일부가 비어 보인다.
 // (2026-09-28 실측: 요소 수가 실행마다 247~270 으로 흔들렸다)
-if let running = NSRunningApplication(processIdentifier: pid) {
+// `--no-activate` 를 주면 활성화하지 않는다 — **메뉴바 팝오버를 열어둔 상태**로
+// 그 안의 요소를 볼 때 필요하다(활성화하면 포커스가 옮겨져 팝오버가 닫힌다).
+if !skipActivate, let running = NSRunningApplication(processIdentifier: pid) {
     running.activate(options: [.activateAllWindows])
     usleep(700_000)
 }
