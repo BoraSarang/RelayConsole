@@ -178,6 +178,51 @@ enum FileBrowserLogic {
         return items.filter { $0.name.lowercased().contains(q) }
     }
 
+    // MARK: - 선택 (체크박스 · 범위)
+
+    /// 헤더 체크박스 3상태 — 현재 목록(필터·정렬 후) 기준
+    enum SelectAllState: Equatable {
+        case none, partial, all
+    }
+
+    static func selectAllState(_ visible: [Item], selection: Set<String>) -> SelectAllState {
+        guard !visible.isEmpty else { return .none }
+        let selected = visible.reduce(into: 0) { count, item in
+            if selection.contains(item.id) { count += 1 }
+        }
+        if selected == 0 { return .none }
+        return selected == visible.count ? .all : .partial
+    }
+
+    /// 체크박스 1개 토글 — 다른 선택은 유지
+    static func toggling(_ selection: Set<String>, id: String) -> Set<String> {
+        var next = selection
+        if next.contains(id) {
+            next.remove(id)
+        } else {
+            next.insert(id)
+        }
+        return next
+    }
+
+    /// Shift 범위 선택 — 기준점이 목록에 없으면 해당 항목만.
+    /// additive(⌘+Shift)면 기존 선택을 유지한 채 범위를 더한다.
+    static func rangeSelection(
+        ids: [String],
+        anchor: String?,
+        to id: String,
+        additive: Bool,
+        current: Set<String>
+    ) -> Set<String> {
+        guard let anchor,
+              let a = ids.firstIndex(of: anchor),
+              let b = ids.firstIndex(of: id) else {
+            return additive ? current.union([id]) : [id]
+        }
+        let slice = a <= b ? ids[a...b] : ids[b...a]
+        return additive ? current.union(slice) : Set(slice)
+    }
+
     // MARK: - 경로
 
     /// "/sdcard/Download" → "/sdcard" · "/" → nil
@@ -894,8 +939,11 @@ final class FileBrowserController: ObservableObject {
         let dir = path
         Task.detached(priority: .utility) {
             var okCount = 0
-            var errorText: String?
+            var failCount = 0
+            var firstError: String?
             if let adb {
+                // 한 항목이 실패해도 나머지는 계속 지운다 — 일괄 삭제에서 중간 중단은
+                // "무엇이 남았는지" 알 수 없게 만든다. 실패는 개수+첫 원인으로 표시.
                 for item in targets {
                     let res = Self.runCapture(
                         adb: adb,
@@ -904,26 +952,35 @@ final class FileBrowserController: ObservableObject {
                     if res.code == 0 {
                         okCount += 1
                     } else {
-                        errorText = Self.firstLine(res.err.isEmpty ? res.out : res.err)
+                        failCount += 1
+                        let line = Self.firstLine(res.err.isEmpty ? res.out : res.err)
+                        if firstError == nil { firstError = line }
                         await DebugLogger.shared.error(
                             "FileBrowser",
-                            "[ERROR] E-MAC-ADB-0007 삭제 실패 code=\(res.code) \(item.path) \(errorText ?? "")"
+                            "[ERROR] E-MAC-ADB-0007 삭제 실패 code=\(res.code) \(item.path) \(line)"
                         )
-                        break
                     }
                 }
             } else {
-                errorText = ErrorCode.adbBinaryMissing.koMessage
+                failCount = targets.count
+                firstError = ErrorCode.adbBinaryMissing.koMessage
                 await DebugLogger.shared.error("FileBrowser", "[ERROR] E-MAC-ADB-0007 adb 바이너리 없음")
             }
             await MainActor.run {
                 self.busy = false
-                if let errorText, !errorText.isEmpty {
-                    self.statusMessage = errorText
-                } else if errorText != nil {
-                    self.statusMessage = L10n.string("files.error.delete")
+                if failCount > 0 {
+                    let reason = (firstError?.isEmpty == false) ? firstError : nil
+                    if okCount > 0 {
+                        self.statusMessage = reason.map {
+                            L10n.format("files.delete.partial", okCount, failCount, $0)
+                        } ?? L10n.format("files.delete.partialCount", okCount, failCount)
+                    } else {
+                        self.statusMessage = reason ?? L10n.string("files.error.delete")
+                    }
                 } else {
                     self.statusMessage = L10n.format("files.delete.done", okCount)
+                }
+                if okCount > 0 {
                     self.invalidateTree()
                     self.reloadQuietly(adb: adb, serial: serial, dir: dir)
                 }

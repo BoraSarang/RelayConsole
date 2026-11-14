@@ -113,3 +113,22 @@ swift test
 ```
 - 버전 상향 1.16.0 (Info.plist · build-macos.sh · AGENTS.local · README · 팝오버 라벨)
 - TODO.md 완료 등록 · push 실측(1바이트 `/data/local/tmp`) 포함
+
+---
+
+## 9. 후속 — 다중 선택·일괄 삭제 (2026-11-14)
+
+> T-2026-11-14-1 · 브랜치 `feat/macos-file-multi-select`. 삭제는 1.25.0 에서 추가됐지만
+> 선택 UI는 ⌘-클릭뿐이어서 "여러 파일을 한 번에" 라는 요구를 화면이 드러내지 못했다.
+> 새 화면이 아니라 기존 목록의 선택 방식 확장이므로 별도 목업 없이 DESIGN 토큰(cta/border)만 사용한다.
+
+| 항목 | 변경 |
+|------|------|
+| 선택 | 행 체크박스(15px) · 헤더 3상태 전체 선택(없음/일부/전체) · Shift 범위(위/아래) · ⌘+Shift 범위 추가 · ⌘ 토글 유지 |
+| 표시 | 툴바 `N개 선택` 칩 + 선택 해제 · 다중 선택 우클릭은 `N개 삭제`/`N개 가져오기` |
+| 안전 | 검색·새로고침으로 목록에서 사라진 항목은 선택에서 제거 — 숨은 파일 삭제 방지 |
+| 삭제 | 항목별 실패를 계속 진행하고 `N개 삭제, M개 실패 — 첫 원인` 표시. 전부 실패면 원인 그대로 |
+| 순수 로직 | `SelectAllState` · `selectAllState` · `toggling` · `rangeSelection` — `FileBrowserTests` 5건 |
+| L10n | `files.select.all|row` · `files.selection.clear|count` · `files.action.deleteCount|pullCount` · `files.delete.partial|partialCount` |
+
+검증: `swift test` **914/914** · `./scripts/build-macos.sh debug` 1.25.0(build `20261114.235045`) · 육안 `MANUAL_VERIFY` §41 127~132.

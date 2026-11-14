@@ -8,6 +8,8 @@ struct FileBrowserContent: View {
     @ObservedObject private var ctl = FileBrowserController.shared
 
     @State private var selection: Set<String> = []
+    /// Shift 범위 선택의 기준점 — 마지막으로 체크·클릭한 항목
+    @State private var selectionAnchor: String?
     @State private var query: String = ""
     @State private var sortKey: FileBrowserLogic.SortKey = .name
     @State private var sortAscending = true
@@ -55,10 +57,17 @@ struct FileBrowserContent: View {
             }
         }
         .onChange(of: ctl.serial) {
-            selection = []
+            clearSelection()
         }
         .onChange(of: ctl.path) {
-            selection = []
+            clearSelection()
+        }
+        // 검색으로 숨겨진 선택이 삭제·가져오기에 섞이지 않게 현재 목록으로 잘라낸다
+        .onChange(of: query) {
+            pruneSelection(to: Set(visible.map(\.id)))
+        }
+        .onChange(of: ctl.items) { _, items in
+            pruneSelection(to: Set(items.map(\.id)))
         }
         .onDisappear {
             // 창이 닫히면 삭제 확인 상태를 버린다 — 싱글턴에 남으면 재오픈 시
@@ -75,7 +84,7 @@ struct FileBrowserContent: View {
         ) {
             Button(L10n.string("files.action.delete"), role: .destructive) {
                 ctl.confirmDelete()
-                selection = []
+                clearSelection()
             }
             Button(L10n.string("files.action.cancel"), role: .cancel) {
                 ctl.cancelDelete()
@@ -119,6 +128,28 @@ struct FileBrowserContent: View {
                     .foregroundStyle(OPColor.bad)
             }
             Spacer()
+            if !selection.isEmpty {
+                HStack(spacing: 4) {
+                    Text(L10n.format("files.selection.count", selection.count))
+                        .font(OPFont.number(10))
+                        .foregroundStyle(OPColor.inkDim)
+                        .lineLimit(1)
+                    Button {
+                        clearSelection()
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 11))
+                            .foregroundStyle(OPColor.inkDim)
+                    }
+                    .buttonStyle(.plain)
+                    .help(L10n.string("files.selection.clear"))
+                    .accessibilityLabel(L10n.string("files.selection.clear"))
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(OPColor.card, in: Capsule())
+                .overlay(Capsule().stroke(OPColor.border, lineWidth: 1))
+            }
             Button {
                 ctl.chooseDestDir()
             } label: {
@@ -207,7 +238,7 @@ struct FileBrowserContent: View {
 
     private func selectDevice(_ serial: String) {
         guard !serial.isEmpty, serial != ctl.serial else { return }
-        selection = []
+        clearSelection()
         store.select(serial)
         ctl.open(serial: serial)
     }
@@ -440,6 +471,15 @@ struct FileBrowserContent: View {
 
     private var columnHeader: some View {
         HStack(spacing: 8) {
+            selectBox(
+                state: FileBrowserLogic.selectAllState(visible, selection: selection),
+                help: L10n.string("files.select.all")
+            ) {
+                toggleSelectAll()
+            }
+            .disabled(visible.isEmpty)
+            // 행의 파일 아이콘 폭(16)만큼 띄워 이름 컬럼을 정렬한다
+            Color.clear.frame(width: 16, height: 1)
             headerButton(L10n.string("files.column.name"), key: .name)
                 .frame(maxWidth: .infinity, alignment: .leading)
             headerButton(L10n.string("files.column.size"), key: .size)
@@ -477,24 +517,44 @@ struct FileBrowserContent: View {
     private func rowView(idx: Int, item: FileBrowserLogic.Item) -> some View {
         let isSelected = selection.contains(item.id)
         return HStack(spacing: 8) {
-            Image(systemName: item.isDir ? "folder.fill" : fileIcon(item))
-                .font(.system(size: 12))
-                .foregroundStyle(item.isDir ? OPColor.cta : OPColor.inkDim)
-                .frame(width: 16)
-            Text(item.name)
-                .font(OPFont.number(11))
-                .foregroundStyle(OPColor.ink)
-                .lineLimit(1)
-                .truncationMode(.middle)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            Text(item.isDir ? "—" : FileBrowserLogic.formatSize(item.size))
-                .font(OPFont.number(10))
-                .foregroundStyle(OPColor.inkDim)
-                .frame(width: 84, alignment: .trailing)
-            Text(item.modified.map { Self.dateFmt.string(from: $0) } ?? "—")
-                .font(OPFont.number(10))
-                .foregroundStyle(OPColor.inkDim)
-                .frame(width: 132, alignment: .trailing)
+            // 체크박스는 별도 버튼 — 행 탭 제스처와 겹치지 않게 아이콘 영역 밖에 둔다
+            selectBox(
+                state: isSelected ? .all : .none,
+                help: L10n.format("files.select.row", item.name)
+            ) {
+                selection = FileBrowserLogic.toggling(selection, id: item.id)
+                selectionAnchor = item.id
+            }
+            HStack(spacing: 8) {
+                Image(systemName: item.isDir ? "folder.fill" : fileIcon(item))
+                    .font(.system(size: 12))
+                    .foregroundStyle(item.isDir ? OPColor.cta : OPColor.inkDim)
+                    .frame(width: 16)
+                Text(item.name)
+                    .font(OPFont.number(11))
+                    .foregroundStyle(OPColor.ink)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                Text(item.isDir ? "—" : FileBrowserLogic.formatSize(item.size))
+                    .font(OPFont.number(10))
+                    .foregroundStyle(OPColor.inkDim)
+                    .frame(width: 84, alignment: .trailing)
+                Text(item.modified.map { Self.dateFmt.string(from: $0) } ?? "—")
+                    .font(OPFont.number(10))
+                    .foregroundStyle(OPColor.inkDim)
+                    .frame(width: 132, alignment: .trailing)
+            }
+            .contentShape(Rectangle())
+            .onTapGesture(count: 2) {
+                ctl.openItem(item)
+            }
+            .onTapGesture {
+                selectRow(item)
+            }
+            .contextMenu {
+                contextMenu(for: item)
+            }
         }
         .padding(.horizontal, OPSpace.md)
         .padding(.vertical, 5)
@@ -502,28 +562,101 @@ struct FileBrowserContent: View {
             isSelected ? OPColor.cta.opacity(0.18)
                 : (idx % 2 == 1 ? OPColor.card.opacity(0.35) : Color.clear)
         )
-        .contentShape(Rectangle())
-        .onTapGesture(count: 2) {
-            ctl.openItem(item)
+    }
+
+    /// 행 클릭 — 일반=단일, ⌘=토글, Shift=기준점부터 범위, ⌘+Shift=범위 추가
+    private func selectRow(_ item: FileBrowserLogic.Item) {
+        let flags = NSEvent.modifierFlags
+        if flags.contains(.shift) {
+            selection = FileBrowserLogic.rangeSelection(
+                ids: visible.map(\.id),
+                anchor: selectionAnchor,
+                to: item.id,
+                additive: flags.contains(.command),
+                current: selection
+            )
+            if selectionAnchor == nil { selectionAnchor = item.id }
+        } else if flags.contains(.command) {
+            selection = FileBrowserLogic.toggling(selection, id: item.id)
+            selectionAnchor = item.id
+        } else {
+            selection = [item.id]
+            selectionAnchor = item.id
         }
-        .onTapGesture {
-            if NSEvent.modifierFlags.contains(.command) {
-                if isSelected {
-                    selection.remove(item.id)
-                } else {
-                    selection.insert(item.id)
+    }
+
+    /// 우클릭 대상 — 선택된 행이면 선택 전체에 적용 (그룹 삭제가 1개로 축소되지 않게)
+    @ViewBuilder
+    private func contextMenu(for item: FileBrowserLogic.Item) -> some View {
+        let targets = selection.contains(item.id) ? selection : Set([item.id])
+        Button(L10n.string("files.action.open")) { ctl.openItem(item) }
+        Button(targets.count > 1
+            ? L10n.format("files.action.pullCount", targets.count)
+            : L10n.string("files.pull.button")) {
+            ctl.pull(selection: targets)
+        }
+        Button(targets.count > 1
+            ? L10n.format("files.action.deleteCount", targets.count)
+            : L10n.string("files.action.delete"), role: .destructive) {
+            ctl.requestDelete(selection: targets)
+        }
+    }
+
+    private func toggleSelectAll() {
+        let ids = Set(visible.map(\.id))
+        guard !ids.isEmpty else { return }
+        if FileBrowserLogic.selectAllState(visible, selection: selection) == .all {
+            selection.subtract(ids)
+            selectionAnchor = nil
+        } else {
+            selection.formUnion(ids)
+            selectionAnchor = visible.first?.id
+        }
+    }
+
+    private func clearSelection() {
+        selection = []
+        selectionAnchor = nil
+    }
+
+    /// 사라진 항목(새로고침·검색 필터)이 선택에 남아 보이지 않는 삭제를 만들지 않게 잘라낸다
+    private func pruneSelection(to ids: Set<String>) {
+        selection.formIntersection(ids)
+        if let anchor = selectionAnchor, !ids.contains(anchor) {
+            selectionAnchor = nil
+        }
+    }
+
+    /// 체크박스 — 3상태(없음/일부/전체). macOS 기본 체크박스 대신 다크 테마에 맞춘 최소 도형
+    private func selectBox(
+        state: FileBrowserLogic.SelectAllState,
+        help: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        let on = state == .all
+        let mixed = state == .partial
+        return Button(action: action) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(on || mixed ? OPColor.cta : Color.clear)
+                RoundedRectangle(cornerRadius: 4)
+                    .stroke(on || mixed ? OPColor.cta : OPColor.inkDim.opacity(0.55), lineWidth: 1)
+                if mixed {
+                    Capsule()
+                        .fill(Color.white)
+                        .frame(width: 7, height: 2)
+                } else if on {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundStyle(Color.white)
                 }
-            } else {
-                selection = [item.id]
             }
+            .frame(width: 15, height: 15)
+            .contentShape(Rectangle())
         }
-        .contextMenu {
-            Button(L10n.string("files.action.open")) { ctl.openItem(item) }
-            Button(L10n.string("files.pull.button")) { ctl.pull(selection: [item.id]) }
-            Button(L10n.string("files.action.delete"), role: .destructive) {
-                ctl.requestDelete(selection: [item.id])
-            }
-        }
+        .buttonStyle(.plain)
+        .help(help)
+        .accessibilityLabel(help)
     }
 
     /// 확인 다이얼로그 미리보기 — 최대 5개 이름 + 나머지는 개수만

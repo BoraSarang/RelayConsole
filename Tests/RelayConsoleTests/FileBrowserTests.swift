@@ -272,6 +272,52 @@ struct FileBrowserTests {
         #expect(FileBrowserLogic.childDirs(items).map(\.name) == ["a", "B"])
     }
 
+    // MARK: 다중 선택 (체크박스 · 범위)
+
+    @Test func selectAllStateNonePartialAll() {
+        let items = [mk("a.txt", dir: false), mk("b.txt", dir: false), mk("C", dir: true)]
+        #expect(FileBrowserLogic.selectAllState(items, selection: []) == .none)
+        #expect(FileBrowserLogic.selectAllState(items, selection: [items[1].id]) == .partial)
+        #expect(FileBrowserLogic.selectAllState(items, selection: Set(items.map(\.id))) == .all)
+        // 목록이 비면 "전체 선택" 상태가 아니다
+        #expect(FileBrowserLogic.selectAllState([], selection: ["/sdcard/a"]) == .none)
+    }
+
+    @Test func togglingKeepsOtherSelections() {
+        let one = FileBrowserLogic.toggling([], id: "/sdcard/a")
+        #expect(one == ["/sdcard/a"])
+        let two = FileBrowserLogic.toggling(one, id: "/sdcard/b")
+        #expect(two == ["/sdcard/a", "/sdcard/b"])
+        #expect(FileBrowserLogic.toggling(two, id: "/sdcard/a") == ["/sdcard/b"])
+    }
+
+    @Test func rangeSelectionCoversBothDirections() {
+        let ids = ["a", "b", "c", "d"]
+        #expect(FileBrowserLogic.rangeSelection(
+            ids: ids, anchor: "b", to: "d", additive: false, current: []
+        ) == ["b", "c", "d"])
+        // 위로 범위를 잡아도 같은 구간
+        #expect(FileBrowserLogic.rangeSelection(
+            ids: ids, anchor: "d", to: "b", additive: false, current: []
+        ) == ["b", "c", "d"])
+    }
+
+    @Test func rangeSelectionAdditiveKeepsExisting() {
+        #expect(FileBrowserLogic.rangeSelection(
+            ids: ["a", "b", "c", "d"], anchor: "c", to: "a",
+            additive: true, current: ["d"]
+        ) == ["a", "b", "c", "d"])
+    }
+
+    @Test func rangeSelectionWithoutAnchorSelectsTargetOnly() {
+        #expect(FileBrowserLogic.rangeSelection(
+            ids: ["a", "b", "c"], anchor: nil, to: "c", additive: false, current: ["a"]
+        ) == ["c"])
+        #expect(FileBrowserLogic.rangeSelection(
+            ids: ["a", "b", "c"], anchor: "gone", to: "c", additive: true, current: ["a"]
+        ) == ["a", "c"])
+    }
+
     // MARK: 헬퍼
 
     private func mk(_ name: String, dir: Bool, size: Int64 = 0) -> FileBrowserLogic.Item {

@@ -3,6 +3,17 @@
 > **육안 검증 대기는 `docs/MANUAL_VERIFY.md` 한 곳에 모았다** (2026-09-28) —
 > 여러 세션에 흩어져 있어 "남은 게 뭐였지" 를 한 번에 볼 수 없었다.
 
+## 완료 (2026-11-14)
+
+- [ ] **T-2026-11-14-1 [P2] 파일 탐색기 다중 선택·일괄 삭제 — 체크박스·전체 선택** (1.25.0+ · 브랜치 `feat/macos-file-multi-select` · **실기기 육안 대기 `MANUAL_VERIFY` §41**)
+  - 요청: "여러 파일 한꺼번에 선택해서 삭제 안 되나? 체크박스를 추가 하던지"
+  - 현황: `confirmDelete`·`pull` 은 이미 `Set<String>` 다중 선택을 지원했지만, 선택 방법이 **⌘-클릭뿐**이라 발견성이 낮았다. 전체 선택·선택 개수 표시도 없었다.
+  - 수정: 행 체크박스(15px) · 헤더 **3상태 전체 선택**(없음/일부/전체) · **Shift 범위 선택**(위/아래, ⌘+Shift 추가) · ⌘ 토글 유지 · 툴바 `N개 선택`+해제 칩 · 우클릭 메뉴를 **선택 전체**에 적용(다중이면 `N개 삭제`/`N개 가져오기`) · 검색·새로고침으로 사라진 항목은 선택에서 제거(숨은 파일 삭제 방지) · 일괄 삭제는 항목별 실패에도 계속 진행하고 `N개 삭제, M개 실패 — 첫 원인` 표시.
+  - 순수 로직: `FileBrowserLogic.SelectAllState` · `selectAllState` · `toggling` · `rangeSelection` — `FileBrowserTests` 5건.
+  - L10n: `files.select.all|row` · `files.selection.clear|count` · `files.action.deleteCount|pullCount` · `files.delete.partial|partialCount` (en·ko 동시).
+  - 검증 [HARD]: `swift test` **914/914**(+5) · `swift test --filter FileBrowserTests` **30/30** · `./scripts/build-macos.sh debug` BUILD SUCCEEDED(1.25.0, build `20261114.235045`) · 앱 재시작(PID 21566).
+  - 육안: `MANUAL_VERIFY` §41 127~132 — 다중 선택 → 삭제 확인 → 일괄 삭제.
+
 ## 완료 (2026-11-12)
 
 - [x] **T-2026-11-12-1 [P1] 부팅 후 첫 연결 훅 — adb root + 웨이크락 + 5555 영속** (1.25.0+ · PR #144 머지 `c50f4ef` · `docs/plans/PLAN_postboot_hook_relayconsole.md` · **`MANUAL_VERIFY` §40 121~125 ✅ · 126 ⬜ 코드 경로**)

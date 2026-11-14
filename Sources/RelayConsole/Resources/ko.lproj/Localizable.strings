@@ -367,6 +367,8 @@
 "files.action.open" = "열기";
 "files.action.cancel" = "취소";
 "files.action.delete" = "삭제";
+"files.action.deleteCount" = "%d개 삭제";
+"files.action.pullCount" = "%d개 가져오기";
 "files.column.modified" = "수정일";
 "files.column.name" = "이름";
 "files.column.size" = "크기";
@@ -376,6 +378,8 @@
 "files.delete.forbidden" = "삭제할 수 없는 경로입니다: %@";
 "files.delete.message" = "되돌릴 수 없습니다:\n%@";
 "files.delete.noSelection" = "삭제할 항목을 선택하세요";
+"files.delete.partial" = "%d개 삭제, %d개 실패 — %@";
+"files.delete.partialCount" = "%d개 삭제, %d개 실패";
 "files.delete.title" = "%d개 삭제";
 "files.empty" = "이 폴더는 비어 있습니다";
 "files.error.delete" = "삭제에 실패했습니다";
@@ -395,6 +399,10 @@
 "files.pull.done" = "%@개를 %@으로 가져왔습니다";
 "files.pull.noSelection" = "가져올 파일을 선택하세요";
 "files.push.done" = "%@개 파일을 기기로 보냈습니다";
+"files.select.all" = "전체 선택";
+"files.select.row" = "%@ 선택";
+"files.selection.clear" = "선택 해제";
+"files.selection.count" = "%d개 선택";
 "files.sidebar.favorites" = "즐겨찾기";
 "files.sidebar.folders" = "폴더";
 "files.status.listing" = "목록 불러오는 중…";
