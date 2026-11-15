@@ -204,6 +204,7 @@
 "cards.empty" = "표시할 카드가 없습니다 — 설정에서 카드 켜기";
 "popover.cards.mode.list" = "상세";
 "popover.cards.mode.tiles" = "타일";
+"common.close" = "닫기";
 "common.na" = "—";
 "diagnose.charging" = "충전 중";
 "diagnose.dropbox" = "dropbox 기록 %@";
@@ -315,6 +316,9 @@
 "droid.process.more" = "프로세스 목록 더보기";
 "droid.process.title" = "프로세스 — %@";
 "droid.process.titleShort" = "프로세스";
+"droid.screenOff.button" = "화면 끄기";
+"droid.screenOff.failed" = "화면을 끄지 못했습니다: %@";
+"droid.screenOff.help" = "지금 기기 화면을 끕니다 — 미러링은 그대로 유지됩니다(adb keyevent SLEEP)";
 "droid.stale.banner" = "측정 실패 — 아래 값은 마지막 정상 수집값입니다";
 "droid.stale.count" = "연속 실패 %d회";
 "droid.storage.read" = "읽기";
@@ -716,8 +720,11 @@
 "settings.scrcpy.opts" = "추가 옵션 (기본 8종 뒤에 추가)";
 "settings.scrcpy.path" = "scrcpy 경로 (비워두면 PATH)";
 "settings.scrcpy.powerOffOnClose" = "미러링 종료 시 기기 화면 끄기";
+"settings.scrcpy.preferText" = "텍스트 우선 입력";
+"settings.scrcpy.preferText.note" = "영문·공백을 키 이벤트 대신 텍스트 이벤트로 보냅니다. 키 조합으로 특수 문자가 어긋날 때 도움이 되지만, 게임에서는 영문 키 동작이 달라집니다.";
 "settings.scrcpy.rescan" = "다시 탐지";
-"settings.scrcpy.screenOffTimeout" = "화면 꺼짐 유지 (초)";
+"settings.scrcpy.screenOffTimeout" = "기기 화면 꺼짐 대기 (초)";
+"settings.scrcpy.screenOffTimeout.note" = "scrcpy 가 실행되는 동안 기기 화면이 스스로 꺼질 때까지의 시간입니다(종료 시 원래 값 복원). 너무 크면 기기가 깨어날 때마다 그만큼 화면이 오래 켜져 있습니다.";
 "settings.scrcpy.showTouches" = "터치 표시";
 "settings.scrcpy.stayAwake" = "미러링 중 절전 방지";
 "settings.scrcpy.turnScreenOff" = "미러링 중 기기 화면 끄기";

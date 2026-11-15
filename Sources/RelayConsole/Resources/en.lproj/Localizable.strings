@@ -204,6 +204,7 @@
 "cards.empty" = "No cards visible — enable cards in Settings";
 "popover.cards.mode.list" = "Detail";
 "popover.cards.mode.tiles" = "Tiles";
+"common.close" = "Close";
 "common.na" = "—";
 "diagnose.charging" = "Charging";
 "diagnose.dropbox" = "dropbox %@";
@@ -315,6 +316,9 @@
 "droid.process.more" = "More processes";
 "droid.process.title" = "Processes — %@";
 "droid.process.titleShort" = "Processes";
+"droid.screenOff.button" = "Screen off";
+"droid.screenOff.failed" = "Could not turn the screen off: %@";
+"droid.screenOff.help" = "Turn the device screen off now — mirroring keeps running (adb keyevent SLEEP)";
 "droid.stale.banner" = "Measurement failed — values below are the last successful reading";
 "droid.stale.count" = "%d consecutive failures";
 "droid.storage.read" = "Read";
@@ -716,8 +720,11 @@
 "settings.scrcpy.opts" = "Extra options (appended after defaults)";
 "settings.scrcpy.path" = "scrcpy path (blank = PATH)";
 "settings.scrcpy.powerOffOnClose" = "Turn device screen off on close";
+"settings.scrcpy.preferText" = "Prefer text input";
+"settings.scrcpy.preferText.note" = "Sends letters and spaces as text events instead of key events. Helps when key combos mangle special characters, but letter keys in games no longer behave as expected.";
 "settings.scrcpy.rescan" = "Rescan";
-"settings.scrcpy.screenOffTimeout" = "Keep screen off (sec)";
+"settings.scrcpy.screenOffTimeout" = "Device screen timeout (sec)";
+"settings.scrcpy.screenOffTimeout.note" = "How long the device waits before its own screen turns off while scrcpy is running (restored on exit). A large value keeps the device screen on that long every time it wakes.";
 "settings.scrcpy.showTouches" = "Show touches";
 "settings.scrcpy.stayAwake" = "Stay awake while mirroring";
 "settings.scrcpy.turnScreenOff" = "Turn device screen off";

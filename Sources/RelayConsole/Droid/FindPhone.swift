@@ -49,6 +49,14 @@ enum FindPhoneLogic {
         ["shell", "input", "keyevent", wakeKeycode]
     }
 
+    /// `input keyevent 223` = KEYCODE_SLEEP — **화면만** 끈다.
+    /// KEYCODE_POWER(26)는 토글이라 이미 꺼진 화면을 다시 켤 수 있어 쓰지 않는다.
+    static let sleepKeycode = "223"
+
+    static func sleepArgs() -> [String] {
+        ["shell", "input", "keyevent", sleepKeycode]
+    }
+
     /// 적용 순서 — 밝기 모드(수동) → 최대 밝기 → 깨우기
     static func applyArgs(level: Int = brightnessMax) -> [[String]] {
         [brightnessModeArgs(), brightnessArgs(level: level), wakeArgs()]
@@ -210,6 +218,49 @@ final class FindPhoneController: ObservableObject {
                     : L10n.string("findphone.status.failed")
             }
         }
+    }
+
+    /// 기기 화면만 끄기 — 미러링은 유지된다.
+    /// 실패하면 **원인(stderr 또는 종료 코드)** 을 completion 으로 돌려준다([표시②]).
+    func turnScreenOff(serial: String, completion: @escaping @MainActor (String?) -> Void) {
+        guard !serial.isEmpty, !busySerials.contains(serial) else { return }
+        guard let adb = DeviceMonitor.adbPathNow() else {
+            completion(ErrorCode.adbBinaryMissing.koMessage)
+            return
+        }
+        busySerials.insert(serial)
+        Task.detached(priority: .userInitiated) {
+            let failure = Self.runCapturingError(
+                adb: adb, args: ["-s", serial] + FindPhoneLogic.sleepArgs()
+            )
+            await MainActor.run {
+                self.busySerials.remove(serial)
+                completion(failure)
+            }
+        }
+    }
+
+    /// 성공이면 nil, 실패면 stderr(없으면 종료 코드) — 조용한 실패를 만들지 않는다
+    nonisolated private static func runCapturingError(adb: String, args: [String]) -> String? {
+        let proc = Process()
+        proc.executableURL = URL(fileURLWithPath: adb)
+        proc.arguments = args
+        proc.standardOutput = FileHandle.nullDevice
+        let err = Pipe()
+        proc.standardError = err
+        do {
+            try proc.run()
+        } catch {
+            return error.localizedDescription
+        }
+        let data = err.fileHandleForReading.readDataToEndOfFile()
+        proc.waitUntilExit()
+        guard proc.terminationStatus == 0 else {
+            let text = String(decoding: data, as: UTF8.self)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            return text.isEmpty ? "adb exit \(proc.terminationStatus)" : text
+        }
+        return nil
     }
 
     nonisolated private static func run(adb: String, args: [String]) -> String? {

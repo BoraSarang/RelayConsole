@@ -14,6 +14,11 @@ struct DroidDashboardView: View {
     @State private var showGallery = false
     @ObservedObject private var shots = ScreenshotService.shared
     @ObservedObject private var scrcpy = ScrcpyController.shared
+    @ObservedObject private var findPhone = FindPhoneController.shared
+    /// 화면 끄기 진행 중 — 중복 탭 방지
+    @State private var screenOffBusy = false
+    /// 화면 끄기 실패 원인(stderr) — 성공하면 nil
+    @State private var screenOffError: String?
 
     private var device: DeviceSnapshot? { store.selectedDevice }
     private var devices: [DeviceSnapshot] { store.inventory.devices }
@@ -61,6 +66,9 @@ struct DroidDashboardView: View {
                         // 조용히 두면 사용자가 알 수 없다
                         if let problem = store.storeProblem {
                             storeProblemBanner(problem)
+                        }
+                        if let err = screenOffError {
+                            screenOffErrorBanner(err)
                         }
                         if let rules = store.rulesProblem {
                             rulesProblemBanner(rules)
@@ -315,6 +323,50 @@ struct DroidDashboardView: View {
         )
     }
 
+    /// 화면 끄기 실패 — 원인(stderr·종료 코드)을 그대로 보여준다 ([표시②])
+    private func screenOffErrorBanner(_ text: String) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: "exclamationmark.triangle")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(OPColor.warn)
+            Text(L10n.format("droid.screenOff.failed", text))
+                .font(OPFont.body(12))
+                .foregroundStyle(OPColor.warn)
+                .fixedSize(horizontal: false, vertical: true)
+                .textSelection(.enabled)
+            Spacer(minLength: 0)
+            Button {
+                screenOffError = nil
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(OPColor.inkDim)
+            }
+            .buttonStyle(.plain)
+            .help(L10n.string("common.close"))
+        }
+        .padding(OPSpace.md)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(OPColor.warn.opacity(0.12), in: RoundedRectangle(cornerRadius: 10))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(OPColor.warn.opacity(0.45), lineWidth: 1)
+        )
+    }
+
+    /// 기기 화면만 끈다(adb `input keyevent 223` = SLEEP). 미러링은 그대로 —
+    /// `--turn-screen-off` 는 **시작할 때 한 번**뿐이라, 기기에서 화면이 다시 켜진 뒤에는
+    /// 이 버튼으로 즉시 끈다(시스템 화면 꺼짐 대기 30분을 기다리지 않는다).
+    private func turnScreenOff(_ serial: String) {
+        guard !screenOffBusy else { return }
+        screenOffBusy = true
+        screenOffError = nil
+        findPhone.turnScreenOff(serial: serial) { failure in
+            screenOffBusy = false
+            if let failure { screenOffError = failure }
+        }
+    }
+
     /// 탐지 타임라인 행마다 DateFormatter 를 새로 만들지 않는다 (생성 1회당 0.178ms 실측)
     private static let timeFmt: DateFormatter = {
         let f = DateFormatter()
@@ -367,6 +419,32 @@ struct DroidDashboardView: View {
             Spacer(minLength: 8)
             if let d = device, !d.serial.isEmpty {
                 ScrcpyHeaderButton(serial: d.serial)
+                Button {
+                    turnScreenOff(d.serial)
+                } label: {
+                    HStack(spacing: 3) {
+                        if screenOffBusy {
+                            ProgressView()
+                                .controlSize(.mini)
+                        } else {
+                            Image(systemName: "moon.zzz")
+                                .font(.system(size: 10, weight: .semibold))
+                        }
+                        Text(L10n.string("droid.screenOff.button"))
+                            .font(OPFont.number(10))
+                    }
+                    .foregroundStyle(OPColor.inkDim)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 4)
+                    .background(OPColor.card, in: RoundedRectangle(cornerRadius: 6))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 6)
+                            .stroke(OPColor.border, lineWidth: 1)
+                    )
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help(L10n.string("droid.screenOff.help"))
                 WifiOnboardingHeaderButton(serial: d.serial, connectionKind: d.connectionKind)
                 Button {
                     showAppHub = true

@@ -37,6 +37,13 @@ final class ScrcpyController: ObservableObject {
     @Published var legacyPaste: Bool {
         didSet { UserDefaults.standard.set(legacyPaste, forKey: "relay.scrcpy.legacyPaste") }
     }
+    /// 알파벳·공백을 **텍스트 이벤트**로 주입 (scrcpy `--prefer-text`)
+    ///
+    /// 특수 문자를 여러 키 조합으로 넣을 때 생기는 어긋남을 피한다.
+    /// 대신 게임에서는 알파 키가 기대대로 동작하지 않는다(scrcpy 문서 명시).
+    @Published var preferText: Bool {
+        didSet { UserDefaults.standard.set(preferText, forKey: "relay.scrcpy.preferText") }
+    }
     @Published var turnScreenOff: Bool {
         didSet { UserDefaults.standard.set(turnScreenOff, forKey: "relay.scrcpy.turnScreenOff") }
     }
@@ -95,6 +102,9 @@ final class ScrcpyController: ObservableObject {
     /// OFF면 클립보드를 기기에 프로그램으로 설정해 유니코드가 그대로 전달된다.
     /// 일부 기기만 클립보드 programmatic 설정을 오처리하므로 그 경우에만 켠다.
     nonisolated static let defaultLegacyPaste = false
+    /// 알파 입력을 텍스트 이벤트로 — 기본 **OFF**.
+    /// 켜면 특수 문자 조합이 안정적이지만, 게임의 알파 키 동작이 달라진다(scrcpy 문서).
+    nonisolated static let defaultPreferText = false
     nonisolated static let defaultTurnScreenOff = true
     nonisolated static let defaultMaxSize = "1024"
     nonisolated static let defaultVideoBitRate = "2M"
@@ -127,6 +137,7 @@ final class ScrcpyController: ObservableObject {
                            showTouches: Bool = defaultShowTouches,
                            stayAwake: Bool = defaultStayAwake,
                            legacyPaste: Bool = defaultLegacyPaste,
+                           preferText: Bool = defaultPreferText,
                            turnScreenOff: Bool = defaultTurnScreenOff,
                            maxSize: String = defaultMaxSize,
                            videoBitRate: String = defaultVideoBitRate,
@@ -145,6 +156,8 @@ final class ScrcpyController: ObservableObject {
         if showTouches { args.append("--show-touches") }
         if stayAwake { args.append("--stay-awake") }
         if legacyPaste { args.append("--legacy-paste") }
+        // 알파·공백을 텍스트 이벤트로 — 기본 OFF, 설정에서 켠다
+        if preferText { args.append("--prefer-text") }
         let size = maxSize.trimmingCharacters(in: .whitespaces)
         if !size.isEmpty { args.append("--max-size=\(size)") }
         let rate = videoBitRate.trimmingCharacters(in: .whitespaces)
@@ -194,6 +207,7 @@ final class ScrcpyController: ObservableObject {
         showTouches = d.object(forKey: "relay.scrcpy.showTouches") as? Bool ?? Self.defaultShowTouches
         stayAwake = d.object(forKey: "relay.scrcpy.stayAwake") as? Bool ?? Self.defaultStayAwake
         legacyPaste = d.object(forKey: "relay.scrcpy.legacyPaste") as? Bool ?? Self.defaultLegacyPaste
+        preferText = d.object(forKey: "relay.scrcpy.preferText") as? Bool ?? Self.defaultPreferText
         turnScreenOff = d.object(forKey: "relay.scrcpy.turnScreenOff") as? Bool ?? Self.defaultTurnScreenOff
         maxSize = d.string(forKey: "relay.scrcpy.maxSize") ?? Self.defaultMaxSize
         videoBitRate = d.string(forKey: "relay.scrcpy.videoBitRate") ?? Self.defaultVideoBitRate
@@ -395,7 +409,8 @@ final class ScrcpyController: ObservableObject {
 
         let args = Self.mirrorArgs(serial: serial, noControl: noControl,
                                      showTouches: showTouches, stayAwake: stayAwake,
-                                     legacyPaste: legacyPaste, turnScreenOff: turnScreenOff,
+                                     legacyPaste: legacyPaste, preferText: preferText,
+                                     turnScreenOff: turnScreenOff,
                                      maxSize: maxSize, videoBitRate: videoBitRate,
                                      maxFps: maxFps, screenOffTimeout: screenOffTimeout,
                                      hwdec: hwdec, videoCodec: videoCodec, videoBuffer: videoBuffer,
