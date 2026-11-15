@@ -9,7 +9,28 @@
 
 ## Unreleased (PR #136·#139·#141·#144 머지 · `c50f4ef` · 버전 미정)
 
+### Changed
+- **chore(macos)**: **scrcpy "구형 붙여넣기 방식" 기본값을 OFF 로 변경** — ON(`--legacy-paste`)은 클립보드 텍스트를 **키 이벤트 시퀀스**로 주입한다. scrcpy 문서도 "it can break non-ASCII content" 라고 명시하며, 실제로 한글 등 조합(IME)된 유니코드는 깨진다. 기본 경로는 클립보드를 기기에 프로그램으로 설정하므로 유니코드가 그대로 전달된다. 기존 사용자 설정값은 그대로 두고 **새 기본값만 OFF** 로 바꿨다. 설정 토글 아래에 한 줄 설명을 넣었다
+  - 참고: scrcpy 는 키 이벤트만 기기로 보내므로 **맥 IME 로 친 한글은 그대로 전달되지 않는다**. 기기 입력창에 한글로 넣으려면 맥에서 복사 후 미러링 창에서 `Ctrl+v`(macOS 기본 MOD 기준 `Cmd+v`·`Alt+v`도 동일)
+  - L10n `settings.scrcpy.legacyPaste.note` (en·ko 동시) · 검증: `swift test` **926/926**
+
 ### Added
+- **feat(macos)**: **파일 탐색기 드롭 대상 확장 — 상위 폴더로 이동** — 드롭 대상이 폴더 행뿐이라 **상위 디렉토리로는 옮길 수 없었다**. 이제 ① **경로 바(브레드크럼)의 각 항목** ② **사이드바 즐겨찾기·트리 폴더** ③ **목록 영역(빈 곳 = 현재 폴더)** 에 떼면 그 경로로 옮긴다. Finder 파일을 거기에 떼면 그 폴더로 전송된다. 드롭 대상이 되면 cta 테두리로 표시한다
+  - 같은 폴더(브레드크럼의 현재 폴더·목록 빈 곳)에 떼는 경우는 `mv` 의 "same file" 실패를 막기 위해 **사전 차단**하고 `이미 그 폴더 안에 있습니다` 를 표시한다
+  - 순수 로직: `MoveBlockReason.sameDirectory` — `FileBrowserTests` 1건 · 검증: `swift test` **927/927**
+
+- **feat(macos)**: **파일 탐색기 폴더 생성(mkdir)** — 툴바 `새 폴더` 버튼으로 현재 폴더에 새 폴더를 만든다. 이름 입력창에서 경로 구분자(`/`)·`.`/`..`·빈 값은 막고, 공백이 있는 이름은 따옴표로 인용한다(`mkdir '/sdcard/New Folder'`). **같은 이름이 있으면 덮어쓰지 않고 실패 사유를 그대로 보여준다**. 생성 후 목록·사이드바 트리를 갱신한다
+  - 검증: `swift test` **922/922**(신규 2 — 이름 검증·인용) · 육안 확인은 `MANUAL_VERIFY` §43 139~141
+
+- **feat(macos)**: **파일 탐색기 드래그 이동 — 행을 폴더로 끌어 옮기기(mv) + Finder 파일을 폴더 행으로 전송** — 파일 탐색기에서 행을 끌어 폴더 행에 놓으면 기기 안에서 **이동**한다. 선택된 상태로 끌면 **선택 전체**가 함께 이동한다. Finder에서 끌어온 파일을 폴더 행에 놓으면 **그 폴더로 전송**된다(기존엔 창 어디든 현재 폴더로 전송)
+  - **덮어쓰지 않는다** — 이동 전에 `test -e`로 대상 존재를 확인하고 `mv -n`으로 옮긴다. 같은 이름이 있으면 건너뛰고 상태줄에 어떤 이름이 충돌했는지 표시한다(Android `mv -n` 는 충돌 시에도 exit 0이라 사전 확인이 필수)
+  - **같은 저장 영역만** 허용한다 — `/sdcard` ↔ `/data/local/tmp` 는 파일시스템이 달라 복사+삭제(진행률 없음)로 동작하므로 거부하고 사유를 알린다. 폴더를 자기 자신·하위 폴더로 옮기는 것도 거부한다
+  - 부분 실패는 `N개 이동, M개 실패 — 첫 원인` 으로 표시한다. 신규 에러코드 `E-MAC-ADB-0011` · L10n 10키(en·ko)
+  - 검증: `swift test` **920/920**(신규 6 — 저장 영역·자기 하위·충돌·드래그 경로) · `./scripts/build-macos.sh debug` BUILD SUCCEEDED(1.25.0, build `20261115.003826`) · 실기기 `mv -n`/`test -e` 동작 확인 · 육안 확인은 `MANUAL_VERIFY` §42 133~138
+
+- **feat(macos)**: **파일 탐색기 다중 선택·일괄 삭제 — 체크박스 열** — 기존에는 ⌘-클릭으로만 여러 항목을 선택할 수 있어(툴바 삭제 자체는 다중 지원) 발견성이 낮았다. 각 행에 체크박스, 헤더에 **3상태 전체 선택**(없음/일부/전체), **Shift 범위 선택**(⌘+Shift 추가), 선택 개수+해제 칩을 추가했다. 선택된 행을 우클릭하면 메뉴가 선택 전체(`N개 삭제`·`N개 가져오기`)에 적용된다. **검색·새로고침으로 사라진 항목은 선택에서 제거**해 보이지 않는 파일이 삭제되는 경로를 막았고, 일괄 삭제는 한 항목이 실패해도 나머지를 계속 진행한 뒤 `N개 삭제, M개 실패 — 첫 원인`으로 표시한다
+  - 검증: `swift test` **914/914**(신규 5 — 3상태·토글·범위) · `swift test --filter FileBrowserTests` 30/30 · `./scripts/build-macos.sh debug` BUILD SUCCEEDED(1.25.0, build `20261114.235045`) · 육안 확인은 `MANUAL_VERIFY` §41 127~132
+
 - **feat(macos)**: **부팅 후 첫 연결 훅 — `adb root` + 웨이크락 + `persist.adb.tcp.port=5555` + 부팅 직후 90초 화면 유지** — S7(`herolte` · LineageOS 21 · `userdebug`)을 재부팅하면 `:5555`가 root adbd가 아닌 상태로 올라오고, 화면이 꺼지면 Wi-Fi/ADB가 끊겨 매번 USB·수동 `adb root`가 필요했다. `adb root`는 **5555를 열지 않는다** — adbd를 root로 재시작할 뿐이고 전송이 한 번 끊긴다. 5555 재부팅 유지는 폰의 `persist.adb.tcp.port=5555`가 담당하므로, 앱이 ① 부팅당 1회 root 승격 ② 끊긴 전송 재연결 ③ persist 보장 ④ 웨이크락 ⑤ Wi-Fi 재연결 창을 자동화한다
   - 설정 토글 `relay.postBootHook`(기본 OFF) · `/proc/sys/kernel/random/boot_id`(폴백 `btime`)로 **부팅당 1회** · 물리 ID별 처리 토큰을 UserDefaults 에 영속해 **앱 재시작에도 반복하지 않는다**. 연결이 끊기면 토큰 캐시를 지워 다음 부팅을 다시 읽는다(60초 TTL)
   - 순서는 **root → persist → wake lock** 고정: userdebug 기본 adbd(shell)는 `persist.*`를 쓸 수 없어 `adb root` 뒤에만 `setprop persist.adb.tcp.port 5555`가 성공한다(2026-11-12 S7 실측 `Failed to set property`). `ro.debuggable=1`/`id -u=0` 선검사로 `user` 빌드(S22/A90)는 호출 없이 건너뛴다
@@ -21,6 +42,10 @@
   - 성능: 상시 폴링 경로는 설정(UserDefaults) 조회 + 60초 캐시된 `boot_id` 확인뿐. 같은 부팅에서도 60초마다 `boot_id` 1회를 다시 읽어(잠든 사이 재부팅 감지) 토큰만 비교하고, 훅 본체는 부팅당 최초 1회(~10회 adb 호출)만 실행한다
 
 ### Fixed
+- **fix(macos)**: **드래그 고스트가 커서에서 크게 떨어져 보이던 문제** — SwiftUI 는 드래그 프리뷰를 **소스 뷰(행 전체)의 중앙**에 건다. 행 폭이 ~630pt 인데 이름 텍스트를 잡아 끄면 고스트가 **커서 +250pt** 어긋나 "잡은 파일"이 어디 있는지 헷갈렸다(2026-11-15 실측: 커서 1172→고스트 왼쪽 1314 / 커서 1513→고스트 왼쪽 1726). 이제 행의 커서 위치와 행 크기를 기록해 프리뷰를 `grab - rowSize/2` 만큼 반대로 밀어 **커서 아래에 붙는다**. 탭·더블클릭·컨텍스트 메뉴와 충돌하지 않게 호버로 위치를 잡는다
+  - 순수 로직: `FileBrowserLogic.dragAnchorOffset` — `FileBrowserTests` 3건
+  - 검증: `swift test` **926/926** · 육안 확인은 `MANUAL_VERIFY` §44 142~144
+
 - **fix(macos)**: **Applications 격자·Dock 아이콘이 재빌드 후에도 회색 기본 아이콘으로 남던 문제** — 번들은 매번 `rm -rf` 로 재생성되는데 `CFBundleVersion` 이 `1` 고정이라 LaunchServices·iconservices·Dock 썸네일 캐시가 **같은 앱**으로 보고 갱신된 `AppIcon.icns` 를 계속 무시했다(2026-11-09 실측: Finder 목록은 정상, Applications 격자만 회색 — 번들 icns 는 16~1024px 전부 유효). 이제 빌드마다 `CFBundleVersion` 을 `YYYYMMDD.HHMMSS` 로 발급하고, 서명 검증 후 `lsregister -f` + 사용자 `com.apple.dock.iconcache` 삭제·Dock 재시작으로 캐시를 무효화한다
 
 - **fix(macos)**: **죽은 기기 하나 때문에 정상 기기 세션까지 끊기던 문제** — `No route to host` 회복이 무조건 전역 `adb kill-server` 였다. 죽은 `.216` 을 재시도할 때마다 S22 전송이 함께 끊겼고, 다른 앱(DroidRelay)의 ADB 세션도 흔들렸다. 이제 `adb devices` 에 `device` 가 **하나라도** 있으면 서버는 정상으로 보고 **대상만 disconnect/connect** 한다. 전역 재시작은 살아 있는 전송이 0일 때만 하고, 기동 직후 빈 목록은 **1.2초 뒤 재확인**한 다음에만 결정한다(2026-11-07 11:46 실측: 기동 3초 뒤 재시작이 3대를 모두 끊었다). 생략한 결정은 `wifi.server.restartSkipped` 로 남긴다

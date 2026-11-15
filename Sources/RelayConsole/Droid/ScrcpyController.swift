@@ -87,7 +87,14 @@ final class ScrcpyController: ObservableObject {
     /// 종전 코드 고정 기본값 (PLAN_v0.7 §2) — 설정 미지정 시 동일 동작
     nonisolated static let defaultShowTouches = true
     nonisolated static let defaultStayAwake = true
-    nonisolated static let defaultLegacyPaste = true
+    /// 구형 붙여넣기 기본값 — **OFF**(2026-11-15 변경)
+    ///
+    /// ON(`--legacy-paste`)은 클립보드 텍스트를 **키 이벤트 시퀀스로 주입**한다.
+    /// 한글처럼 조합(IME)된 유니코드는 키 이벤트로 표현되지 않아 깨진다
+    /// (scrcpy 문서: "it can break non-ASCII content").
+    /// OFF면 클립보드를 기기에 프로그램으로 설정해 유니코드가 그대로 전달된다.
+    /// 일부 기기만 클립보드 programmatic 설정을 오처리하므로 그 경우에만 켠다.
+    nonisolated static let defaultLegacyPaste = false
     nonisolated static let defaultTurnScreenOff = true
     nonisolated static let defaultMaxSize = "1024"
     nonisolated static let defaultVideoBitRate = "2M"

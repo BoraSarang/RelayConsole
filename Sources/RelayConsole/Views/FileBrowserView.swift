@@ -1,5 +1,23 @@
 import SwiftUI
 import AppKit
+import CoreTransferable
+import UniformTypeIdentifiers
+
+// MARK: - 드래그 페이로드
+
+extension UTType {
+    /// 앱 내부 드래그 전용 — Finder 파일 드롭(public.file-url)과 구분한다
+    static let relayConsoleFilePaths = UTType(exportedAs: "com.borasarang.relayconsole.filepaths")
+}
+
+/// 행을 끌어 옮길 때 실어 가는 경로 목록 — 기기 내 경로만 담는다
+struct FileBrowserDragPayload: Codable, Sendable, Transferable {
+    let paths: [String]
+
+    static var transferRepresentation: some TransferRepresentation {
+        CodableRepresentation(contentType: .relayConsoleFilePaths)
+    }
+}
 
 /// ADB 파일 탐색기 콘텐츠 — 사이드바 즐겨찾기 · 컬럼 목록 · 드래그 전송
 /// UI 형식: `RESEARCH_adb_file_browser` §7 (운영체제 탐색기 컬럼형)
@@ -8,9 +26,25 @@ struct FileBrowserContent: View {
     @ObservedObject private var ctl = FileBrowserController.shared
 
     @State private var selection: Set<String> = []
+    /// Shift 범위 선택의 기준점 — 마지막으로 체크·클릭한 항목
+    @State private var selectionAnchor: String?
+    /// 드롭 대상이 된 폴더 행 — 놓을 수 있을 때 테두리로 표시
+    @State private var dropTargetID: String?
+    /// 드롭 대상이 된 **경로**(브레드크럼 · 사이드바 · 현재 폴더)
+    @State private var dropPathTarget: String?
+    /// 목록 영역이 드롭 대상이 된 상태 — 여긴 현재 폴더로 이동
+    @State private var dropListTarget = false
+    /// 새 폴더 만들기 — 입력창에 쓰는 이름
+    @State private var newFolderName: String = ""
+    @State private var showNewFolderDialog = false
     @State private var query: String = ""
     @State private var sortKey: FileBrowserLogic.SortKey = .name
     @State private var sortAscending = true
+    /// 드래그 프리뷰 앵커 보정용 — SwiftUI는 프리뷰를 **소스 뷰 중앙**에 맞춘다.
+    /// 행(폭 ~630pt) 전체가 소스라서 행 왼쪽을 잡으면 고스트가 오른쪽으로 밀려난다.
+    /// → 누른 지점(행 로컬 좌표)과 행 크기를 재서 프리뷰를 그만큼 반대로 민다.
+    @State private var dragGrab: CGPoint = .zero
+    @State private var dragRowSize: CGSize = .zero
 
     private static let dateFmt: DateFormatter = {
         let f = DateFormatter()
@@ -55,10 +89,17 @@ struct FileBrowserContent: View {
             }
         }
         .onChange(of: ctl.serial) {
-            selection = []
+            clearSelection()
         }
         .onChange(of: ctl.path) {
-            selection = []
+            clearSelection()
+        }
+        // 검색으로 숨겨진 선택이 삭제·가져오기에 섞이지 않게 현재 목록으로 잘라낸다
+        .onChange(of: query) {
+            pruneSelection(to: Set(visible.map(\.id)))
+        }
+        .onChange(of: ctl.items) { _, items in
+            pruneSelection(to: Set(items.map(\.id)))
         }
         .onDisappear {
             // 창이 닫히면 삭제 확인 상태를 버린다 — 싱글턴에 남으면 재오픈 시
@@ -75,7 +116,7 @@ struct FileBrowserContent: View {
         ) {
             Button(L10n.string("files.action.delete"), role: .destructive) {
                 ctl.confirmDelete()
-                selection = []
+                clearSelection()
             }
             Button(L10n.string("files.action.cancel"), role: .cancel) {
                 ctl.cancelDelete()
@@ -84,6 +125,23 @@ struct FileBrowserContent: View {
             if let targets = ctl.pendingDelete {
                 Text(L10n.format("files.delete.message", deletePreview(targets)))
             }
+        }
+        .alert(L10n.string("files.mkdir.title"), isPresented: $showNewFolderDialog) {
+            TextField(L10n.string("files.mkdir.placeholder"), text: $newFolderName)
+            Button(L10n.string("files.action.create")) {
+                ctl.createFolder(name: newFolderName)
+                newFolderName = ""
+            }
+            .disabled(
+                !FileBrowserLogic.isValidFolderName(
+                    newFolderName.trimmingCharacters(in: .whitespacesAndNewlines)
+                )
+            )
+            Button(L10n.string("files.action.cancel"), role: .cancel) {
+                newFolderName = ""
+            }
+        } message: {
+            Text(L10n.format("files.mkdir.hint", ctl.path))
         }
     }
 
@@ -119,6 +177,28 @@ struct FileBrowserContent: View {
                     .foregroundStyle(OPColor.bad)
             }
             Spacer()
+            if !selection.isEmpty {
+                HStack(spacing: 4) {
+                    Text(L10n.format("files.selection.count", selection.count))
+                        .font(OPFont.number(10))
+                        .foregroundStyle(OPColor.inkDim)
+                        .lineLimit(1)
+                    Button {
+                        clearSelection()
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 11))
+                            .foregroundStyle(OPColor.inkDim)
+                    }
+                    .buttonStyle(.plain)
+                    .help(L10n.string("files.selection.clear"))
+                    .accessibilityLabel(L10n.string("files.selection.clear"))
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(OPColor.card, in: Capsule())
+                .overlay(Capsule().stroke(OPColor.border, lineWidth: 1))
+            }
             Button {
                 ctl.chooseDestDir()
             } label: {
@@ -132,6 +212,21 @@ struct FileBrowserContent: View {
             }
             .buttonStyle(.plain)
             .help(L10n.format("files.dest.title", ctl.destDir))
+            Button {
+                newFolderName = ""
+                showNewFolderDialog = true
+            } label: {
+                Image(systemName: "folder.badge.plus")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(OPColor.inkDim)
+                    .frame(width: 26, height: 26)
+                    .background(OPColor.card, in: RoundedRectangle(cornerRadius: 13))
+                    .overlay(RoundedRectangle(cornerRadius: 13).stroke(OPColor.border, lineWidth: 1))
+            }
+            .buttonStyle(.plain)
+            .help(L10n.string("files.mkdir.button"))
+            .accessibilityLabel(L10n.string("files.mkdir.button"))
+            .disabled(ctl.busy || ctl.loading)
             Button(L10n.string("files.pull.button")) {
                 ctl.pull(selection: selection)
             }
@@ -207,7 +302,7 @@ struct FileBrowserContent: View {
 
     private func selectDevice(_ serial: String) {
         guard !serial.isEmpty, serial != ctl.serial else { return }
-        selection = []
+        clearSelection()
         store.select(serial)
         ctl.open(serial: serial)
     }
@@ -228,22 +323,32 @@ struct FileBrowserContent: View {
                                 .font(.system(size: 8, weight: .bold))
                                 .foregroundStyle(OPColor.inkDim.opacity(0.6))
                         }
-                        Button {
-                            ctl.navigate(to: crumb.path)
-                        } label: {
-                            Text(crumb.label)
-                                .font(OPFont.number(11))
-                                .foregroundStyle(idx == crumbs.count - 1 ? OPColor.cta : OPColor.ink)
-                                .lineLimit(1)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 5)
-                                .background(
-                                    idx == crumbs.count - 1
-                                        ? OPColor.cta.opacity(0.14) : Color.clear,
-                                    in: RoundedRectangle(cornerRadius: 6)
-                                )
+                        // 상위 폴더로 이동 — 브레드크럼에 떼면 그 경로로 옮겨 간다
+                        droppableFolder(crumb.path) {
+                            Button {
+                                ctl.navigate(to: crumb.path)
+                            } label: {
+                                Text(crumb.label)
+                                    .font(OPFont.number(11))
+                                    .foregroundStyle(idx == crumbs.count - 1 ? OPColor.cta : OPColor.ink)
+                                    .lineLimit(1)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 5)
+                                    .background(
+                                        idx == crumbs.count - 1
+                                            ? OPColor.cta.opacity(0.14) : Color.clear,
+                                        in: RoundedRectangle(cornerRadius: 6)
+                                    )
+                            }
+                            .buttonStyle(.plain)
                         }
-                        .buttonStyle(.plain)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 6)
+                                .stroke(
+                                    dropPathTarget == crumb.path ? OPColor.cta : Color.clear,
+                                    lineWidth: 1
+                                )
+                        )
                     }
                 }
             }
@@ -301,27 +406,30 @@ struct FileBrowserContent: View {
                     .padding(.horizontal, 10)
                     .padding(.top, 4)
                 ForEach(Array(FileBrowserLogic.favorites.enumerated()), id: \.offset) { _, fav in
-                    Button {
-                        ctl.navigate(to: fav.path)
-                    } label: {
-                        HStack(spacing: 6) {
-                            Image(systemName: iconFor(fav.label))
-                                .font(.system(size: 11))
-                                .frame(width: 14)
-                            Text(fav.label)
-                                .font(OPFont.body(11))
-                                .lineLimit(1)
-                            Spacer()
+                    droppableFolder(fav.path) {
+                        Button {
+                            ctl.navigate(to: fav.path)
+                        } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: iconFor(fav.label))
+                                    .font(.system(size: 11))
+                                    .frame(width: 14)
+                                Text(fav.label)
+                                    .font(OPFont.body(11))
+                                    .lineLimit(1)
+                                Spacer()
+                            }
+                            .foregroundStyle(ctl.path.hasPrefix(fav.path) ? OPColor.cta : OPColor.inkDim)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .contentShape(Rectangle())
                         }
-                        .foregroundStyle(ctl.path.hasPrefix(fav.path) ? OPColor.cta : OPColor.inkDim)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 5)
-                        .contentShape(Rectangle())
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
                     .background(
-                        ctl.path.hasPrefix(fav.path)
-                            ? OPColor.cta.opacity(0.14) : Color.clear,
+                        dropPathTarget == fav.path
+                            ? OPColor.cta.opacity(0.22)
+                            : (ctl.path.hasPrefix(fav.path) ? OPColor.cta.opacity(0.14) : Color.clear),
                         in: RoundedRectangle(cornerRadius: 6)
                     )
                 }
@@ -356,28 +464,33 @@ struct FileBrowserContent: View {
                         .frame(width: 14, height: 18)
                 }
                 .buttonStyle(.plain)
-                Button {
-                    ctl.navigate(to: dir)
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "folder")
-                            .font(.system(size: 11))
-                            .frame(width: 14)
-                        Text(label)
-                            .font(OPFont.body(11))
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                        Spacer()
+                // 트리 폴더로 이동 — 거기에 떼면 그 경로로 옮겨 간다
+                droppableFolder(dir) {
+                    Button {
+                        ctl.navigate(to: dir)
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "folder")
+                                .font(.system(size: 11))
+                                .frame(width: 14)
+                            Text(label)
+                                .font(OPFont.body(11))
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                            Spacer()
+                        }
+                        .foregroundStyle(isCurrent ? OPColor.cta : OPColor.inkDim)
+                        .padding(.vertical, 4)
+                        .contentShape(Rectangle())
                     }
-                    .foregroundStyle(isCurrent ? OPColor.cta : OPColor.inkDim)
-                    .padding(.vertical, 4)
-                    .contentShape(Rectangle())
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
             }
             .padding(.leading, CGFloat(depth) * 12)
             .background(
-                isCurrent ? OPColor.cta.opacity(0.14) : Color.clear,
+                dropPathTarget == dir
+                    ? OPColor.cta.opacity(0.22)
+                    : (isCurrent ? OPColor.cta.opacity(0.14) : Color.clear),
                 in: RoundedRectangle(cornerRadius: 6)
             )
             if expanded {
@@ -436,10 +549,33 @@ struct FileBrowserContent: View {
             ctl.push(urls: urls)
             return true
         }
+        // 목록 빈 곳(행이 아닌 곳)에 떼면 **현재 폴더**로 옮긴다
+        .dropDestination(for: FileBrowserDragPayload.self) { payloads, _ in
+            let paths = payloads.flatMap(\.paths)
+            guard !paths.isEmpty else { return false }
+            dropListTarget = false
+            ctl.move(paths: paths, to: ctl.path)
+            return true
+        } isTargeted: { targeted in
+            dropListTarget = targeted
+        }
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(dropListTarget ? OPColor.cta : Color.clear, lineWidth: 1)
+        )
     }
 
     private var columnHeader: some View {
         HStack(spacing: 8) {
+            selectBox(
+                state: FileBrowserLogic.selectAllState(visible, selection: selection),
+                help: L10n.string("files.select.all")
+            ) {
+                toggleSelectAll()
+            }
+            .disabled(visible.isEmpty)
+            // 행의 파일 아이콘 폭(16)만큼 띄워 이름 컬럼을 정렬한다
+            Color.clear.frame(width: 16, height: 1)
             headerButton(L10n.string("files.column.name"), key: .name)
                 .frame(maxWidth: .infinity, alignment: .leading)
             headerButton(L10n.string("files.column.size"), key: .size)
@@ -477,24 +613,44 @@ struct FileBrowserContent: View {
     private func rowView(idx: Int, item: FileBrowserLogic.Item) -> some View {
         let isSelected = selection.contains(item.id)
         return HStack(spacing: 8) {
-            Image(systemName: item.isDir ? "folder.fill" : fileIcon(item))
-                .font(.system(size: 12))
-                .foregroundStyle(item.isDir ? OPColor.cta : OPColor.inkDim)
-                .frame(width: 16)
-            Text(item.name)
-                .font(OPFont.number(11))
-                .foregroundStyle(OPColor.ink)
-                .lineLimit(1)
-                .truncationMode(.middle)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            Text(item.isDir ? "—" : FileBrowserLogic.formatSize(item.size))
-                .font(OPFont.number(10))
-                .foregroundStyle(OPColor.inkDim)
-                .frame(width: 84, alignment: .trailing)
-            Text(item.modified.map { Self.dateFmt.string(from: $0) } ?? "—")
-                .font(OPFont.number(10))
-                .foregroundStyle(OPColor.inkDim)
-                .frame(width: 132, alignment: .trailing)
+            // 체크박스는 별도 버튼 — 행 탭 제스처와 겹치지 않게 아이콘 영역 밖에 둔다
+            selectBox(
+                state: isSelected ? .all : .none,
+                help: L10n.format("files.select.row", item.name)
+            ) {
+                selection = FileBrowserLogic.toggling(selection, id: item.id)
+                selectionAnchor = item.id
+            }
+            HStack(spacing: 8) {
+                Image(systemName: item.isDir ? "folder.fill" : fileIcon(item))
+                    .font(.system(size: 12))
+                    .foregroundStyle(item.isDir ? OPColor.cta : OPColor.inkDim)
+                    .frame(width: 16)
+                Text(item.name)
+                    .font(OPFont.number(11))
+                    .foregroundStyle(OPColor.ink)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                Text(item.isDir ? "—" : FileBrowserLogic.formatSize(item.size))
+                    .font(OPFont.number(10))
+                    .foregroundStyle(OPColor.inkDim)
+                    .frame(width: 84, alignment: .trailing)
+                Text(item.modified.map { Self.dateFmt.string(from: $0) } ?? "—")
+                    .font(OPFont.number(10))
+                    .foregroundStyle(OPColor.inkDim)
+                    .frame(width: 132, alignment: .trailing)
+            }
+            .contentShape(Rectangle())
+            .onTapGesture(count: 2) {
+                ctl.openItem(item)
+            }
+            .onTapGesture {
+                selectRow(item)
+            }
+            .contextMenu {
+                contextMenu(for: item)
+            }
         }
         .padding(.horizontal, OPSpace.md)
         .padding(.vertical, 5)
@@ -502,28 +658,211 @@ struct FileBrowserContent: View {
             isSelected ? OPColor.cta.opacity(0.18)
                 : (idx % 2 == 1 ? OPColor.card.opacity(0.35) : Color.clear)
         )
-        .contentShape(Rectangle())
-        .onTapGesture(count: 2) {
-            ctl.openItem(item)
+        .overlay(
+            RoundedRectangle(cornerRadius: 6)
+                .stroke(dropTargetID == item.id ? OPColor.cta : Color.clear, lineWidth: 1)
+        )
+        // 행을 끌어 폴더에 놓으면 이동(같은 저장 영역만) — 선택이 있으면 선택 전체를 옮긴다
+        // 앵커 보정: 커서가 행 어디를 누르고 있는지 기록해 두고 dragPreview 에서 상쇄한다.
+        // (호버 위치 사용 — 탭·드래그 제스처와 충돌하지 않는다)
+        .onGeometryChange(for: CGSize.self) { $0.size } action: { size in
+            if dragRowSize != size { dragRowSize = size }
         }
-        .onTapGesture {
-            if NSEvent.modifierFlags.contains(.command) {
-                if isSelected {
-                    selection.remove(item.id)
-                } else {
-                    selection.insert(item.id)
+        .onContinuousHover { phase in
+            if case .active(let point) = phase, dragGrab != point {
+                dragGrab = point
+            }
+        }
+        .draggable(FileBrowserDragPayload(paths: dragPaths(for: item))) {
+            dragPreview(for: item)
+        }
+        .dropDestination(for: FileBrowserDragPayload.self) { payloads, _ in
+            guard item.isDir else { return false }
+            let paths = payloads.flatMap(\.paths)
+            guard !paths.isEmpty else { return false }
+            dropTargetID = nil
+            ctl.move(paths: paths, to: item.path)
+            return true
+        } isTargeted: { targeted in
+            setDropTarget(item, targeted)
+        }
+        // Finder 파일을 폴더 행에 놓으면 그 폴더로 전송 (기존: 창 어디든 현재 폴더로)
+        .dropDestination(for: URL.self) { urls, _ in
+            guard item.isDir, !urls.isEmpty else { return false }
+            dropTargetID = nil
+            ctl.push(urls: urls, to: item.path)
+            return true
+        } isTargeted: { targeted in
+            setDropTarget(item, targeted)
+        }
+    }
+
+    /// 드래그할 경로 — 선택된 행이면 선택 전체, 아니면 그 행만
+    private func dragPaths(for item: FileBrowserLogic.Item) -> [String] {
+        FileBrowserLogic.dragPaths(
+            itemID: item.id,
+            selection: selection,
+            orderedIDs: visible.map(\.id)
+        )
+    }
+
+    /// 드래그 고스트 — 아이콘+이름 반투명 복사. "들고 있는 물건"처럼 보이게 한다
+    private func dragPreview(for item: FileBrowserLogic.Item) -> some View {
+        let paths = dragPaths(for: item)
+        return HStack(spacing: 5) {
+            Image(systemName: item.isDir ? "folder.fill" : fileIcon(item))
+                .font(.system(size: 11))
+                .foregroundStyle(item.isDir ? OPColor.cta : OPColor.inkDim)
+            Text(paths.count > 1 ? L10n.format("files.drag.multiple", paths.count) : item.name)
+                .font(OPFont.number(11))
+                .foregroundStyle(OPColor.ink)
+                .lineLimit(1)
+        }
+        .padding(.horizontal, 6)
+        .padding(.vertical, 3)
+        .background(OPColor.card.opacity(0.85), in: RoundedRectangle(cornerRadius: 5))
+        // SwiftUI 는 프리뷰를 **소스 뷰(행) 중앙**에 건다 → 누른 지점만큼 반대로 민다.
+        // (2026-11-15 실측: 행 왼쪽을 잡으면 고스트가 커서 +250pt 에 떠 있었다)
+        .offset(FileBrowserLogic.dragAnchorOffset(grab: dragGrab, rowSize: dragRowSize))
+    }
+
+    private func setDropTarget(_ item: FileBrowserLogic.Item, _ targeted: Bool) {
+        guard item.isDir else { return }
+        if targeted {
+            dropTargetID = item.id
+        } else if dropTargetID == item.id {
+            dropTargetID = nil
+        }
+    }
+
+    // MARK: 폴더 경로 드롭 대상 (브레드크럼 · 사이드바 · 현재 폴더)
+
+    /// 경로(폴더)를 드롭 대상으로 만든다 — 기기 내 이동 + Finder 전송
+    private func droppableFolder<Content: View>(
+        _ path: String,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        content()
+            .dropDestination(for: FileBrowserDragPayload.self) { payloads, _ in
+                let paths = payloads.flatMap(\.paths)
+                guard !paths.isEmpty else { return false }
+                dropPathTarget = nil
+                ctl.move(paths: paths, to: path)
+                return true
+            } isTargeted: { targeted in
+                setDropPath(path, targeted)
+            }
+            .dropDestination(for: URL.self) { urls, _ in
+                guard !urls.isEmpty else { return false }
+                dropPathTarget = nil
+                ctl.push(urls: urls, to: path)
+                return true
+            } isTargeted: { targeted in
+                setDropPath(path, targeted)
+            }
+    }
+
+    private func setDropPath(_ path: String, _ targeted: Bool) {
+        if targeted {
+            dropPathTarget = path
+        } else if dropPathTarget == path {
+            dropPathTarget = nil
+        }
+    }
+
+    /// 행 클릭 — 일반=단일, ⌘=토글, Shift=기준점부터 범위, ⌘+Shift=범위 추가
+    private func selectRow(_ item: FileBrowserLogic.Item) {
+        let flags = NSEvent.modifierFlags
+        if flags.contains(.shift) {
+            selection = FileBrowserLogic.rangeSelection(
+                ids: visible.map(\.id),
+                anchor: selectionAnchor,
+                to: item.id,
+                additive: flags.contains(.command),
+                current: selection
+            )
+            if selectionAnchor == nil { selectionAnchor = item.id }
+        } else if flags.contains(.command) {
+            selection = FileBrowserLogic.toggling(selection, id: item.id)
+            selectionAnchor = item.id
+        } else {
+            selection = [item.id]
+            selectionAnchor = item.id
+        }
+    }
+
+    /// 우클릭 대상 — 선택된 행이면 선택 전체에 적용 (그룹 삭제가 1개로 축소되지 않게)
+    @ViewBuilder
+    private func contextMenu(for item: FileBrowserLogic.Item) -> some View {
+        let targets = selection.contains(item.id) ? selection : Set([item.id])
+        Button(L10n.string("files.action.open")) { ctl.openItem(item) }
+        Button(targets.count > 1
+            ? L10n.format("files.action.pullCount", targets.count)
+            : L10n.string("files.pull.button")) {
+            ctl.pull(selection: targets)
+        }
+        Button(targets.count > 1
+            ? L10n.format("files.action.deleteCount", targets.count)
+            : L10n.string("files.action.delete"), role: .destructive) {
+            ctl.requestDelete(selection: targets)
+        }
+    }
+
+    private func toggleSelectAll() {
+        let ids = Set(visible.map(\.id))
+        guard !ids.isEmpty else { return }
+        if FileBrowserLogic.selectAllState(visible, selection: selection) == .all {
+            selection.subtract(ids)
+            selectionAnchor = nil
+        } else {
+            selection.formUnion(ids)
+            selectionAnchor = visible.first?.id
+        }
+    }
+
+    private func clearSelection() {
+        selection = []
+        selectionAnchor = nil
+    }
+
+    /// 사라진 항목(새로고침·검색 필터)이 선택에 남아 보이지 않는 삭제를 만들지 않게 잘라낸다
+    private func pruneSelection(to ids: Set<String>) {
+        selection.formIntersection(ids)
+        if let anchor = selectionAnchor, !ids.contains(anchor) {
+            selectionAnchor = nil
+        }
+    }
+
+    /// 체크박스 — 3상태(없음/일부/전체). macOS 기본 체크박스 대신 다크 테마에 맞춘 최소 도형
+    private func selectBox(
+        state: FileBrowserLogic.SelectAllState,
+        help: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        let on = state == .all
+        let mixed = state == .partial
+        return Button(action: action) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(on || mixed ? OPColor.cta : Color.clear)
+                RoundedRectangle(cornerRadius: 4)
+                    .stroke(on || mixed ? OPColor.cta : OPColor.inkDim.opacity(0.55), lineWidth: 1)
+                if mixed {
+                    Capsule()
+                        .fill(Color.white)
+                        .frame(width: 7, height: 2)
+                } else if on {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundStyle(Color.white)
                 }
-            } else {
-                selection = [item.id]
             }
+            .frame(width: 15, height: 15)
+            .contentShape(Rectangle())
         }
-        .contextMenu {
-            Button(L10n.string("files.action.open")) { ctl.openItem(item) }
-            Button(L10n.string("files.pull.button")) { ctl.pull(selection: [item.id]) }
-            Button(L10n.string("files.action.delete"), role: .destructive) {
-                ctl.requestDelete(selection: [item.id])
-            }
-        }
+        .buttonStyle(.plain)
+        .help(help)
+        .accessibilityLabel(help)
     }
 
     /// 확인 다이얼로그 미리보기 — 최대 5개 이름 + 나머지는 개수만

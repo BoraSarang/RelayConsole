@@ -272,6 +272,167 @@ struct FileBrowserTests {
         #expect(FileBrowserLogic.childDirs(items).map(\.name) == ["a", "B"])
     }
 
+    // MARK: 다중 선택 (체크박스 · 범위)
+
+    @Test func selectAllStateNonePartialAll() {
+        let items = [mk("a.txt", dir: false), mk("b.txt", dir: false), mk("C", dir: true)]
+        #expect(FileBrowserLogic.selectAllState(items, selection: []) == .none)
+        #expect(FileBrowserLogic.selectAllState(items, selection: [items[1].id]) == .partial)
+        #expect(FileBrowserLogic.selectAllState(items, selection: Set(items.map(\.id))) == .all)
+        // 목록이 비면 "전체 선택" 상태가 아니다
+        #expect(FileBrowserLogic.selectAllState([], selection: ["/sdcard/a"]) == .none)
+    }
+
+    @Test func togglingKeepsOtherSelections() {
+        let one = FileBrowserLogic.toggling([], id: "/sdcard/a")
+        #expect(one == ["/sdcard/a"])
+        let two = FileBrowserLogic.toggling(one, id: "/sdcard/b")
+        #expect(two == ["/sdcard/a", "/sdcard/b"])
+        #expect(FileBrowserLogic.toggling(two, id: "/sdcard/a") == ["/sdcard/b"])
+    }
+
+    @Test func rangeSelectionCoversBothDirections() {
+        let ids = ["a", "b", "c", "d"]
+        #expect(FileBrowserLogic.rangeSelection(
+            ids: ids, anchor: "b", to: "d", additive: false, current: []
+        ) == ["b", "c", "d"])
+        // 위로 범위를 잡아도 같은 구간
+        #expect(FileBrowserLogic.rangeSelection(
+            ids: ids, anchor: "d", to: "b", additive: false, current: []
+        ) == ["b", "c", "d"])
+    }
+
+    @Test func rangeSelectionAdditiveKeepsExisting() {
+        #expect(FileBrowserLogic.rangeSelection(
+            ids: ["a", "b", "c", "d"], anchor: "c", to: "a",
+            additive: true, current: ["d"]
+        ) == ["a", "b", "c", "d"])
+    }
+
+    @Test func rangeSelectionWithoutAnchorSelectsTargetOnly() {
+        #expect(FileBrowserLogic.rangeSelection(
+            ids: ["a", "b", "c"], anchor: nil, to: "c", additive: false, current: ["a"]
+        ) == ["c"])
+        #expect(FileBrowserLogic.rangeSelection(
+            ids: ["a", "b", "c"], anchor: "gone", to: "c", additive: true, current: ["a"]
+        ) == ["a", "c"])
+    }
+
+    // MARK: 이동 (드래그 → 폴더)
+
+    @Test func moveAllowedWithinSameRoot() {
+        #expect(FileBrowserLogic.canMove(path: "/sdcard/Download/a.txt", to: "/sdcard/DCIM"))
+        #expect(FileBrowserLogic.canMove(path: "/sdcard/Download/a.txt", to: "/sdcard"))
+        // 같은 저장 영역 안의 다른 폴더로는 이동 가능
+        #expect(FileBrowserLogic.canMove(path: "/data/local/tmp/x.log", to: "/data/local/tmp/sub"))
+        // trailing slash 를 붙여도 같은 경로로 본다
+        #expect(FileBrowserLogic.canMove(path: "/sdcard/Download/a.txt", to: "/sdcard/DCIM/"))
+    }
+
+    @Test func moveBlockedAcrossStorageRoots() {
+        #expect(FileBrowserLogic.moveBlockReason(path: "/sdcard/a.txt", to: "/data/local/tmp") == .differentRoot)
+        #expect(!FileBrowserLogic.canMove(path: "/data/local/tmp/x.log", to: "/sdcard"))
+    }
+
+    @Test func moveBlockedForRootItselfAndOutsidePaths() {
+        #expect(FileBrowserLogic.moveBlockReason(path: "/sdcard", to: "/sdcard/DCIM") == .sourceNotAllowed)
+        #expect(FileBrowserLogic.moveBlockReason(path: "/system/build.prop", to: "/sdcard") == .sourceNotAllowed)
+        #expect(FileBrowserLogic.moveBlockReason(path: "/sdcardFake/x", to: "/sdcard") == .sourceNotAllowed)
+        #expect(FileBrowserLogic.moveBlockReason(path: "", to: "/sdcard") == .sourceNotAllowed)
+    }
+
+    @Test func moveBlockedIntoSelfOrDescendant() {
+        #expect(FileBrowserLogic.moveBlockReason(path: "/sdcard/A", to: "/sdcard/A") == .intoSelf)
+        #expect(FileBrowserLogic.moveBlockReason(path: "/sdcard/A", to: "/sdcard/A/B") == .intoSelf)
+    }
+
+    @Test func moveBlockedWhenAlreadyInThatDirectory() {
+        // 브레드크럼(현재 폴더)이나 목록에 떼면 변화가 없다 — 사유를 알려준다
+        #expect(
+            FileBrowserLogic.moveBlockReason(path: "/sdcard/Download/a.txt", to: "/sdcard/Download")
+                == .sameDirectory
+        )
+        #expect(FileBrowserLogic.moveBlockReason(path: "/sdcard/a.txt", to: "/sdcard") == .sameDirectory)
+        #expect(!FileBrowserLogic.canMove(path: "/sdcard/Download/a.txt", to: "/sdcard/Download"))
+        // 형제 폴더는 정상 이동
+        #expect(FileBrowserLogic.canMove(path: "/sdcard/Download/a.txt", to: "/sdcard/DCIM"))
+    }
+
+    @Test func moveTargetKeepsNameAndQuotesSpaces() {
+        #expect(
+            FileBrowserLogic.moveTarget(path: "/sdcard/Download/a.txt", to: "/sdcard/DCIM")
+                == "/sdcard/DCIM/a.txt"
+        )
+        #expect(FileBrowserLogic.moveArgs(path: "/sdcard/My File.jpg", to: "/sdcard/DCIM") == [
+            "shell", "mv -n '/sdcard/My File.jpg' '/sdcard/DCIM/My File.jpg'"
+        ])
+    }
+
+    @Test func dragPathsFollowsSelectionAndListOrder() {
+        let ids = ["/sdcard/a", "/sdcard/b", "/sdcard/c"]
+        // 선택된 행을 끌면 선택 전체
+        #expect(FileBrowserLogic.dragPaths(
+            itemID: "/sdcard/b", selection: ["/sdcard/a", "/sdcard/b"], orderedIDs: ids
+        ) == ["/sdcard/a", "/sdcard/b"])
+        // 선택에 없는 행을 끌면 그 행만
+        #expect(FileBrowserLogic.dragPaths(
+            itemID: "/sdcard/c", selection: ["/sdcard/a"], orderedIDs: ids
+        ) == ["/sdcard/c"])
+        // 목록 순서를 유지
+        #expect(FileBrowserLogic.dragPaths(
+            itemID: "/sdcard/a", selection: ["/sdcard/c", "/sdcard/a"], orderedIDs: ids
+        ) == ["/sdcard/a", "/sdcard/c"])
+    }
+
+    // MARK: 폴더 생성 (mkdir)
+
+    @Test func folderNameValidationRejectsBadNames() {
+        #expect(FileBrowserLogic.isValidFolderName("New Folder"))
+        #expect(FileBrowserLogic.isValidFolderName("사진 2026"))
+        #expect(FileBrowserLogic.isValidFolderName(" a "))     // 앞뒤 공백은 정리해서 사용
+        #expect(!FileBrowserLogic.isValidFolderName(""))
+        #expect(!FileBrowserLogic.isValidFolderName("   "))
+        #expect(!FileBrowserLogic.isValidFolderName("."))
+        #expect(!FileBrowserLogic.isValidFolderName(".."))
+        #expect(!FileBrowserLogic.isValidFolderName("a/b"))    // 경로 구분자 금지
+        #expect(!FileBrowserLogic.isValidFolderName(String(repeating: "가", count: 100)))
+    }
+
+    @Test func mkdirArgsQuotesSpacesAndUnicode() {
+        #expect(FileBrowserLogic.mkdirArgs(dir: "/sdcard", name: "New Folder") == [
+            "shell", "mkdir '/sdcard/New Folder'"
+        ])
+        #expect(FileBrowserLogic.mkdirArgs(dir: "/sdcard/Download/", name: "사진") == [
+            "shell", "mkdir '/sdcard/Download/사진'"
+        ])
+    }
+
+    // MARK: 드래그 프리뷰 앵커 보정
+
+    @Test func dragAnchorOffsetCancelsSwiftUICentering() {
+        // SwiftUI 는 프리뷰를 행(폭 630) 중앙에 건다.
+        // 행 왼쪽(x=64)을 잡으면 고스트가 커서 +251pt 로 밀린다 → 그만큼 반대로 민다.
+        let row = CGSize(width: 630, height: 30)
+        let offset = FileBrowserLogic.dragAnchorOffset(grab: CGPoint(x: 64, y: 15), rowSize: row)
+        #expect(offset.width == -251)
+        #expect(offset.height == 0)
+    }
+
+    @Test func dragAnchorOffsetIsZeroWhenGrabbedAtCenter() {
+        let row = CGSize(width: 630, height: 30)
+        let offset = FileBrowserLogic.dragAnchorOffset(grab: CGPoint(x: 315, y: 15), rowSize: row)
+        #expect(offset.width == 0)
+        #expect(offset.height == 0)
+    }
+
+    @Test func dragAnchorOffsetIgnoresUnknownRowSize() {
+        let offset = FileBrowserLogic.dragAnchorOffset(
+            grab: CGPoint(x: 40, y: 10),
+            rowSize: .zero
+        )
+        #expect(offset == .zero)
+    }
+
     // MARK: 헬퍼
 
     private func mk(_ name: String, dir: Bool, size: Int64 = 0) -> FileBrowserLogic.Item {

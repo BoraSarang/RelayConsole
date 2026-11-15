@@ -3,6 +3,57 @@
 > **육안 검증 대기는 `docs/MANUAL_VERIFY.md` 한 곳에 모았다** (2026-09-28) —
 > 여러 세션에 흩어져 있어 "남은 게 뭐였지" 를 한 번에 볼 수 없었다.
 
+## 완료 (2026-11-15)
+
+- [ ] **T-2026-11-15-5 [P2] 상위 폴더로 이동 — 드롭 대상 확장** (1.25.0+ · PR #146 · **육안 대기 `MANUAL_VERIFY` §46**)
+  - 요청: "이전 디렉토리는 이동 못하는구나.. 여기 까지가 한계 인가."
+  - 현황(한계가 아니라 구현 공백): 드롭 대상이 **폴더 행뿐**이었다. 브레드크럼(상위 경로)·사이드바 즐겨찾기/트리·목록 빈 곳에는 놓을 수 없었다.
+  - 수정: ① **브레드크럼 각 항목** ② **사이드바 즐겨찾기·트리 폴더** ③ **목록 영역(빈 곳 = 현재 폴더)** 을 드롭 대상으로 추가. 기기 내 이동(`move`) + Finder 전송(`push`) 둘 다. 대상이 되면 cta 테두리/배경으로 표시.
+  - 같은 폴더에 떼는 경우(브레드크럼의 현재 폴더·목록 빈 곳)는 `mv` 가 "same file" 로 실패하지 않도록 **사전 차단**하고 `이미 그 폴더 안에 있습니다` 를 표시(`MoveBlockReason.sameDirectory` · L10n `files.move.sameDir`).
+  - 순수 로직: `moveBlockReason` 에 `sameDirectory` 분기 — `FileBrowserTests` 1건(기존 1건 갱신).
+  - 검증 [HARD]: `swift test` **927/927**(+1) · `./scripts/build-macos.sh debug` BUILD SUCCEEDED(1.25.0, build `20261115.045026`).
+
+- [ ] **T-2026-11-15-3 [P2] 드래그 고스트가 커서에서 떨어져 보이던 문제** (1.25.0+ · PR #146 · **육안 대기 `MANUAL_VERIFY` §44**)
+  - 요청: "파일 선택해서 드래그 하려니까 마우스 포인터 위치랑.. 드래그 되는 파일 위치가 애매하게 동떨어져 있다"
+  - 원인(측정): SwiftUI 는 드래그 프리뷰를 **소스 뷰(행 전체)의 중앙**에 건다. 행 폭이 ~630pt 인데 이름 텍스트(행 왼쪽)를 잡으면 고스트가 **커서 +248~251pt** 로 밀려난다(자홍 마커 + 픽셀 경계 상자 실측: 커서 1172→고스트 왼쪽 1314, 커서 1513→고스트 왼쪽 1726).
+  - 수정: 행의 커서 위치(`onContinuousHover`)와 행 크기(`onGeometryChange`)를 기록하고, 프리뷰를 `grab - rowSize/2` 만큼 반대로 민다(`FileBrowserLogic.dragAnchorOffset`). 탭·더블클릭·컨텍스트 메뉴와 충돌하지 않도록 **호버**를 쓴다(드래그 제스처를 쓰면 탭이 씹힌다).
+  - 순수 로직: `dragAnchorOffset` — `FileBrowserTests` 3건.
+  - 검증 [HARD]: `swift test` **926/926**(+4) · `swift test --filter FileBrowserTests` **41/41** · `./scripts/build-macos.sh debug` BUILD SUCCEEDED(1.25.0, build `20261115.034723`).
+
+- [ ] **T-2026-11-15-4 [P2] scrcpy 구형 붙여넣기 기본값 OFF + 설명 추가** (1.25.0+ · PR #146 · **육안 대기 `MANUAL_VERIFY` §45**)
+  - 요청: "구형 붙여넣기 방식을 Off 로 하니까 한글 복사 잘 되는데… 맥에서 한글 쳤을때 기기에 적용 못하는게 맞지?"
+  - 사실(scrcpy 5.0.1 `scrcpy --help`·공식 문서): 기본 경로는 클립보드를 **기기에 프로그램으로 설정** → 유니코드 유지. `--legacy-paste` 는 텍스트를 **키 이벤트 시퀀스**로 주입 → "it can break non-ASCII content" 라 한글은 깨진다. scrcpy 는 키 이벤트만 전달하므로 **맥 IME 로 조합한 한글은 그대로 못 보낸다**(복사 후 `Ctrl+v` 붙여넣기가 정답).
+  - 수정: `defaultLegacyPaste` 을 **false** 로 변경(기존 사용자 설정값은 유지) + 설정 토글 아래 설명 한 줄 추가. L10n `settings.scrcpy.legacyPaste.note` (en·ko 동시).
+  - 검증 [HARD]: `swift test` **926/926**(+2 — 기본 인자에서 `--legacy-paste` 제외·명시 시에만 추가) · `./scripts/build-macos.sh debug` BUILD SUCCEEDED.
+
+- [ ] **T-2026-11-15-2 [P2] 파일 탐색기 폴더 생성(mkdir)** (1.25.0+ · PR #146 · **실기기 육안 대기 `MANUAL_VERIFY` §43**)
+  - 요청: "폴더 생성 기능이 없더라"
+  - 수정: 툴바에 `새 폴더` 버튼 → 이름 입력 다이얼로그 → 현재 폴더에 `mkdir`(같은 이름이 있으면 실패를 그대로 알림). 이름 검증(빈 값·`.`/`..`·`/` 포함·255바이트 초과 거부)· 경로·공백 따옴표 인용(`mkdir '/sdcard/New Folder'`). 성공 시 목록·트리 갱신.
+  - L10n: `files.mkdir.button|title|placeholder|hint|done|invalid` · `files.error.mkdir` · `files.action.create` (en·ko 동시). 신규 에러코드 `E-MAC-ADB-0012`.
+  - 순수 로직: `isValidFolderName` · `mkdirArgs` — `FileBrowserTests` 2건.
+  - 검증 [HARD]: `swift test` **922/922**(+2) · `swift test --filter FileBrowserTests` **38/38** · `./scripts/build-macos.sh debug` BUILD SUCCEEDED.
+
+- [ ] **T-2026-11-15-1 [P2] 파일 탐색기 드래그 이동 — 행 → 폴더(mv) + Finder → 폴더 전송** (1.25.0+ · PR #146 · **실기기 육안 대기 `MANUAL_VERIFY` §42**)
+  - 요청: "파일 드래그 해서 폴더로 옮기는건 어려울라나?"
+  - 결정(사용자): ① 기기 내부 이동 + Finder→폴더 전송 ② 이름 충돌 시 **이동하지 않고 알림** ③ **같은 저장 영역만** 허용.
+  - 수정: 행을 드래그 소스로, 폴더 행을 드롭 대상으로 — `FileBrowserDragPayload`(커스텀 UTI `com.borasarang.relayconsole.filepaths`, Info.plist `UTExportedTypeDeclarations`)에 **기기 내 경로만** 싣는다. 선택된 행을 끌면 **선택 전체**를 옮긴다(목록 순서 유지). 이동은 `mv -n` + `test -e` 사전 확인으로 **덮어쓰지 않는다**(충돌 시 이름 알림). `/sdcard` ↔ `/data/local/tmp` 교차 이동·자기 자신/하위 폴더 이동은 **사유를 붙여 거부**. Finder 파일을 폴더 행에 놓으면 그 폴더로 push(`files.push.doneTo`). 부분 실패는 `N개 이동, M개 실패 — 첫 사유`.
+  - 실측(실기기 S22 `192.168.126.213:5555`): `test -e` 종료코드 **0=있음 / 1=없음** 확인 · `mv -n` 는 **충돌 시 덮어쓰지 않고 exit 0**(→ 사전 확인 필수 확인) · 파일·폴더 이동 성공 · 테스트 폴더 정리 완료.
+  - 순수 로직: `moveRoots` · `moveRoot(of:)` · `moveBlockReason` · `canMove` · `moveTarget` · `moveArgs` · `dragPaths` — `FileBrowserTests` 6건.
+  - L10n: `files.move.*` 7키 · `files.drag.multiple` · `files.error.move` · `files.push.doneTo` (en·ko 동시). 신규 에러코드 `E-MAC-ADB-0011`.
+  - 검증 [HARD]: `swift test` **920/920**(+6) · `swift test --filter FileBrowserTests` **36/36** · `./scripts/build-macos.sh debug` BUILD SUCCEEDED(1.25.0, build `20261115.003826`) · UTI 선언이 번들에 반영됨 확인.
+  - 육안: `MANUAL_VERIFY` §42 133~138 — 행→폴더 이동 · 다중 이동 · 충돌 알림 · 교차 영역 거부 · Finder→폴더 전송.
+
+## 완료 (2026-11-14)
+
+- [ ] **T-2026-11-14-1 [P2] 파일 탐색기 다중 선택·일괄 삭제 — 체크박스·전체 선택** (1.25.0+ · 브랜치 `feat/macos-file-multi-select` · **실기기 육안 대기 `MANUAL_VERIFY` §41**)
+  - 요청: "여러 파일 한꺼번에 선택해서 삭제 안 되나? 체크박스를 추가 하던지"
+  - 현황: `confirmDelete`·`pull` 은 이미 `Set<String>` 다중 선택을 지원했지만, 선택 방법이 **⌘-클릭뿐**이라 발견성이 낮았다. 전체 선택·선택 개수 표시도 없었다.
+  - 수정: 행 체크박스(15px) · 헤더 **3상태 전체 선택**(없음/일부/전체) · **Shift 범위 선택**(위/아래, ⌘+Shift 추가) · ⌘ 토글 유지 · 툴바 `N개 선택`+해제 칩 · 우클릭 메뉴를 **선택 전체**에 적용(다중이면 `N개 삭제`/`N개 가져오기`) · 검색·새로고침으로 사라진 항목은 선택에서 제거(숨은 파일 삭제 방지) · 일괄 삭제는 항목별 실패에도 계속 진행하고 `N개 삭제, M개 실패 — 첫 원인` 표시.
+  - 순수 로직: `FileBrowserLogic.SelectAllState` · `selectAllState` · `toggling` · `rangeSelection` — `FileBrowserTests` 5건.
+  - L10n: `files.select.all|row` · `files.selection.clear|count` · `files.action.deleteCount|pullCount` · `files.delete.partial|partialCount` (en·ko 동시).
+  - 검증 [HARD]: `swift test` **914/914**(+5) · `swift test --filter FileBrowserTests` **30/30** · `./scripts/build-macos.sh debug` BUILD SUCCEEDED(1.25.0, build `20261114.235045`) · 앱 재시작(PID 21566).
+  - 육안: `MANUAL_VERIFY` §41 127~132 — 다중 선택 → 삭제 확인 → 일괄 삭제.
+
 ## 완료 (2026-11-12)
 
 - [x] **T-2026-11-12-1 [P1] 부팅 후 첫 연결 훅 — adb root + 웨이크락 + 5555 영속** (1.25.0+ · PR #144 머지 `c50f4ef` · `docs/plans/PLAN_postboot_hook_relayconsole.md` · **`MANUAL_VERIFY` §40 121~125 ✅ · 126 ⬜ 코드 경로**)

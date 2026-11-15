@@ -9,11 +9,12 @@ struct ScrcpyMirrorArgsTests {
 
     @Test func defaultsMatchLegacyOptsPlusAppBackground() {
         // 종전 고정 옵션 + 오디오 AAC 고정 + 새 기본값(창 여백색 통일)
+        // 2026-11-15: 구형 붙여넣기 기본값을 **OFF** 로 바꿨다
+        // (ON 은 텍스트를 키 이벤트로 보내 한글 등 비-ASCII 가 깨진다)
         #expect(ScrcpyController.mirrorArgs(serial: serial, noControl: false) == [
             "-s", serial,
             "--show-touches",
             "--stay-awake",
-            "--legacy-paste",
             "--max-size=1024",
             "--video-bit-rate=2M",
             "--max-fps=30",
@@ -22,6 +23,15 @@ struct ScrcpyMirrorArgsTests {
             "--audio-codec=aac",
             "--background-color=#1c1f2a",
         ])
+        #expect(ScrcpyController.defaultLegacyPaste == false)
+    }
+
+    @Test func legacyPasteFlagAppearsOnlyWhenEnabled() {
+        // 기본은 OFF — 일부 기기가 클립보드 programmatic 설정을 오처리할 때만 켠다
+        #expect(!ScrcpyController.mirrorArgs(serial: serial, noControl: false)
+            .contains("--legacy-paste"))
+        #expect(ScrcpyController.mirrorArgs(serial: serial, noControl: false, legacyPaste: true)
+            .contains("--legacy-paste"))
     }
 
     @Test func audioCodecIsAACForDevicesWithoutOpus() {
@@ -40,7 +50,6 @@ struct ScrcpyMirrorArgsTests {
             "-s", serial,
             "--show-touches",
             "--stay-awake",
-            "--legacy-paste",
             "--max-size=1024",
             "--video-bit-rate=2M",
             "--max-fps=30",
