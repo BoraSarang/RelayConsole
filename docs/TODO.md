@@ -5,13 +5,14 @@
 
 ## 완료 (2026-11-15)
 
-- [ ] **T-2026-11-15-6 [P1] scrcpy 텍스트 우선 입력 설정 + 원격 "화면 끄기" 버튼** (1.25.0+ · **육안 대기 `MANUAL_VERIFY` §47**)
+- [ ] **T-2026-11-15-6 [P1] scrcpy 텍스트 우선 입력 설정 + 원격 "화면 끄기" 버튼** (1.25.0+ · PR #148 **MERGED** squash `7439377` · **육안 대기 `MANUAL_VERIFY` §47**)
   - 요청: ① "`--prefer-text` 이게 뭔지… 이거 설정 옵션으로 넣어 주고" ② "사용하지 않고 그냥 원격으로 연결돼 있는데 계속 켜 있는게 문제" ③ "어떤 상태인지 점검"
   - **점검 결과(실측)** — ① 충전 때문이 **아니다**: `AC/USB/Wireless powered=false` · `stay_on_while_plugged_in=0`. ② 마지막 wake = `WAKE_REASON_POWER_BUTTON`. ③ 유일한 wake lock 은 `PARTIAL_WAKE_LOCK 'AudioIn'`(scrcpy 오디오 캡처 — CPU만 깨우고 화면과 무관). ④ **진짜 원인: 우리 앱이 넘긴 `--screen-off-timeout=1800`** — 기기의 `screen_off_timeout` 이 scrcpy 실행 중 **1800000ms(30분)** 로 바뀌어 있었다(종료 시 복원). ⑤ `--turn-screen-off` 는 **시작할 때 한 번**뿐이라, 기기에서 화면이 다시 켜지면 다시 꺼 주지 않는다.
   - 수정: `--prefer-text` 를 **1급 설정**으로 — `relay.scrcpy.preferText`(기본 OFF) + 설정 토글·설명(en·ko) + `mirrorArgs` 인자.
   - 수정: 대시보드 헤더에 **화면 끄기** 버튼 — adb `input keyevent 223`(KEYCODE_SLEEP, 전원 토글 26 아님) 로 **즉시** 끄고 미러링은 유지. 실패하면 stderr/종료 코드를 배너로 노출([표시②]).
   - 수정: `screenOffTimeout` 라벨이 실제 의미와 **반대**였다 — "화면 꺼짐 유지" → **"기기 화면 꺼짐 대기 (초)"** + 설명. 이 값이 길면 기기가 깨어날 때마다 그만큼 화면이 오래 켜져 있다.
   - 검증 [HARD]: `swift test` **929/929**(+2) · `./scripts/build-macos.sh debug` BUILD SUCCEEDED(1.25.0, build `20261115.123218`) · L10n 키 977=977.
+  - **적용(2026-11-15)**: 사용자 요청으로 `relay.scrcpy.screenOffTimeout` 을 **1800 → 60** 으로 바꿔 두었다(앱 재시작으로 반영). 이제 미러링을 열면 scrcpy 가 기기의 화면 꺼짐 시간을 **60초**로 맞춘다. 기기 자체 `settings put system screen_off_timeout` 은 **미적용** — 작업 시점에 두 기기(`192.168.126.213:5555`·`192.168.126.49:5555`)가 모두 오프라인이었다.
 
 - [ ] **T-2026-11-15-5 [P2] 상위 폴더로 이동 — 드롭 대상 확장** (1.25.0+ · PR #146 · **육안 대기 `MANUAL_VERIFY` §46**)
   - 요청: "이전 디렉토리는 이동 못하는구나.. 여기 까지가 한계 인가."
