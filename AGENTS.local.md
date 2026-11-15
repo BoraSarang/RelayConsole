@@ -39,7 +39,7 @@ swift test
 ## 2. 번들ID / 앱 ID
 - macOS bundleIdentifier: `com.borasarang.relayconsole` **확정** (AGENTS 플랫폼 규칙 `com.borasarang.{AppName}`)
 - 앱 표시명: Relay Console / 메뉴바: RELAY
-- **버전**: `1.25.0` (파일 탐색기 확장 — 다중 선택·일괄 삭제 / 드래그 이동(행→폴더 + Finder→폴더) / 폴더 생성(mkdir) / 드래그 고스트 앵커 보정 / 상위 폴더로 이동(브레드크럼·사이드바·목록 드롭 대상). LineageOS/AOSP 배터리 건강·사이클 sysfs 대체 표시. 1.24.0 앱 관리 C — 다기기 순차 설치·시스템 앱 `--user 0` 비활성/복원·하드 블록·폴링 완화, B 1.23.0 분할·번들(.apks/.xapk/.apkm)·OBB·APK 백업·아이콘, A 1.22.0 APK 설치·삭제 교정)
+- **버전**: `1.25.0` (파일 탐색기 확장 — 다중 선택·일괄 삭제 / 드래그 이동(행→폴더 + Finder→폴더) / 폴더 생성(mkdir) / 드래그 고스트 앵커 보정 / 상위 폴더로 이동(브레드크럼·사이드바·목록 드롭 대상). scrcpy — 텍스트 우선 입력(`--prefer-text`) 설정·대시보드 `화면 끄기` 버튼(KEYCODE_SLEEP)·`기기 화면 꺼짐 대기` 라벨 교정. LineageOS/AOSP 배터리 건강·사이클 sysfs 대체 표시. 1.24.0 앱 관리 C — 다기기 순차 설치·시스템 앱 `--user 0` 비활성/복원·하드 블록·폴링 완화, B 1.23.0 분할·번들(.apks/.xapk/.apkm)·OBB·APK 백업·아이콘, A 1.22.0 APK 설치·삭제 교정)
 - UserDefaults·설정 키 접두어: `relay.*` (구 `outpost.*` 계승 금지 — 코드 신규)
 
 ## 3. 성능 예산 Override
