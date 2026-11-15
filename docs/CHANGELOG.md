@@ -10,11 +10,17 @@
 ## Unreleased (PR #136·#139·#141·#144 머지 · `c50f4ef` · 버전 미정)
 
 ### Changed
+- **chore(macos)**: **scrcpy `기기 화면 꺼짐 대기` 라벨·설명 교정** — 종전 라벨 `화면 꺼짐 유지 (초)` 는 실제 옵션과 **반대** 의미였다. scrcpy `--screen-off-timeout` = "scrcpy 가 실행되는 동안 **기기 화면이 스스로 꺼질 때까지의 시간**"(종료 시 원래 값 복원)이다. 라벨을 `기기 화면 꺼짐 대기 (초)` 로 바꾸고, 값이 길면 기기가 깨어날 때마다 그만큼 화면이 오래 켜져 있다는 설명을 넣었다 (en·ko)
 - **chore(macos)**: **scrcpy "구형 붙여넣기 방식" 기본값을 OFF 로 변경** — ON(`--legacy-paste`)은 클립보드 텍스트를 **키 이벤트 시퀀스**로 주입한다. scrcpy 문서도 "it can break non-ASCII content" 라고 명시하며, 실제로 한글 등 조합(IME)된 유니코드는 깨진다. 기본 경로는 클립보드를 기기에 프로그램으로 설정하므로 유니코드가 그대로 전달된다. 기존 사용자 설정값은 그대로 두고 **새 기본값만 OFF** 로 바꿨다. 설정 토글 아래에 한 줄 설명을 넣었다
   - 참고: scrcpy 는 키 이벤트만 기기로 보내므로 **맥 IME 로 친 한글은 그대로 전달되지 않는다**. 기기 입력창에 한글로 넣으려면 맥에서 복사 후 미러링 창에서 `Ctrl+v`(macOS 기본 MOD 기준 `Cmd+v`·`Alt+v`도 동일)
   - L10n `settings.scrcpy.legacyPaste.note` (en·ko 동시) · 검증: `swift test` **926/926**
 
 ### Added
+- **feat(macos)**: **기기 화면 끄기 버튼 + scrcpy `--prefer-text` 설정** — 대시보드 헤더에 **화면 끄기** 버튼을 추가했다. adb `input keyevent 223`(`KEYCODE_SLEEP` — 전원 토글 `26` 과 달리 꺼진 화면을 다시 켜지 않는다)로 **즉시** 끄고 미러링은 그대로 유지한다. 실패하면 stderr·종료 코드를 배너로 보여준다
+  - 배경(실측): 기기 화면이 계속 켜져 있던 원인은 **충전도, 앱의 상주도 아니었다**. 우리 앱이 넘긴 `--screen-off-timeout=1800` 이 scrcpy 실행 중 기기의 `screen_off_timeout` 을 **30분**으로 바꿔 두고 있었고(종료 시 복원), `--turn-screen-off` 는 **시작할 때 한 번**만 동작한다. 그래서 기기에서 화면이 한 번 켜지면 30분간 유지됐다
+  - `--prefer-text` 를 **1급 설정**으로 노출(`relay.scrcpy.preferText`, 기본 OFF): 알파·공백을 키 이벤트 대신 **텍스트 이벤트**로 주입한다. 특수 문자 조합이 어긋날 때 도움이 되지만 게임의 알파 키 동작이 달라진다(scrcpy 문서)
+  - L10n: `droid.screenOff.*` · `settings.scrcpy.preferText(.note)` · `settings.scrcpy.screenOffTimeout.note` · `common.close` (en·ko 동시) · 검증: `swift test` **929/929**
+
 - **feat(macos)**: **파일 탐색기 드롭 대상 확장 — 상위 폴더로 이동** — 드롭 대상이 폴더 행뿐이라 **상위 디렉토리로는 옮길 수 없었다**. 이제 ① **경로 바(브레드크럼)의 각 항목** ② **사이드바 즐겨찾기·트리 폴더** ③ **목록 영역(빈 곳 = 현재 폴더)** 에 떼면 그 경로로 옮긴다. Finder 파일을 거기에 떼면 그 폴더로 전송된다. 드롭 대상이 되면 cta 테두리로 표시한다
   - 같은 폴더(브레드크럼의 현재 폴더·목록 빈 곳)에 떼는 경우는 `mv` 의 "same file" 실패를 막기 위해 **사전 차단**하고 `이미 그 폴더 안에 있습니다` 를 표시한다
   - 순수 로직: `MoveBlockReason.sameDirectory` — `FileBrowserTests` 1건 · 검증: `swift test` **927/927**

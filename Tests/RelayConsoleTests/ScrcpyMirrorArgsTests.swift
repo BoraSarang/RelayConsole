@@ -26,6 +26,21 @@ struct ScrcpyMirrorArgsTests {
         #expect(ScrcpyController.defaultLegacyPaste == false)
     }
 
+    @Test func preferTextFlagAppearsOnlyWhenEnabled() {
+        // 기본 OFF — 켜면 알파·공백을 텍스트 이벤트로 보낸다(게임 알파 키 동작이 달라진다)
+        #expect(ScrcpyController.defaultPreferText == false)
+        #expect(!ScrcpyController.mirrorArgs(serial: serial, noControl: false)
+            .contains("--prefer-text"))
+        #expect(ScrcpyController.mirrorArgs(serial: serial, noControl: false, preferText: true)
+            .contains("--prefer-text"))
+        // 구형 붙여넣기와는 **독립** — 둘을 같이 켜도 각각 들어간다
+        let both = ScrcpyController.mirrorArgs(
+            serial: serial, noControl: false, legacyPaste: true, preferText: true
+        )
+        #expect(both.contains("--legacy-paste"))
+        #expect(both.contains("--prefer-text"))
+    }
+
     @Test func legacyPasteFlagAppearsOnlyWhenEnabled() {
         // 기본은 OFF — 일부 기기가 클립보드 programmatic 설정을 오처리할 때만 켠다
         #expect(!ScrcpyController.mirrorArgs(serial: serial, noControl: false)

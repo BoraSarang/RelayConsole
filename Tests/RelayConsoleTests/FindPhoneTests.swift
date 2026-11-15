@@ -9,6 +9,13 @@ struct FindPhoneTests {
         #expect(FindPhoneLogic.wakeArgs() == ["shell", "input", "keyevent", "224"])
     }
 
+    @Test func screenOffUsesSleepKeycodeNotPowerToggle() {
+        // 223 = KEYCODE_SLEEP (화면만 끄기) · 26 = KEYCODE_POWER 는 토글이라
+        // 이미 꺼진 화면을 다시 켤 수 있다 — 화면 끄기에는 쓰지 않는다.
+        #expect(FindPhoneLogic.sleepArgs() == ["shell", "input", "keyevent", "223"])
+        #expect(FindPhoneLogic.sleepKeycode != FindPhoneLogic.wakeKeycode)
+    }
+
     @Test func applyOrderIsManualModeThenBrightnessThenWake() {
         let steps = FindPhoneLogic.applyArgs()
         #expect(steps.count == 3)

@@ -817,3 +817,21 @@ t=75s … t=105s → 192.168.190.49:38671   (첫 온라인 S22 로 전환)
 
 - **코드/테스트** — `swift test` **927/927**(신규 1 — `sameDirectory`) · `./scripts/build-macos.sh debug` BUILD SUCCEEDED(1.25.0, build `20261115.045026`) · L10n `files.move.sameDir` en·ko 동시 추가(키 969=969).
 - **규칙** — 이동 제약은 그대로다: **같은 저장 영역만**(`/sdcard` ↔ `/data/local/tmp` 교차 이동 거부) · 폴더를 자기 자신·하위로 옮기는 것 거부 · **덮어쓰지 않음**(같은 이름은 알림).
+
+---
+
+## 47. 기기 화면 끄기 + scrcpy 텍스트 우선 입력 (T-2026-11-15-6 · 2026-11-15 · 앱 1.25.0+)
+
+| # | 확인할 것 | 방법 | 기대 결과 | 상태 |
+|---|---|---|---|---|
+| 152 | **버튼으로 기기 화면이 꺼진다** | 미러링 중 대시보드 헤더의 `화면 끄기` 를 누른다 | 기기 화면이 즉시 꺼지고 **미러 창은 그대로** 보인다 | ⬜ |
+| 153 | **두 번 눌러도 켜지지 않는다** | 화면이 꺼진 상태에서 `화면 끄기` 를 한 번 더 누른다 | 화면이 **켜지지 않는다**(KEYCODE_SLEEP 223 — 전원 토글 26 아님) | ⬜ |
+| 154 | **텍스트 우선 입력 토글** | 설정 → scrcpy → `텍스트 우선 입력` ON → 미러 재실행 | 실행 인자에 `--prefer-text` 가 붙는다(추가 옵션에서 지운 뒤 토글로만 확인) | ⬜ |
+| 155 | **화면 꺼짐 대기 라벨·설명** | 설정 → scrcpy | `기기 화면 꺼짐 대기 (초)` + 설명이 보인다(종전 `화면 꺼짐 유지` 아님) | ⬜ |
+
+### 실측 기록 (§47 · 2026-11-15)
+
+- **기기 점검(S22 `192.168.126.213:5555`)** — `mWakefulness=Awake` · `AC/USB/Wireless powered=false` · `stay_on_while_plugged_in=0` · 마지막 wake `WAKE_REASON_POWER_BUTTON` · wake lock 은 `PARTIAL_WAKE_LOCK 'AudioIn'` 1건(scrcpy 오디오 — 화면과 무관).
+- **원인** — `settings get system screen_off_timeout` = **1800000(30분)**. 이는 기기 자체 설정이 아니라 **scrcpy 가 실행 중에 바꿔 둔 값**이다(`--screen-off-timeout=1800`, 종료 시 복원). `--turn-screen-off` 는 세션 시작 시 1회만 동작하므로 이후 기기에서 화면이 켜지면 30분간 유지된다.
+- **코드/테스트** — `preferText`(기본 OFF) · `FindPhoneLogic.sleepArgs()`(223) · `swift test` **929/929**(+2 — `preferText` 인자·`sleepArgs`) · `./scripts/build-macos.sh debug` BUILD SUCCEEDED(1.25.0, build `20261115.123218`) · L10n 키 977=977.
+- **주의** — `추가 옵션` 에 `--prefer-text` 가 남아 있으면 토글과 **중복 지정**된다. 토글을 쓰려면 추가 옵션에서 지운다.
